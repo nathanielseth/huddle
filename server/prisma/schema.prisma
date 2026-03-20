@@ -1,0 +1,36 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model Room {
+  id        String   @id @default(uuid())
+  code      String   @unique @db.Char(4)
+  createdAt DateTime @default(now())
+  endedAt   DateTime?
+  gameType  String   @default("default")
+  players   RoomPlayer[]
+  rounds    Round[]
+}
+
+model RoomPlayer {
+  id         String @id @default(uuid())
+  room       Room   @relation(fields: [roomId], references: [id])
+  roomId     String
+  playerId   String  // the stable localStorage ID
+  name       String
+  finalScore Int     @default(0)
+}
+
+model Round {
+  id          String @id @default(uuid())
+  room        Room   @relation(fields: [roomId], references: [id])
+  roomId      String
+  roundNumber Int
+  prompt      String
+  answers     Json   // { playerId: answerText }
+  votes       Json   // { voterId: votedForPlayerId }
+}
