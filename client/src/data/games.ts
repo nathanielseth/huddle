@@ -14,6 +14,7 @@ export const GAMES: Game[] = [
 	{
 		id: "super-sabong",
 		name: "Super Sabong",
+		thumbnail: "/games/super_sabong.avif",
 		placeholderColor: "#f97316",
 		description:
 			"Bet on AI-powered manoks fighting it out. Read the odds, go all in, lose everything.",
@@ -33,7 +34,8 @@ export const GAMES: Game[] = [
 	},
 	{
 		id: "wit-showdown",
-		name: "Wit Showdown",
+		name: "WitZone",
+		thumbnail: "/games/witzone.avif",
 		placeholderColor: "#eab308",
 		description:
 			"Roast the prompt, outshine the room. Votes decide who's actually funny.",

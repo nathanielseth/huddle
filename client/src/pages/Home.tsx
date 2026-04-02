@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { AnimatePresence, motion } from "motion/react";
 import { JoinBar } from "../components/home/JoinBar";
 import { GameGrid } from "../components/shared/GameGrid";
 import { GAMES } from "../data/games";
@@ -39,54 +40,80 @@ export function Home() {
 				</section>
 			</main>
 
-			{/* bottom bar */}
-			<div
-				className={`fixed bottom-0 left-0 right-0 z-20 border-t border-border bg-surface/95 backdrop-blur-md transition-transform duration-300 ease-out ${
-					selected ? "translate-y-0" : "translate-y-full"
-				}`}
-			>
+			<AnimatePresence>
 				{selected && (
-					<div className="flex items-center justify-between gap-6 px-6 py-5 mx-auto max-w-5xl">
-						<div className="flex items-center min-w-0 gap-4">
-							<div
-								className="hidden shrink-0 w-11 h-11 rounded-lg sm:block"
-								style={{ backgroundColor: selected.placeholderColor }}
-							/>
-							<div className="flex flex-col min-w-0 gap-1">
-								<span className="font-display text-xl font-extrabold leading-none uppercase truncate">
-									{selected.name}
-								</span>
-								<p className="text-xs leading-snug text-white/70 line-clamp-2">
-									{selected.description}
-								</p>
-								<div className="flex flex-wrap items-center gap-1.5">
-									{selected.tags.map((tag) => (
-										<span
-											key={tag}
-											className="px-2 py-0.5 text-[10px] font-semibold tracking-wider uppercase rounded-full bg-white/8 text-white/60"
-										>
-											{tag}
+					<motion.div
+						key="bottom-bar"
+						className="fixed bottom-0 left-0 right-0 z-20 border-t border-border bg-surface/95 backdrop-blur-md"
+						initial={{ y: "100%" }}
+						animate={{ y: 0 }}
+						exit={{ y: "100%" }}
+						transition={{
+							type: "spring",
+							stiffness: 380,
+							damping: 32,
+							mass: 1,
+						}}
+					>
+						<div className="flex items-center justify-between gap-6 px-6 py-5 mx-auto max-w-5xl">
+							<div className="flex items-center min-w-0 gap-4">
+								<motion.div
+									className="hidden shrink-0 w-11 h-11 rounded-lg sm:block"
+									style={{ backgroundColor: selected.placeholderColor }}
+									layoutId="selected-color"
+								/>
+								<div className="flex flex-col min-w-0 gap-1">
+									<motion.span
+										className="font-display text-xl font-extrabold leading-none uppercase truncate"
+										initial={{ opacity: 0, x: -6 }}
+										animate={{ opacity: 1, x: 0 }}
+										transition={{ delay: 0.08, duration: 0.2 }}
+									>
+										{selected.name}
+									</motion.span>
+									<motion.p
+										className="text-xs leading-snug text-white/70 line-clamp-2"
+										initial={{ opacity: 0 }}
+										animate={{ opacity: 1 }}
+										transition={{ delay: 0.12, duration: 0.2 }}
+									>
+										{selected.description}
+									</motion.p>
+									<motion.div
+										className="flex flex-wrap items-center gap-1.5"
+										initial={{ opacity: 0 }}
+										animate={{ opacity: 1 }}
+										transition={{ delay: 0.16, duration: 0.2 }}
+									>
+										{selected.tags.map((tag) => (
+											<span
+												key={tag}
+												className="px-2 py-0.5 text-[10px] font-semibold tracking-wider uppercase rounded-full bg-white/8 text-white/60"
+											>
+												{tag}
+											</span>
+										))}
+										<span className="px-2 py-0.5 text-[10px] font-semibold tracking-wider uppercase rounded-full bg-white/8 text-white/60">
+											{selected.playerCount[0]}–{selected.playerCount[1]}{" "}
+											players
 										</span>
-									))}
-									<span className="px-2 py-0.5 text-[10px] font-semibold tracking-wider uppercase rounded-full bg-white/8 text-white/60">
-										{selected.playerCount[0]}–{selected.playerCount[1]} players
-									</span>
-									<span className="px-2 py-0.5 text-[10px] font-semibold tracking-wider uppercase rounded-full bg-white/8 text-white/60">
-										~{selected.duration} min
-									</span>
+										<span className="px-2 py-0.5 text-[10px] font-semibold tracking-wider uppercase rounded-full bg-white/8 text-white/60">
+											~{selected.duration} min
+										</span>
+									</motion.div>
 								</div>
 							</div>
-						</div>
 
-						<button
-							type="button"
-							className="shrink-0 h-11 px-8 text-sm font-bold tracking-widest text-white uppercase transition-opacity rounded-lg cursor-pointer bg-huddle hover:opacity-85 active:opacity-70"
-						>
-							Create Room →
-						</button>
-					</div>
+							<button
+								type="button"
+								className="shrink-0 h-11 px-8 text-sm font-bold tracking-widest text-white uppercase transition-opacity rounded-lg cursor-pointer bg-huddle hover:opacity-85 active:opacity-70"
+							>
+								Create Room →
+							</button>
+						</div>
+					</motion.div>
 				)}
-			</div>
+			</AnimatePresence>
 		</div>
 	);
 }
