@@ -1,46 +1,83 @@
-import { useRef } from "react";
+import { useRef, useCallback, useEffect } from "react";
 
-const CONFIG = {
-	scale: 1.07,
-	perspective: 700,
-	rotateMultiplierX: 10,
-	rotateMultiplierY: 12,
-	transitionEnter: "transform 0.25s cubic-bezier(0.34, 1.4, 0.64, 1)",
-	transitionMove: "transform 0.08s ease-out",
-	transitionLeave: "transform 0.6s cubic-bezier(0.23, 1.2, 0.32, 1)",
-};
+const hasHover =
+	typeof window !== "undefined" &&
+	window.matchMedia("(hover: hover) and (pointer: fine)").matches &&
+	!window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
-export function use3DTilt<T extends HTMLElement>() {
+const DEFAULTS = {
+	scale: 1.05,
+	perspective: 800,
+	rotateX: 10,
+	rotateY: 12,
+	transitionEnter: "transform 0.2s cubic-bezier(0.34, 1.4, 0.64, 1)",
+	transitionMove: "transform 0.1s ease-out",
+	transitionLeave: "transform 0.5s cubic-bezier(0.23, 1.2, 0.32, 1)",
+} as const;
+
+type TiltConfig = Partial<typeof DEFAULTS>;
+
+export function use3DTilt<T extends HTMLElement>(config?: TiltConfig) {
 	const ref = useRef<T>(null);
+	const raf = useRef<number | null>(null);
+	const cfg = useRef({ ...DEFAULTS, ...config });
 
-	const hasHover =
-		typeof window !== "undefined" &&
-		window.matchMedia("(hover: hover) and (pointer: fine)").matches;
+	useEffect(() => {
+		cfg.current = { ...DEFAULTS, ...config };
+	}, [config]);
 
-	function onMouseEnter() {
+	useEffect(
+		() => () => {
+			if (raf.current !== null) cancelAnimationFrame(raf.current);
+		},
+		[],
+	);
+
+	const onMouseEnter = useCallback(() => {
 		if (!hasHover || !ref.current) return;
-		ref.current.style.transition = CONFIG.transitionEnter;
-		ref.current.style.transform = `perspective(${CONFIG.perspective}px) rotateX(0deg) rotateY(0deg) scale(${CONFIG.scale})`;
-	}
+		const { perspective, scale, transitionEnter } = cfg.current;
+		ref.current.style.willChange = "transform";
+		ref.current.style.transition = transitionEnter;
+		ref.current.style.transform = `perspective(${perspective}px) rotateX(0deg) rotateY(0deg) scale(${scale})`;
+	}, []);
 
-	function onMouseMove(e: React.MouseEvent<T>) {
+	const onMouseMove = useCallback((e: React.MouseEvent<T>) => {
 		if (!hasHover || !ref.current) return;
+
 		const rect = ref.current.getBoundingClientRect();
-		const cx = rect.left + rect.width / 2;
-		const cy = rect.top + rect.height / 2;
-		const dx = (e.clientX - cx) / (rect.width / 2);
-		const dy = (e.clientY - cy) / (rect.height / 2);
-		const rotateX = -dy * CONFIG.rotateMultiplierX;
-		const rotateY = dx * CONFIG.rotateMultiplierY;
-		ref.current.style.transition = CONFIG.transitionMove;
-		ref.current.style.transform = `perspective(${CONFIG.perspective}px) rotateX(${rotateX}deg) rotateY(${rotateY}deg) scale(${CONFIG.scale})`;
-	}
+		const x = e.clientX - rect.left;
+		const y = e.clientY - rect.top;
+		const dx = (x - rect.width / 2) / (rect.width / 2);
+		const dy = (y - rect.height / 2) / (rect.height / 2);
 
-	function onMouseLeave() {
+		if (raf.current !== null) cancelAnimationFrame(raf.current);
+		raf.current = requestAnimationFrame(() => {
+			if (!ref.current) return;
+			const { perspective, scale, rotateX, rotateY, transitionMove } =
+				cfg.current;
+			ref.current.style.transition = transitionMove;
+			ref.current.style.transform = `perspective(${perspective}px) rotateX(${-dy * rotateX}deg) rotateY(${dx * rotateY}deg) scale(${scale})`;
+			ref.current.style.setProperty("--mouse-x", `${x}px`);
+			ref.current.style.setProperty("--mouse-y", `${y}px`);
+		});
+	}, []);
+
+	const onMouseLeave = useCallback(() => {
 		if (!hasHover || !ref.current) return;
-		ref.current.style.transition = CONFIG.transitionLeave;
-		ref.current.style.transform = `perspective(${CONFIG.perspective}px) rotateX(0deg) rotateY(0deg) scale(1)`;
-	}
+		if (raf.current !== null) cancelAnimationFrame(raf.current);
+		const { perspective, transitionLeave } = cfg.current;
+		ref.current.style.transition = transitionLeave;
+		ref.current.style.transform = `perspective(${perspective}px) rotateX(0deg) rotateY(0deg) scale(1)`;
+		ref.current.style.setProperty("--mouse-x", "-9999px");
+		ref.current.style.setProperty("--mouse-y", "-9999px");
+		ref.current.addEventListener(
+			"transitionend",
+			() => {
+				if (ref.current) ref.current.style.willChange = "auto";
+			},
+			{ once: true },
+		);
+	}, []);
 
 	return { ref, onMouseEnter, onMouseMove, onMouseLeave };
 }

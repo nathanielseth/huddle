@@ -16,45 +16,38 @@ export function GameCard({
 	anySelected,
 }: GameCardProps) {
 	const { ref, ...tiltEvents } = use3DTilt<HTMLButtonElement>();
-	const dimmed = anySelected && !isSelected;
 
 	return (
 		<button
 			type="button"
 			ref={ref}
+			aria-label={game.name}
+			aria-pressed={isSelected}
 			onClick={() => onSelect(game)}
 			{...tiltEvents}
 			className={cn(
-				"group relative aspect-video rounded-xl overflow-hidden text-left cursor-pointer will-change-transform",
+				"group relative aspect-video rounded-xl overflow-hidden cursor-pointer will-change-transform transform-gpu",
 				"outline-none focus-visible:ring-2 focus-visible:ring-huddle focus-visible:ring-offset-2 focus-visible:ring-offset-bg",
-				"transition-opacity duration-0",
-				isSelected && "ring-2 ring-huddle",
-				dimmed ? "opacity-35" : "opacity-100",
+				"transition-all duration-300 ease-out",
+				isSelected
+					? "ring-2 ring-huddle shadow-lg shadow-huddle/30"
+					: "hover:scale-[1.02]",
+				anySelected && !isSelected ? "opacity-35" : "opacity-100",
 			)}
-			style={{ backgroundColor: game.placeholderColor }}
 		>
-			{game.thumbnail ? (
-				<>
-					<img
-						src={game.thumbnail}
-						alt=""
-						className="absolute inset-0 w-full h-full object-cover"
-					/>
-					<span className="sr-only">{game.name}</span>
-				</>
-			) : (
-				<>
-					<div className="absolute inset-0 bg-linear-to-t from-black/50 via-transparent to-transparent" />
-					<div className="absolute top-0 left-0 p-3 pr-6">
-						<p
-							className="font-display font-extrabold uppercase leading-[1.1] text-white drop-shadow-sm"
-							style={{ fontSize: "clamp(0.7rem, 2vw, 1rem)" }}
-						>
-							{game.name}
-						</p>
-					</div>
-				</>
-			)}
+			<div
+				aria-hidden
+				className="pointer-events-none absolute -inset-px z-10 opacity-0 transition-opacity duration-300 group-hover:opacity-100"
+				style={{
+					background: `radial-gradient(400px circle at var(--mouse-x, 0) var(--mouse-y, 0), rgba(255,255,255,0.12), transparent 40%)`,
+				}}
+			/>
+
+			<img
+				src={game.thumbnail}
+				alt=""
+				className="absolute inset-0 w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
+			/>
 		</button>
 	);
 }

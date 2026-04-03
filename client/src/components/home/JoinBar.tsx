@@ -1,6 +1,6 @@
 import { useRef, useState } from "react";
 import { AnimatePresence, motion } from "motion/react";
-import { X, ArrowRight } from "lucide-react";
+import { X } from "lucide-react";
 
 interface JoinBarProps {
 	onFocus: () => void;
