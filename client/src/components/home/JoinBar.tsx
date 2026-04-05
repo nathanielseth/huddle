@@ -18,6 +18,7 @@ export function JoinBar({ onFocus }: JoinBarProps) {
 
 	const isValid = code.length === 4 && name.trim().length > 0;
 
+	// trigger shake animation on invalid field
 	function triggerShake(field: "code" | "name") {
 		if (field === "code") {
 			setShakeCode(true);
@@ -31,7 +32,7 @@ export function JoinBar({ onFocus }: JoinBarProps) {
 	function handleCodeChange(e: React.ChangeEvent<HTMLInputElement>) {
 		const val = e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, "");
 		setCode(val);
-		if (val.length === 4) nameRef.current?.focus();
+		if (val.length === 4) nameRef.current?.focus(); // auto-focus name
 	}
 
 	function handleNameChange(e: React.ChangeEvent<HTMLInputElement>) {
@@ -59,7 +60,7 @@ export function JoinBar({ onFocus }: JoinBarProps) {
 			<h2 className="text-sm font-semibold text-white">QUICK JOIN</h2>
 
 			<div className="flex flex-col sm:flex-row sm:items-end gap-3">
-				{/* room code */}
+				{/* room code input */}
 				<div className="flex flex-col gap-2 w-full sm:w-40 shrink-0">
 					<label
 						htmlFor="room-code"
@@ -106,7 +107,7 @@ export function JoinBar({ onFocus }: JoinBarProps) {
 					</motion.div>
 				</div>
 
-				{/* name */}
+				{/* player name input*/}
 				<div className="flex flex-col gap-2 w-full sm:w-56 shrink-0">
 					<label
 						htmlFor="player-name"

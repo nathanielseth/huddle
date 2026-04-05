@@ -7,45 +7,40 @@ import type {
 	ClientToServerEvents,
 } from "../../shared/events.js";
 import { registerHandlers } from "./handlers.js";
-import { isExpired, type Room } from "./rooms.js";
+import { RoomStore, isExpired } from "./rooms.js";
 
 const app = express();
 const httpServer = createServer(app);
 
+const CLIENT_URL = process.env["CLIENT_URL"] ?? "http://localhost:5173";
+
+// socket.io with typed events
 const io = new Server<ClientToServerEvents, ServerToClientEvents>(httpServer, {
-	cors: {
-		origin: process.env["CLIENT_URL"] ?? "http://localhost:5173",
-		methods: ["GET", "POST"],
-	},
+	cors: { origin: CLIENT_URL, methods: ["GET", "POST"] },
 });
 
-app.use(cors());
+app.use(cors({ origin: CLIENT_URL }));
 app.use(express.json());
 
-// in-memory state
-const rooms = new Map<string, Room>();
+const store = new RoomStore();
 
-// health check
+// health check endpoint
 app.get("/health", (_req, res) => {
-	res.json({
-		status: "ok",
-		rooms: rooms.size,
-		uptime: process.uptime(),
-	});
+	res.json({ status: "ok", rooms: store.size, uptime: process.uptime() });
 });
 
-// socket.io 
+// handle new socket connections
 io.on("connection", (socket) => {
 	console.log(`[socket] connected ${socket.id}`);
-	registerHandlers(io, socket, rooms);
+	registerHandlers(io, socket, store);
 });
 
-// room cleanup
+// cleanup expired rooms every 5 minutes
 setInterval(
 	() => {
-		for (const [code, room] of rooms) {
+		for (const [code, room] of store.entries()) {
 			if (isExpired(room)) {
-				rooms.delete(code);
+				store.delete(code);
 				console.log(`[cleanup] expired room ${code}`);
 			}
 		}
@@ -53,9 +48,7 @@ setInterval(
 	1000 * 60 * 5,
 );
 
-// start server
 const PORT = process.env["PORT"] ?? 3001;
-
 httpServer.listen(PORT, () => {
 	console.log(`Huddle server running on :${PORT}`);
 });

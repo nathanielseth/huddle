@@ -16,22 +16,78 @@ export interface Room {
 	phase: GamePhase;
 	gameId: string | null;
 	createdAt: number;
+	lastActiveAt: number;
 }
 
-export function generateCode(rooms: Map<string, Room>): string {
-	let code: string;
-	do {
-		code = Math.random().toString(36).substring(2, 6).toUpperCase();
-	} while (rooms.has(code));
-	return code;
+const CODE_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+
+export class RoomStore {
+	private rooms = new Map<string, Room>();
+	private socketToCode = new Map<string, string>();
+
+	get(code: string): Room | undefined {
+		return this.rooms.get(code);
+	}
+
+	save(room: Room): void {
+		this.rooms.set(room.code, room);
+	}
+
+	// delete room and all socket mappings
+	delete(code: string): void {
+		const room = this.rooms.get(code);
+		if (room) {
+			this.socketToCode.delete(room.hostSocketId);
+			for (const p of room.players.values()) {
+				this.socketToCode.delete(p.socketId);
+			}
+		}
+		this.rooms.delete(code);
+	}
+
+	get size(): number {
+		return this.rooms.size;
+	}
+
+	entries(): IterableIterator<[string, Room]> {
+		return this.rooms.entries();
+	}
+
+	// find room by socket id
+	findBySocket(socketId: string): Room | null {
+		const code = this.socketToCode.get(socketId);
+		return code !== undefined ? (this.rooms.get(code) ?? null) : null;
+	}
+
+	trackSocket(socketId: string, roomCode: string): void {
+		this.socketToCode.set(socketId, roomCode);
+	}
+
+	untrackSocket(socketId: string): void {
+		this.socketToCode.delete(socketId);
+	}
+
+	// generate unique 4-char room code
+	generateCode(): string {
+		let code: string;
+		do {
+			code = Array.from(
+				{ length: 4 },
+				() => CODE_ALPHABET[Math.floor(Math.random() * CODE_ALPHABET.length)],
+			).join("");
+		} while (this.rooms.has(code));
+		return code;
+	}
 }
 
+// create new room with host
 export function createRoom(
 	code: string,
 	hostPlayerId: string,
 	hostSocketId: string,
 	gameId: string,
 ): Room {
+	const now = Date.now();
 	return {
 		code,
 		hostPlayerId,
@@ -39,10 +95,17 @@ export function createRoom(
 		players: new Map(),
 		phase: "lobby",
 		gameId,
-		createdAt: Date.now(),
+		createdAt: now,
+		lastActiveAt: now,
 	};
 }
 
+// update last activity timestamp
+export function touchRoom(room: Room): void {
+	room.lastActiveAt = Date.now();
+}
+
+// add or reconnect player to room
 export function addPlayer(
 	room: Room,
 	playerId: string,
@@ -65,7 +128,7 @@ export function addPlayer(
 	return "joined";
 }
 
-// only reconnects existing players
+// reconnect existing player (page refresh)
 export function rejoinPlayer(
 	room: Room,
 	playerId: string,
@@ -78,6 +141,7 @@ export function rejoinPlayer(
 	return true;
 }
 
+// remove player entirely (left room)
 export function removePlayer(room: Room, socketId: string): void {
 	for (const [playerId, player] of room.players) {
 		if (player.socketId === socketId) {
@@ -87,6 +151,7 @@ export function removePlayer(room: Room, socketId: string): void {
 	}
 }
 
+// mark disconnected but keep slot (network loss)
 export function markDisconnected(room: Room, socketId: string): void {
 	for (const player of room.players.values()) {
 		if (player.socketId === socketId) {
@@ -96,6 +161,7 @@ export function markDisconnected(room: Room, socketId: string): void {
 	}
 }
 
+// find player by socket id
 export function findPlayerBySocket(
 	room: Room,
 	socketId: string,
@@ -106,23 +172,12 @@ export function findPlayerBySocket(
 	return null;
 }
 
-export function findRoomBySocket(
-	rooms: Map<string, Room>,
-	socketId: string,
-): Room | null {
-	for (const room of rooms.values()) {
-		if (room.hostSocketId === socketId) return room;
-		for (const player of room.players.values()) {
-			if (player.socketId === socketId) return room;
-		}
-	}
-	return null;
-}
-
+// check if socket is the room host
 export function isHostSocket(room: Room, socketId: string): boolean {
 	return room.hostSocketId === socketId;
 }
 
+// get public-facing state (no internal socket ids)
 export function getPublicState(room: Room): GameState {
 	const players: Player[] = Array.from(room.players.values()).map((p) => ({
 		id: p.playerId,
@@ -138,6 +193,7 @@ export function getPublicState(room: Room): GameState {
 	};
 }
 
+// expire after 2h of inactivity
 export function isExpired(room: Room): boolean {
-	return Date.now() - room.createdAt > 1000 * 60 * 120;
+	return Date.now() - room.lastActiveAt > 1000 * 60 * 120;
 }
