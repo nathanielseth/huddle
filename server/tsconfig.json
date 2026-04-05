@@ -19,7 +19,10 @@
 		"isolatedModules": true,
 		"noUncheckedSideEffectImports": true,
 		"moduleDetection": "force",
-		"skipLibCheck": true
+		"skipLibCheck": true,
+		"paths": {
+			"@shared/*": ["../shared/*"]
+		}
 	},
-	"include": ["src/**/*", "../shared/src/**/*"]
+	"include": ["src/**/*"]
 }

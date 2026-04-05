@@ -1,0 +1,13 @@
+{
+	"compilerOptions": {
+		"composite": true,
+		"declaration": true,
+		"declarationMap": true,
+		"strict": true,
+		"module": "nodenext",
+		"moduleResolution": "nodenext",
+		"target": "es2020",
+		"outDir": "./dist"
+	},
+	"include": ["./**/*.ts"]
+}

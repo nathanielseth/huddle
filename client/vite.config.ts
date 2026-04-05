@@ -7,7 +7,7 @@ export default defineConfig({
 	plugins: [react(), tailwindcss()],
 	resolve: {
 		alias: {
-			"@huddle/shared": path.resolve(__dirname, "../shared/src/index.ts"),
+			"@huddle/shared": path.resolve(__dirname, "../shared"),
 		},
 		dedupe: ["react", "react-dom"],
 	},
