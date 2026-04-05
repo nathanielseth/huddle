@@ -1,4 +1,4 @@
-import { useRef, useCallback, useEffect } from "react";
+import { useRef, useEffect } from "react";
 
 const hasHover =
 	typeof window !== "undefined" &&
@@ -20,28 +20,24 @@ type TiltConfig = Partial<typeof DEFAULTS>;
 export function use3DTilt<T extends HTMLElement>(config?: TiltConfig) {
 	const ref = useRef<T>(null);
 	const raf = useRef<number | null>(null);
-	const cfg = useRef({ ...DEFAULTS, ...config });
+
+	const cfg = { ...DEFAULTS, ...config };
 
 	useEffect(() => {
-		cfg.current = { ...DEFAULTS, ...config };
-	}, [config]);
-
-	useEffect(
-		() => () => {
+		return () => {
 			if (raf.current !== null) cancelAnimationFrame(raf.current);
-		},
-		[],
-	);
-
-	const onMouseEnter = useCallback(() => {
-		if (!hasHover || !ref.current) return;
-		const { perspective, scale, transitionEnter } = cfg.current;
-		ref.current.style.willChange = "transform";
-		ref.current.style.transition = transitionEnter;
-		ref.current.style.transform = `perspective(${perspective}px) rotateX(0deg) rotateY(0deg) scale(${scale})`;
+		};
 	}, []);
 
-	const onMouseMove = useCallback((e: React.MouseEvent<T>) => {
+	const onMouseEnter = () => {
+		if (!hasHover || !ref.current) return;
+
+		ref.current.style.willChange = "transform";
+		ref.current.style.transition = cfg.transitionEnter;
+		ref.current.style.transform = `perspective(${cfg.perspective}px) rotateX(0deg) rotateY(0deg) scale(${cfg.scale})`;
+	};
+
+	const onMouseMove = (e: React.MouseEvent<T>) => {
 		if (!hasHover || !ref.current) return;
 
 		const rect = ref.current.getBoundingClientRect();
@@ -51,25 +47,25 @@ export function use3DTilt<T extends HTMLElement>(config?: TiltConfig) {
 		const dy = (y - rect.height / 2) / (rect.height / 2);
 
 		if (raf.current !== null) cancelAnimationFrame(raf.current);
+
 		raf.current = requestAnimationFrame(() => {
 			if (!ref.current) return;
-			const { perspective, scale, rotateX, rotateY, transitionMove } =
-				cfg.current;
-			ref.current.style.transition = transitionMove;
-			ref.current.style.transform = `perspective(${perspective}px) rotateX(${-dy * rotateX}deg) rotateY(${dx * rotateY}deg) scale(${scale})`;
+			ref.current.style.transition = cfg.transitionMove;
+			ref.current.style.transform = `perspective(${cfg.perspective}px) rotateX(${-dy * cfg.rotateX}deg) rotateY(${dx * cfg.rotateY}deg) scale(${cfg.scale})`;
 			ref.current.style.setProperty("--mouse-x", `${x}px`);
 			ref.current.style.setProperty("--mouse-y", `${y}px`);
 		});
-	}, []);
+	};
 
-	const onMouseLeave = useCallback(() => {
+	const onMouseLeave = () => {
 		if (!hasHover || !ref.current) return;
 		if (raf.current !== null) cancelAnimationFrame(raf.current);
-		const { perspective, transitionLeave } = cfg.current;
-		ref.current.style.transition = transitionLeave;
-		ref.current.style.transform = `perspective(${perspective}px) rotateX(0deg) rotateY(0deg) scale(1)`;
+
+		ref.current.style.transition = cfg.transitionLeave;
+		ref.current.style.transform = `perspective(${cfg.perspective}px) rotateX(0deg) rotateY(0deg) scale(1)`;
 		ref.current.style.setProperty("--mouse-x", "-9999px");
 		ref.current.style.setProperty("--mouse-y", "-9999px");
+
 		ref.current.addEventListener(
 			"transitionend",
 			() => {
@@ -77,7 +73,7 @@ export function use3DTilt<T extends HTMLElement>(config?: TiltConfig) {
 			},
 			{ once: true },
 		);
-	}, []);
+	};
 
 	return { ref, onMouseEnter, onMouseMove, onMouseLeave };
 }

@@ -1,143 +1,190 @@
 import { create } from "zustand";
 import { socket } from "../lib/socket";
-import type { Player, GamePhase, GameState, ConnectionStatus } from "@shared/types";
+import type {
+	Player,
+	GamePhase,
+	GameState,
+	ConnectionStatus,
+} from "@shared/types";
 
-interface GameStore {
-  playerId: string;
-
-  // session
-  playerName: string;
-  roomCode: string;
-  role: "host" | "player" | null;
-
-  // connection
-  status: ConnectionStatus;
-  error: string | null;
-
-  // room state
-  players: Player[];
-  phase: GamePhase;
-  gameId: string | null;
-
-  // public
-  setPlayerName: (name: string) => void;
-  connect: () => void;
-  disconnect: () => void;
-  createRoom: (gameId: string, playerName: string) => void;
-  joinRoom: (code: string, name: string) => void;
-  clearError: () => void;
-
-  // internal
-  _syncState: (state: GameState) => void;
-  _setStatus: (status: ConnectionStatus) => void;
-  _setError: (message: string) => void;
-  _onRoomCreated: (code: string) => void;
+interface RoomSession {
+	roomCode: string;
+	role: "host" | "player";
+	playerName: string;
 }
 
-// persistent player ID
+// session persistence
+function saveRoomSession(session: RoomSession): void {
+	localStorage.setItem("huddle_room", JSON.stringify(session));
+}
 
-function getOrCreatePlayerId(): string {
-  const existing = localStorage.getItem("huddle_pid");
-  if (existing) return existing;
-  const id = crypto.randomUUID();
-  localStorage.setItem("huddle_pid", id);
-  return id;
+function clearRoomSession(): void {
+	localStorage.removeItem("huddle_room");
+}
+
+function loadRoomSession(): RoomSession | null {
+	try {
+		const raw = localStorage.getItem("huddle_room");
+		if (!raw) return null;
+		return JSON.parse(raw) as RoomSession;
+	} catch {
+		return null;
+	}
 }
 
 // store
+interface GameStore {
+	playerId: string;
+	playerName: string;
+	roomCode: string;
+	role: "host" | "player" | null;
+	status: ConnectionStatus;
+	error: string | null;
+	players: Player[];
+	phase: GamePhase;
+	gameId: string | null;
+	setPlayerName: (name: string) => void;
+	connect: () => void;
+	disconnect: () => void;
+	createRoom: (gameId: string) => void;
+	joinRoom: (code: string, name: string) => void;
+	leaveRoom: () => void;
+	clearError: () => void;
+	_syncState: (state: GameState) => void;
+	_setStatus: (status: ConnectionStatus) => void;
+	_setError: (message: string) => void;
+	_closeRoom: () => void;
+	_attemptRejoin: (session: RoomSession) => void;
+}
+
+function getOrCreatePlayerId(): string {
+	const existing = localStorage.getItem("huddle_pid");
+	if (existing) return existing;
+	const id = crypto.randomUUID();
+	localStorage.setItem("huddle_pid", id);
+	return id;
+}
+
+const ROOM_RESET: Partial<GameStore> = {
+	roomCode: "",
+	role: null,
+	players: [],
+	phase: "lobby",
+	gameId: null,
+	error: null,
+};
 
 export const useGameStore = create<GameStore>((set, get) => ({
-  playerId: getOrCreatePlayerId(),
+	playerId: getOrCreatePlayerId(),
+	playerName: "",
+	roomCode: "",
+	role: null,
+	status: "idle",
+	error: null,
+	players: [],
+	phase: "lobby",
+	gameId: null,
 
-  // session
-  playerName: "",
-  roomCode: "",
-  role: null,
+	setPlayerName: (name) => set({ playerName: name }),
 
-  // connection
-  status: "idle",
-  error: null,
+	connect: () => {
+		if (socket.connected || get().status === "connecting") return;
+		set({ status: "connecting", error: null });
+		socket.connect();
+	},
 
-  // room
-  players: [],
-  phase: "lobby",
-  gameId: null,
+	disconnect: () => {
+		socket.disconnect();
+		clearRoomSession();
+		set({ status: "disconnected", ...ROOM_RESET });
+	},
 
-  // public actions
+	createRoom: (gameId) => {
+		const { playerId, status } = get();
+		if (status !== "connected") return;
+		set({ role: "host", gameId });
+		socket.emit("create_room", { gameId, playerId });
+	},
 
-  setPlayerName: (name) => set({ playerName: name }),
+	joinRoom: (code, name) => {
+		const { playerId, status } = get();
+		if (status !== "connected") return;
+		set({ playerName: name, role: "player" });
+		socket.emit("join_room", { code, name, playerId });
+	},
 
-  connect: () => {
-    if (socket.connected || get().status === "connecting") return;
-    set({ status: "connecting", error: null });
-    socket.connect();
-  },
+	leaveRoom: () => {
+		socket.emit("leave_room");
+		clearRoomSession();
+		set(ROOM_RESET);
+	},
 
-  disconnect: () => {
-    socket.disconnect();
-    set({
-      status: "disconnected",
-      roomCode: "",
-      role: null,
-      players: [],
-      phase: "lobby",
-      gameId: null,
-      error: null,
-    });
-  },
+	clearError: () => set({ error: null }),
 
-  createRoom: (gameId, playerName) => {
-    const { playerId, status } = get();
-    if (status !== "connected") return;
-    set({ playerName, role: "host", gameId });
-    socket.emit("create_room", { gameId, playerName, playerId });
-  },
+	_syncState: (state) => {
+		const { role, playerName } = get();
+		// persist session whenever we get valid room state
+		if (state.roomCode && role) {
+			saveRoomSession({ roomCode: state.roomCode, role, playerName });
+		}
+		set({
+			roomCode: state.roomCode,
+			players: state.players,
+			phase: state.phase,
+			gameId: state.gameId,
+		});
+	},
 
-  joinRoom: (code, name) => {
-    const { playerId, status } = get();
-    if (status !== "connected") return;
-    set({ playerName: name, role: "player" });
-    socket.emit("join_room", { code, name, playerId });
-  },
+	_setStatus: (status) => set({ status }),
+	_setError: (message) => set({ error: message }),
 
-  clearError: () => set({ error: null }),
+	_closeRoom: () => {
+		clearRoomSession();
+		set(ROOM_RESET);
+	},
 
-  // internal - only socket listeners should call
-
-  _syncState: (state) =>
-    set({
-      roomCode: state.roomCode,
-      players: state.players,
-      phase: state.phase,
-      gameId: state.gameId,
-    }),
-
-  _setStatus: (status) => set({ status }),
-
-  _setError: (message) => set({ error: message }),
-
-  _onRoomCreated: (code) => set({ roomCode: code }),
+	_attemptRejoin: (session) => {
+		const { playerId } = get();
+		// optimistically restore session state
+		set({
+			roomCode: session.roomCode,
+			role: session.role,
+			playerName: session.playerName,
+		});
+		socket.emit("rejoin_room", {
+			code: session.roomCode,
+			playerId,
+			role: session.role,
+		});
+	},
 }));
 
 // socket listeners
 
 socket.on("connect", () => {
-  useGameStore.getState()._setStatus("connected");
+	useGameStore.getState()._setStatus("connected");
+	// attempt rejoin on every connect
+	const session = loadRoomSession();
+	if (session) useGameStore.getState()._attemptRejoin(session);
 });
 
-socket.on("disconnect", () => {
-  useGameStore.getState()._setStatus("disconnected");
-});
+socket.on("disconnect", () =>
+	useGameStore.getState()._setStatus("disconnected"),
+);
 
 socket.on("connect_error", () => {
-  useGameStore.getState()._setStatus("error");
-  useGameStore.getState()._setError("Could not connect to server.");
+	useGameStore.getState()._setStatus("error");
+	useGameStore.getState()._setError("Could not connect to server.");
 });
 
-socket.on("game_state", (state) => {
-  useGameStore.getState()._syncState(state);
+socket.on("game_state", (state) => useGameStore.getState()._syncState(state));
+socket.on("room_error", (message) =>
+	useGameStore.getState()._setError(message),
+);
+socket.on("room_closed", () => useGameStore.getState()._closeRoom());
+
+socket.on("rejoin_failed", () => {
+	useGameStore.getState()._closeRoom();
 });
 
-socket.on("room_error", (message) => {
-  useGameStore.getState()._setError(message);
-});
+useGameStore.getState().connect();

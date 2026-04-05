@@ -1,6 +1,7 @@
 import { useRef, useState } from "react";
 import { AnimatePresence, motion } from "motion/react";
 import { X } from "lucide-react";
+import { useGameStore } from "../../store/useGameStore";
 
 interface JoinBarProps {
 	onFocus: () => void;
@@ -12,6 +13,8 @@ export function JoinBar({ onFocus }: JoinBarProps) {
 	const [shakeCode, setShakeCode] = useState(false);
 	const [shakeName, setShakeName] = useState(false);
 	const nameRef = useRef<HTMLInputElement>(null);
+
+	const joinRoom = useGameStore((s) => s.joinRoom);
 
 	const isValid = code.length === 4 && name.trim().length > 0;
 
@@ -41,7 +44,7 @@ export function JoinBar({ onFocus }: JoinBarProps) {
 			if (name.trim().length === 0) triggerShake("name");
 			return;
 		}
-		// TODO: fire socket event
+		joinRoom(code, name.trim());
 	}
 
 	const shakeTransition = {

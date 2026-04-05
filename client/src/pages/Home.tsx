@@ -1,18 +1,33 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { useNavigate } from "react-router";
 import { AnimatePresence, motion } from "motion/react";
 import { JoinBar } from "../components/home/JoinBar";
 import { GameGrid } from "../components/shared/GameGrid";
 import { GAMES } from "../data/games";
+import { useGameStore } from "../store/useGameStore";
 import type { Game } from "../types/game";
 
 export function Home() {
 	const [selected, setSelected] = useState<Game | null>(null);
+
+	const navigate = useNavigate();
+	const createRoom = useGameStore((s) => s.createRoom);
+	const roomCode = useGameStore((s) => s.roomCode);
+
+	useEffect(() => {
+		if (roomCode) navigate(`/room/${roomCode}`);
+	}, [roomCode, navigate]);
 
 	const handleSelect = (game: Game) => {
 		setSelected((prev) => (prev?.id === game.id ? null : game));
 	};
 
 	const clearSelected = () => setSelected(null);
+
+	function handleCreateRoom() {
+		if (!selected) return;
+		createRoom(selected.id);
+	}
 
 	return (
 		<div className="flex flex-col min-h-screen">
@@ -27,9 +42,7 @@ export function Home() {
 						Party games for tropa hangouts
 					</p>
 				</header>
-
 				<JoinBar onFocus={clearSelected} />
-
 				<section className="flex flex-col gap-5">
 					<h2 className="text-sm font-semibold text-white">HOST A GAME</h2>
 					<GameGrid
@@ -106,6 +119,7 @@ export function Home() {
 
 							<button
 								type="button"
+								onClick={handleCreateRoom}
 								className="shrink-0 h-11 px-8 text-sm font-bold tracking-widest text-white uppercase transition-opacity rounded-lg cursor-pointer bg-huddle hover:opacity-85 active:opacity-70"
 							>
 								Create Room →

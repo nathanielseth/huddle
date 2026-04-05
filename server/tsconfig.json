@@ -1,6 +1,6 @@
 {
 	"compilerOptions": {
-		"rootDir": "./src",
+		"rootDir": "..",
 		"outDir": "./dist",
 		"module": "nodenext",
 		"moduleResolution": "nodenext",
@@ -19,10 +19,7 @@
 		"isolatedModules": true,
 		"noUncheckedSideEffectImports": true,
 		"moduleDetection": "force",
-		"skipLibCheck": true,
-		"paths": {
-			"@shared/*": ["../shared/*"]
-		}
+		"skipLibCheck": true
 	},
 	"include": ["src/**/*"]
 }
