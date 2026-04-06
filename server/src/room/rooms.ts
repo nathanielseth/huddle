@@ -23,6 +23,7 @@ export interface Room {
 	createdAt: number;
 	lastActiveAt: number;
 	gamePayload: unknown;
+	publicPayload: unknown;
 	timer: GameTimer | null;
 }
 
@@ -105,6 +106,7 @@ export function createRoom(
 		createdAt: now,
 		lastActiveAt: now,
 		gamePayload: null,
+		publicPayload: null,
 		timer: null,
 	};
 }
@@ -200,7 +202,7 @@ export function getPublicState(room: Room): GameState {
 		phase: room.phase,
 		players,
 		timer: room.timer,
-		gamePayload: room.gamePayload,
+		gamePayload: room.publicPayload,
 	};
 }
 

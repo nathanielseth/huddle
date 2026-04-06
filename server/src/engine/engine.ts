@@ -7,7 +7,8 @@ export interface GameContext {
 
 // what the engine hands back after processing any event
 export interface EngineResult {
-	gamePayload: unknown;
+	serverPayload: unknown; // stored in room.gamePayload
+	publicPayload: unknown; // goes into broadcast
 	timer: GameTimer | null;
 	roomPhase?: RoomPhase;
 	scoreDeltas?: Record<string, number>;

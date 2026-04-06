@@ -68,7 +68,7 @@ export class EngineRunner {
 		io: IO,
 		store: RoomStore,
 	): void {
-		// Apply score changes first so the broadcast reflects them.
+		// apply score changes first so the broadcast reflects them
 		if (result.scoreDeltas) {
 			for (const [playerId, delta] of Object.entries(result.scoreDeltas)) {
 				const player = room.players.get(playerId);
@@ -76,14 +76,16 @@ export class EngineRunner {
 			}
 		}
 
-		room.gamePayload = result.gamePayload;
-		room.timer = result.timer;
+		room.gamePayload = result.serverPayload;
+		room.publicPayload = result.publicPayload;
 
 		if (result.roomPhase) {
 			room.phase = result.roomPhase;
 		}
 
+		room.timer = result.timer;
 		this.cancelTimer(room.code);
+
 		if (result.timer) {
 			this.scheduleTimer(result.timer, room, io, store);
 		}
