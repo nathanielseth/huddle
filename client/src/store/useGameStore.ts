@@ -7,7 +7,7 @@ import {
 } from "../lib/session";
 import type {
 	Player,
-	GamePhase,
+	RoomPhase,
 	GameState,
 	ConnectionStatus,
 } from "@shared/types";
@@ -20,7 +20,7 @@ interface GameStore {
 	status: ConnectionStatus;
 	error: string | null;
 	players: Player[];
-	phase: GamePhase;
+	phase: RoomPhase;
 	gameId: string | null;
 	setPlayerName: (name: string) => void;
 	connect: () => void;

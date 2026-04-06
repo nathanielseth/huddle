@@ -23,4 +23,8 @@ export interface ClientToServerEvents {
 	}) => void;
 
 	leave_room: () => void;
+
+	start_game: () => void;
+
+	player_action: (payload: unknown) => void;
 }

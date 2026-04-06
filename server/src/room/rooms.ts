@@ -1,4 +1,9 @@
-import type { GamePhase, GameState, Player } from "../../shared/types.js";
+import type {
+	GameState,
+	Player,
+	RoomPhase,
+	GameTimer,
+} from "../../../shared/types.js";
 
 export interface RoomPlayer {
 	playerId: string;
@@ -13,10 +18,12 @@ export interface Room {
 	hostPlayerId: string;
 	hostSocketId: string;
 	players: Map<string, RoomPlayer>;
-	phase: GamePhase;
+	phase: RoomPhase;
 	gameId: string | null;
 	createdAt: number;
 	lastActiveAt: number;
+	gamePayload: unknown;
+	timer: GameTimer | null;
 }
 
 const CODE_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
@@ -97,6 +104,8 @@ export function createRoom(
 		gameId,
 		createdAt: now,
 		lastActiveAt: now,
+		gamePayload: null,
+		timer: null,
 	};
 }
 
@@ -190,6 +199,8 @@ export function getPublicState(room: Room): GameState {
 		gameId: room.gameId,
 		phase: room.phase,
 		players,
+		timer: room.timer,
+		gamePayload: room.gamePayload,
 	};
 }
 

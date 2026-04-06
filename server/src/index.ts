@@ -6,8 +6,9 @@ import type {
 	ServerToClientEvents,
 	ClientToServerEvents,
 } from "../../shared/events.js";
-import { registerHandlers } from "./handlers.js";
-import { RoomStore, isExpired } from "./rooms.js";
+import { registerHandlers } from "./room/handlers.js";
+import { RoomStore, isExpired } from "./room/rooms.js";
+import { EngineRunner } from "./engine/engineRunner.js";
 
 const app = express();
 const httpServer = createServer(app);
@@ -23,6 +24,7 @@ app.use(cors({ origin: CLIENT_URL }));
 app.use(express.json());
 
 const store = new RoomStore();
+const runner = new EngineRunner();
 
 // health check endpoint
 app.get("/health", (_req, res) => {
@@ -32,7 +34,7 @@ app.get("/health", (_req, res) => {
 // handle new socket connections
 io.on("connection", (socket) => {
 	console.log(`[socket] connected ${socket.id}`);
-	registerHandlers(io, socket, store);
+	registerHandlers(io, socket, store, runner); // ← pass runner
 });
 
 // cleanup expired rooms every 5 minutes

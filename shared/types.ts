@@ -1,5 +1,7 @@
-export type GamePhase = "lobby" | "answering" | "voting" | "results" | "podium";
+export type RoomPhase = "lobby" | "in_game" | "ended";
 
+
+// client-only
 export type ConnectionStatus =
 	| "idle"
 	| "connecting"
@@ -7,6 +9,7 @@ export type ConnectionStatus =
 	| "disconnected"
 	| "error";
 
+// room-level player
 export interface Player {
 	id: string;
 	name: string;
@@ -14,9 +17,17 @@ export interface Player {
 	isConnected: boolean;
 }
 
+export interface GameTimer {
+	startsAt: number; // server timestamp when phase began
+	duration: number; // ms
+}
+
+// broadcast on every change
 export interface GameState {
 	roomCode: string;
 	gameId: string | null;
-	phase: GamePhase;
+	phase: RoomPhase;
 	players: Player[];
+	timer: GameTimer | null;
+	gamePayload: unknown; // typed per-game, cast where used
 }

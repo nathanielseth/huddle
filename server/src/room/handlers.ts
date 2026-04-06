@@ -2,7 +2,7 @@ import type { Server, Socket } from "socket.io";
 import type {
 	ServerToClientEvents,
 	ClientToServerEvents,
-} from "../../shared/events.js";
+} from "../../../shared/events.js";
 import {
 	createRoom,
 	addPlayer,
@@ -12,6 +12,7 @@ import {
 	isHostSocket,
 	getPublicState,
 	touchRoom,
+	findPlayerBySocket,
 	type Room,
 	type RoomStore,
 } from "./rooms.js";
@@ -20,6 +21,7 @@ import {
 	JoinRoomSchema,
 	RejoinRoomSchema,
 } from "./schemas.js";
+import { EngineRunner } from "../engine/engineRunner.js";
 
 type IO = Server<ClientToServerEvents, ServerToClientEvents>;
 type ClientSocket = Socket<ClientToServerEvents, ServerToClientEvents>;
@@ -31,7 +33,14 @@ function broadcast(io: IO, room: Room): void {
 }
 
 // delete room and notify players
-function closeRoom(io: IO, store: RoomStore, room: Room, reason: string): void {
+function closeRoom(
+	io: IO,
+	store: RoomStore,
+	room: Room,
+	reason: string,
+	runner: EngineRunner,
+): void {
+	runner.cancelTimer(room.code);
 	io.to(room.code).emit("room_closed");
 	store.delete(room.code);
 	console.log(`[room] ${room.code} closed — ${reason}`);
@@ -42,20 +51,17 @@ function handleIntentionalLeave(
 	io: IO,
 	socket: ClientSocket,
 	store: RoomStore,
+	runner: EngineRunner,
 ): void {
 	const room = store.findBySocket(socket.id);
 	if (!room) return;
-
-	store.untrackSocket(socket.id); // cleanup before potential deletion
-
+	store.untrackSocket(socket.id);
 	if (isHostSocket(room, socket.id)) {
-		closeRoom(io, store, room, "host left");
+		closeRoom(io, store, room, "host left", runner);
 		return;
 	}
-
 	removePlayer(room, socket.id);
 	socket.leave(room.code);
-	console.log(`[room] socket ${socket.id} left ${room.code}`);
 	broadcast(io, room);
 }
 
@@ -65,21 +71,16 @@ function handleDisconnect(
 	socket: ClientSocket,
 	store: RoomStore,
 	reason: string,
+	runner: EngineRunner,
 ): void {
 	const room = store.findBySocket(socket.id);
 	if (!room) return;
-
 	store.untrackSocket(socket.id);
-
 	if (isHostSocket(room, socket.id)) {
-		closeRoom(io, store, room, `host disconnected (${reason})`);
+		closeRoom(io, store, room, `host disconnected (${reason})`, runner);
 		return;
 	}
-
-	markDisconnected(room, socket.id); // preserve player slot
-	console.log(
-		`[room] socket ${socket.id} disconnected from ${room.code} (${reason})`,
-	);
+	markDisconnected(room, socket.id);
 	broadcast(io, room);
 }
 
@@ -87,6 +88,7 @@ export function registerHandlers(
 	io: IO,
 	socket: ClientSocket,
 	store: RoomStore,
+	runner: EngineRunner,
 ): void {
 	// host creates new game room
 	socket.on("create_room", (payload) => {
@@ -176,8 +178,31 @@ export function registerHandlers(
 		broadcast(io, room);
 	});
 
-	socket.on("leave_room", () => handleIntentionalLeave(io, socket, store));
+	socket.on("start_game", () => {
+		const room = store.findBySocket(socket.id);
+		if (!room) return;
+		if (!isHostSocket(room, socket.id)) return; // only host can start
+		if (room.phase !== "lobby") return; // can't restart mid-game
+
+		const ok = runner.startGame(room, io, store);
+		if (!ok) {
+			socket.emit("room_error", "Unknown game.");
+		}
+	});
+
+	socket.on("player_action", (payload) => {
+		const room = store.findBySocket(socket.id);
+		if (!room) return;
+		const player = findPlayerBySocket(room, socket.id);
+		if (!player) return; // host can't submit player actions
+
+		runner.handleAction(room, player.playerId, payload, io, store);
+	});
+
+	socket.on("leave_room", () =>
+		handleIntentionalLeave(io, socket, store, runner),
+	);
 	socket.on("disconnect", (reason) =>
-		handleDisconnect(io, socket, store, reason),
+		handleDisconnect(io, socket, store, reason, runner),
 	);
 }
