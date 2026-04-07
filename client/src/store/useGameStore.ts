@@ -10,6 +10,7 @@ import type {
 	RoomPhase,
 	GameState,
 	ConnectionStatus,
+	GameTimer,
 } from "@shared/types";
 
 interface GameStore {
@@ -22,6 +23,8 @@ interface GameStore {
 	players: Player[];
 	phase: RoomPhase;
 	gameId: string | null;
+	gamePayload: unknown;
+	timer: GameTimer | null;
 	setPlayerName: (name: string) => void;
 	connect: () => void;
 	disconnect: () => void;
@@ -29,6 +32,7 @@ interface GameStore {
 	joinRoom: (code: string, name: string) => void;
 	leaveRoom: () => void;
 	clearError: () => void;
+	startGame: () => void;
 	_syncState: (state: GameState) => void;
 	_setStatus: (status: ConnectionStatus) => void;
 	_setError: (message: string) => void;
@@ -52,6 +56,8 @@ const ROOM_RESET = {
 	players: [],
 	phase: "lobby",
 	gameId: null,
+	gamePayload: null,
+	timer: null,
 	error: null,
 } as const satisfies Partial<GameStore>;
 
@@ -65,23 +71,21 @@ export const useGameStore = create<GameStore>((set, get) => ({
 	players: [],
 	phase: "lobby",
 	gameId: null,
-
+	gamePayload: null,
+	timer: null,
 	setPlayerName: (name) => set({ playerName: name }),
-
 	// connect to socket server if not already
 	connect: () => {
 		if (socket.connected || get().status === "connecting") return;
 		set({ status: "connecting", error: null });
 		socket.connect();
 	},
-
 	// disconnect and clear room session storage
 	disconnect: () => {
 		socket.disconnect();
 		clearRoomSession();
 		set({ status: "disconnected", ...ROOM_RESET });
 	},
-
 	// host creates new room
 	createRoom: (gameId) => {
 		const { playerId, status } = get();
@@ -89,7 +93,6 @@ export const useGameStore = create<GameStore>((set, get) => ({
 		set({ role: "host", gameId });
 		socket.emit("create_room", { gameId, playerId });
 	},
-
 	// player joins existing room by code
 	joinRoom: (code, name) => {
 		const { playerId, status } = get();
@@ -97,16 +100,17 @@ export const useGameStore = create<GameStore>((set, get) => ({
 		set({ playerName: name, role: "player" });
 		socket.emit("join_room", { code, name, playerId });
 	},
-
 	// leave current room and clear local state
 	leaveRoom: () => {
 		socket.emit("leave_room");
 		clearRoomSession();
 		set(ROOM_RESET);
 	},
-
 	clearError: () => set({ error: null }),
-
+	startGame: () => {
+		if (get().status !== "connected") return;
+		socket.emit("start_game");
+	},
 	// sync room state from server, persist session if host/player
 	_syncState: (state) => {
 		const { role, playerName } = get();
@@ -118,24 +122,22 @@ export const useGameStore = create<GameStore>((set, get) => ({
 			players: state.players,
 			phase: state.phase,
 			gameId: state.gameId,
+			gamePayload: state.gamePayload,
+			timer: state.timer,
 		});
 	},
-
 	_setStatus: (status) => set({ status }),
-
 	// set error, keep role if still in room
 	_setError: (message) =>
 		set((state) => ({
 			error: message,
 			role: state.roomCode ? state.role : null,
 		})),
-
 	// force close room from server (host left)
 	_closeRoom: () => {
 		clearRoomSession();
 		set(ROOM_RESET);
 	},
-
 	// try to rejoin previous room on page refresh
 	_attemptRejoin: (session) => {
 		const { playerId } = get();

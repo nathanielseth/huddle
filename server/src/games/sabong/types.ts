@@ -69,4 +69,6 @@ export const SABONG_CONSTANTS = {
 	MAX_ATTACK_BOOST: 50,
 	BALANCE_TOLERANCE: 0.125, // for matchup balance check, ensures fair fights
 	MIN_STAT_DIFF_COUNT: 3, // stats must differ by 10+ to consider manoks distinct
+	PRE_TOURNAMENT_DURATION_MS: 90_000, // 90s to study bracket + pick winner
+	BETTING_DURATION_MS: 60_000, // 60s to place and lock bet
 } as const;

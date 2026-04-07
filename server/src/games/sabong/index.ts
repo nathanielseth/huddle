@@ -301,6 +301,7 @@ function buildManokView(
 			speed: manok.hiddenStats.has("speed") ? null : manok.speed,
 			critRate: manok.hiddenStats.has("critRate") ? null : manok.critRate,
 		},
+		maxHp: manok.maxHealth,
 		currentHp: null, // client derives hp from battlelog events
 		moneylineOdds,
 		winProbability,
@@ -335,6 +336,7 @@ function getPublicSabongState(state: SabongServerState): SabongState {
 			playerId: id,
 			balance: p.balance,
 			bracketPickId: p.bracketPickId,
+			bracketPickLocked: p.bracketPickLocked,
 			currentBet: p.currentBet,
 			betLocked: p.betLocked,
 		};
@@ -444,7 +446,7 @@ export const sabongEngine: GameEngine = {
 		return {
 			serverPayload: state,
 			publicPayload: getPublicSabongState(state),
-			timer: null, // no timer - advances when all bracket picks locked
+			timer: { startsAt: Date.now(), duration: C.PRE_TOURNAMENT_DURATION_MS },
 		};
 	},
 
@@ -478,8 +480,14 @@ export const sabongEngine: GameEngine = {
 
 				if (allPicksLocked(state)) {
 					openBetting(state);
+					// all players locked manually - cancel pre_tournament timer, start betting
+					return {
+						serverPayload: state,
+						publicPayload: getPublicSabongState(state),
+						timer: { startsAt: Date.now(), duration: C.BETTING_DURATION_MS },
+					};
 				}
-				break;
+				break; // still waiting - keep existing pre_tournament timer
 			}
 
 			case "place_bet": {
@@ -548,6 +556,69 @@ export const sabongEngine: GameEngine = {
 		const { room } = ctx;
 		const state = room.gamePayload as SabongServerState;
 
+		if (state.phase === "pre_tournament") {
+			const manokIds = [...state.manoks.keys()];
+			for (const player of state.players.values()) {
+				if (!player.bracketPickId) {
+					// assign a random pick for players who never selected one
+					player.bracketPickId =
+						manokIds[Math.floor(Math.random() * manokIds.length)]!;
+				}
+				player.bracketPickLocked = true;
+			}
+			openBetting(state);
+			return {
+				serverPayload: state,
+				publicPayload: getPublicSabongState(state),
+				timer: { startsAt: Date.now(), duration: C.BETTING_DURATION_MS },
+			};
+		}
+
+		// betting timer ran out - force-lock anyone still pending, then fight
+		if (state.phase === "betting") {
+			const slot = state.bracket[state.currentMatchIndex]!;
+			if (!slot.fighter1Id || !slot.fighter2Id) {
+				return {
+					serverPayload: state,
+					publicPayload: getPublicSabongState(state),
+					timer: null,
+				};
+			}
+
+			for (const player of state.players.values()) {
+				if (player.betLocked) continue;
+
+				if (!player.currentBet) {
+					// no bet placed at all - minimum bet on a random side
+					const manokId =
+						Math.random() < 0.5 ? slot.fighter1Id : slot.fighter2Id;
+					const amount = Math.min(1, player.balance);
+					player.currentBet = { manokId, amount };
+				}
+				player.balance -= player.currentBet.amount;
+				player.betLocked = true;
+			}
+
+			const f1 = state.manoks.get(slot.fighter1Id)!;
+			const f2 = state.manoks.get(slot.fighter2Id)!;
+			const { winnerId, log } = simulateBattle(
+				toFighterStats(f1),
+				toFighterStats(f2),
+			);
+			slot.winnerId = winnerId;
+			state.battleLog = log;
+			state.phase = "fighting";
+
+			return {
+				serverPayload: state,
+				publicPayload: getPublicSabongState(state),
+				timer: {
+					startsAt: Date.now(),
+					duration: estimateFightDuration(log.length),
+				},
+			};
+		}
+
 		// fight animation finished → payout
 		if (state.phase === "fighting") {
 			const scoreDeltas = applyPayouts(state);
@@ -603,7 +674,7 @@ export const sabongEngine: GameEngine = {
 			return {
 				serverPayload: state,
 				publicPayload: getPublicSabongState(state),
-				timer: null, // betting has no timer
+				timer: { startsAt: Date.now(), duration: C.BETTING_DURATION_MS },
 			};
 		}
 

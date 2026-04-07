@@ -4,6 +4,7 @@ import { motion, AnimatePresence } from "motion/react";
 import { LogOut, Copy, Check, AlertCircle, X } from "lucide-react";
 import { useGameStore } from "../store/useGameStore";
 import { GAMES } from "../data/games";
+import { SabongGame } from "../games/sabong/SabongGame";
 
 export function Room() {
 	const navigate = useNavigate();
@@ -15,6 +16,8 @@ export function Room() {
 	const error = useGameStore((s) => s.error);
 	const leaveRoom = useGameStore((s) => s.leaveRoom);
 	const clearError = useGameStore((s) => s.clearError);
+	const phase = useGameStore((s) => s.phase);
+	const startGame = useGameStore((s) => s.startGame);
 
 	const [copied, setCopied] = useState(false);
 
@@ -42,6 +45,18 @@ export function Room() {
 		navigator.clipboard.writeText(roomCode);
 		setCopied(true);
 		setTimeout(() => setCopied(false), 2000);
+	}
+
+	if (phase === "in_game") {
+		if (gameId === "super-sabong") return <SabongGame />;
+	}
+
+	if (phase === "ended") {
+		return (
+			<div className="flex items-center justify-center min-h-screen bg-bg text-white">
+				Game over.
+			</div>
+		);
 	}
 
 	return (
@@ -149,6 +164,7 @@ export function Room() {
 							<button
 								type="button"
 								disabled={!canStart}
+								onClick={startGame}
 								className={`h-12 px-12 rounded-lg text-sm font-bold tracking-widest uppercase transition-all duration-150 ${
 									canStart
 										? "bg-huddle text-white cursor-pointer hover:opacity-85 active:opacity-70"

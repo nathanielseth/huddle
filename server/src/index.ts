@@ -9,10 +9,10 @@ import type {
 import { registerHandlers } from "./room/handlers.js";
 import { RoomStore, isExpired } from "./room/rooms.js";
 import { EngineRunner } from "./engine/engineRunner.js";
+import { sabongEngine } from "./games/sabong/index.js";
 
 const app = express();
 const httpServer = createServer(app);
-
 const CLIENT_URL = process.env["CLIENT_URL"] ?? "http://localhost:5173";
 
 // socket.io with typed events
@@ -25,6 +25,7 @@ app.use(express.json());
 
 const store = new RoomStore();
 const runner = new EngineRunner();
+runner.register(sabongEngine);
 
 // health check endpoint
 app.get("/health", (_req, res) => {
@@ -34,7 +35,7 @@ app.get("/health", (_req, res) => {
 // handle new socket connections
 io.on("connection", (socket) => {
 	console.log(`[socket] connected ${socket.id}`);
-	registerHandlers(io, socket, store, runner); // ← pass runner
+	registerHandlers(io, socket, store, runner);
 });
 
 // cleanup expired rooms every 5 minutes

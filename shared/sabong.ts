@@ -8,6 +8,7 @@ export interface ManokView {
 		speed: number | null;
 		critRate: number | null;
 	};
+	maxHp: number;
 	currentHp: number | null;
 	moneylineOdds: number;
 	winProbability: number;
@@ -48,6 +49,7 @@ export interface SabongPlayerView {
 	playerId: string;
 	balance: number;
 	bracketPickId: string | null; // which they picked to win the whole tourna
+	bracketPickLocked: boolean;
 	currentBet: { manokId: string; amount: number } | null;
 	betLocked: boolean; // true = they're done betting this match, waiting for others
 }
