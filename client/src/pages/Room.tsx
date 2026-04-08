@@ -5,6 +5,8 @@ import { LogOut, Copy, Check, AlertCircle, X } from "lucide-react";
 import { useGameStore } from "../store/useGameStore";
 import { GAMES } from "../data/games";
 import { SabongGame } from "../games/sabong/SabongGame";
+import { FinishedHost, FinishedPlayer } from "../games/sabong/phases/Finished";
+import { QRCodeSVG } from "qrcode.react";
 
 export function Room() {
 	const navigate = useNavigate();
@@ -52,8 +54,11 @@ export function Room() {
 	}
 
 	if (phase === "ended") {
+		if (gameId === "super-sabong") {
+			return role === "host" ? <FinishedHost /> : <FinishedPlayer />;
+		}
 		return (
-			<div className="flex items-center justify-center min-h-screen bg-bg text-white">
+			<div className="flex items-center justify-center min-h-screen bg-bg text-white/40 text-sm">
 				Game over.
 			</div>
 		);
@@ -151,6 +156,26 @@ export function Room() {
 									</AnimatePresence>
 								</button>
 							</div>
+						</motion.div>
+
+						<motion.div
+							className="flex flex-col items-center gap-3"
+							initial={{ opacity: 0, scale: 0.95 }}
+							animate={{ opacity: 1, scale: 1 }}
+							transition={{ duration: 0.25 }}
+						>
+							<div className="p-3 rounded-xl bg-white">
+								<QRCodeSVG
+									value={`${window.location.origin}/join/${roomCode}`}
+									size={120}
+									level="M"
+									bgColor="#ffffff"
+									fgColor="#0f0f0f"
+								/>
+							</div>
+							<p className="text-[10px] font-semibold tracking-[0.2em] uppercase text-white/30">
+								Scan to join
+							</p>
 						</motion.div>
 
 						<PlayerList players={players} playerId={null} />
