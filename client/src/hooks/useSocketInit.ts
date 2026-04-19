@@ -23,6 +23,7 @@ export function useSocketInit(): void {
 		const onRoomError = (msg: string) => store()._setError(msg);
 		const onRoomClosed = () => store()._closeRoom();
 		const onRejoinFailed = () => store()._closeRoom();
+		const onPlayerSecret = (payload: unknown) => store()._setSecret(payload);
 
 		socket.on("connect", onConnect);
 		socket.on("disconnect", onDisconnect);
@@ -31,6 +32,7 @@ export function useSocketInit(): void {
 		socket.on("room_error", onRoomError);
 		socket.on("room_closed", onRoomClosed);
 		socket.on("rejoin_failed", onRejoinFailed);
+		socket.on("player_secret", onPlayerSecret);
 
 		store().connect();
 
@@ -42,6 +44,7 @@ export function useSocketInit(): void {
 			socket.off("room_error", onRoomError);
 			socket.off("room_closed", onRoomClosed);
 			socket.off("rejoin_failed", onRejoinFailed);
+			socket.off("player_secret", onPlayerSecret);
 		};
 	}, []);
 }

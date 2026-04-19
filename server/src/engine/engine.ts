@@ -12,6 +12,7 @@ export interface EngineResult {
 	timer: GameTimer | null;
 	roomPhase?: RoomPhase;
 	scoreDeltas?: Record<string, number>;
+	privatePayloads?: Map<string, unknown>;
 }
 
 // the contract every game module must satisfy
@@ -28,4 +29,8 @@ export interface GameEngine {
 
 	// the active timer expired
 	onTimerExpired(ctx: GameContext): EngineResult;
+}
+
+export interface GameEngineWithSecrets extends GameEngine {
+	getPlayerSecret(ctx: GameContext, playerId: string): unknown | null;
 }

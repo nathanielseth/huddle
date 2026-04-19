@@ -50,6 +50,7 @@ export interface SabongPlayerView {
 	balance: number;
 	bracketPickId: string | null; // which they picked to win the whole tourna
 	bracketPickLocked: boolean;
+	sabotageTargetId: string | null;
 	currentBet: { manokId: string; amount: number } | null;
 	betLocked: boolean; // true = they're done betting this match, waiting for others
 }

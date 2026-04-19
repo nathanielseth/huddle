@@ -1,4 +1,4 @@
-import { useRef, useEffect } from "react";
+import { useRef } from "react";
 
 const hasHover =
 	typeof window !== "undefined" &&
@@ -22,12 +22,6 @@ export function use3DTilt<T extends HTMLElement>(config?: TiltConfig) {
 	const raf = useRef<number | null>(null);
 
 	const cfg = { ...DEFAULTS, ...config };
-
-	useEffect(() => {
-		return () => {
-			if (raf.current !== null) cancelAnimationFrame(raf.current);
-		};
-	}, []);
 
 	const onMouseEnter = () => {
 		if (!hasHover || !ref.current) return;

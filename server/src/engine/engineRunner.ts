@@ -3,7 +3,7 @@ import type {
 	ServerToClientEvents,
 	ClientToServerEvents,
 } from "../../../shared/events.js";
-import type { GameEngine, EngineResult, GameContext } from "./engine.js";
+import type { GameEngine, EngineResult, GameEngineWithSecrets } from "./engine.js";
 import type { RoomStore } from "../room/rooms.js";
 import { type Room, getPublicState, touchRoom } from "../room/rooms.js";
 import type { GameTimer } from "../../../shared/types.js";
@@ -55,6 +55,20 @@ export class EngineRunner {
 		}
 	}
 
+	resendSecret(room: Room, playerId: string, io: IO): void {
+		const engine = this.resolveEngine(room.gameId);
+		if (!engine || !("getPlayerSecret" in engine)) return;
+		const secret = (engine as GameEngineWithSecrets).getPlayerSecret(
+			{ room },
+			playerId,
+		);
+		if (!secret) return;
+		const player = room.players.get(playerId);
+		if (player?.socketId) {
+			io.to(player.socketId).emit("player_secret", secret);
+		}
+	}
+
 	// private helpers
 
 	private resolveEngine(gameId: string | null): GameEngine | null {
@@ -92,6 +106,15 @@ export class EngineRunner {
 
 		touchRoom(room);
 		io.to(room.code).emit("game_state", getPublicState(room));
+
+		if (result.privatePayloads) {
+			for (const [playerId, secret] of result.privatePayloads) {
+				const player = room.players.get(playerId);
+				if (player?.socketId) {
+					io.to(player.socketId).emit("player_secret", secret);
+				}
+			}
+		}
 	}
 
 	private scheduleTimer(

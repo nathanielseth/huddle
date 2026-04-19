@@ -1,37 +1,35 @@
 import { useEffect, useRef, useState } from "react";
-import { useNavigate, useParams } from "react-router";
+import { useNavigate, useParams, Navigate } from "react-router";
 import { motion, AnimatePresence } from "motion/react";
 import { X } from "lucide-react";
 import { useGameStore } from "../store/useGameStore";
+
+const SHAKE = [0, -6, 6, -5, 5, -3, 3, 0];
 
 export function Join() {
 	const { code } = useParams<{ code: string }>();
 	const navigate = useNavigate();
 	const joinRoom = useGameStore((s) => s.joinRoom);
 	const roomCode = useGameStore((s) => s.roomCode);
+	const error = useGameStore((s) => s.error);
+	const clearError = useGameStore((s) => s.clearError);
 
 	const [name, setName] = useState("");
 	const [shake, setShake] = useState(false);
 	const inputRef = useRef<HTMLInputElement>(null);
 
-	// once store confirms we're in a room, navigate there
 	useEffect(() => {
-		if (roomCode) navigate(`/room/${roomCode}`);
-	}, [roomCode, navigate]);
-
-	useEffect(() => {
+		clearError();
 		inputRef.current?.focus();
-	}, []);
+	}, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-	function triggerShake() {
-		setShake(true);
-		setTimeout(() => setShake(false), 400);
-	}
+	if (roomCode) return <Navigate to={`/room/${roomCode}`} replace />;
 
 	function handleJoin() {
 		const trimmed = name.trim();
 		if (!trimmed || !code) {
-			triggerShake();
+			setShake(true);
+			setTimeout(() => setShake(false), 400);
 			return;
 		}
 		joinRoom(code.toUpperCase(), trimmed);
@@ -51,7 +49,6 @@ export function Join() {
 				animate={{ opacity: 1, y: 0 }}
 				transition={{ duration: 0.3 }}
 			>
-				{/* logo */}
 				<div className="flex justify-center">
 					<img
 						src="/huddle-logo.svg"
@@ -60,9 +57,7 @@ export function Join() {
 					/>
 				</div>
 
-				{/* card */}
 				<div className="flex flex-col gap-6 rounded-2xl border border-border bg-surface-raised p-6">
-					{/* room badge */}
 					<div className="flex flex-col items-center gap-1">
 						<p className="text-[10px] font-semibold tracking-[0.2em] uppercase text-white/40">
 							Joining room
@@ -72,7 +67,6 @@ export function Join() {
 						</span>
 					</div>
 
-					{/* name input */}
 					<div className="flex flex-col gap-2">
 						<label
 							htmlFor="join-name"
@@ -82,7 +76,7 @@ export function Join() {
 						</label>
 						<motion.div
 							className="relative"
-							animate={{ x: shake ? [0, -6, 6, -5, 5, -3, 3, 0] : 0 }}
+							animate={{ x: shake ? SHAKE : 0 }}
 							transition={{ type: "tween", duration: 0.4 }}
 						>
 							<input
@@ -90,12 +84,15 @@ export function Join() {
 								ref={inputRef}
 								type="text"
 								value={name}
-								onChange={(e) => setName(e.target.value.slice(0, 10))}
+								onChange={(e) => {
+									setName(e.target.value.slice(0, 10));
+									if (error) clearError();
+								}}
 								onKeyDown={handleKeyDown}
 								placeholder="Enter your name"
 								maxLength={10}
 								className={`h-11 w-full px-4 pr-10 rounded-lg bg-white/5 border text-sm placeholder:text-white/30 outline-none transition-colors ${
-									shake
+									shake || error
 										? "border-red-500/70"
 										: "border-border focus:border-white/40"
 								}`}
@@ -108,7 +105,10 @@ export function Join() {
 										animate={{ opacity: 1, scale: 1 }}
 										exit={{ opacity: 0, scale: 0.7 }}
 										transition={{ duration: 0.12 }}
-										onClick={() => setName("")}
+										onClick={() => {
+											setName("");
+											clearError();
+										}}
 										className="absolute right-3 top-1/2 -translate-y-1/2 text-white/30 hover:text-white/70 transition-colors cursor-pointer"
 										tabIndex={-1}
 										aria-label="Clear name"
@@ -118,9 +118,23 @@ export function Join() {
 								)}
 							</AnimatePresence>
 						</motion.div>
+
+						<AnimatePresence>
+							{error && (
+								<motion.p
+									key="join-error"
+									className="text-xs text-red-400/80"
+									initial={{ opacity: 0, y: -4 }}
+									animate={{ opacity: 1, y: 0 }}
+									exit={{ opacity: 0, y: -4 }}
+									transition={{ duration: 0.15 }}
+								>
+									{error}
+								</motion.p>
+							)}
+						</AnimatePresence>
 					</div>
 
-					{/* submit */}
 					<button
 						type="button"
 						onClick={handleJoin}

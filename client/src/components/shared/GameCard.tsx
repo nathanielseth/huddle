@@ -16,7 +16,6 @@ export function GameCard({
 	anySelected,
 }: GameCardProps) {
 	const { ref, ...tiltEvents } = use3DTilt<HTMLButtonElement>();
-
 	return (
 		<button
 			type="button"
@@ -26,7 +25,7 @@ export function GameCard({
 			onClick={() => onSelect(game)}
 			{...tiltEvents}
 			className={cn(
-				"group relative aspect-video rounded-xl overflow-hidden cursor-pointer will-change-transform transform-gpu",
+				"group relative aspect-video rounded-xl overflow-hidden cursor-pointer transform-gpu",
 				"outline-none focus-visible:ring-2 focus-visible:ring-huddle focus-visible:ring-offset-2 focus-visible:ring-offset-bg",
 				"transition-all duration-300 ease-out",
 				isSelected
@@ -42,11 +41,10 @@ export function GameCard({
 					background: `radial-gradient(400px circle at var(--mouse-x, 0) var(--mouse-y, 0), rgba(255,255,255,0.12), transparent 40%)`,
 				}}
 			/>
-
 			<img
 				src={game.thumbnail}
 				alt=""
-				className="absolute inset-0 w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
+				className="absolute inset-0 w-full h-full object-cover"
 			/>
 		</button>
 	);

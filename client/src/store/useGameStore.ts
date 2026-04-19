@@ -25,6 +25,7 @@ interface GameStore {
 	gameId: string | null;
 	gamePayload: unknown;
 	timer: GameTimer | null;
+	secret: unknown;
 	setPlayerName: (name: string) => void;
 	connect: () => void;
 	disconnect: () => void;
@@ -38,6 +39,7 @@ interface GameStore {
 	_setError: (message: string) => void;
 	_closeRoom: () => void;
 	_attemptRejoin: (session: RoomSession) => void;
+	_setSecret: (payload: unknown) => void;
 }
 
 // get or create persistent player id from localstorage
@@ -58,6 +60,7 @@ const ROOM_RESET = {
 	gameId: null,
 	gamePayload: null,
 	timer: null,
+	secret: null,
 	error: null,
 } as const satisfies Partial<GameStore>;
 
@@ -72,6 +75,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
 	phase: "lobby",
 	gameId: null,
 	gamePayload: null,
+	secret: null,
 	timer: null,
 	setPlayerName: (name) => set({ playerName: name }),
 	// connect to socket server if not already
@@ -152,4 +156,5 @@ export const useGameStore = create<GameStore>((set, get) => ({
 			role: session.role,
 		});
 	},
+	_setSecret: (payload) => set({ secret: payload }),
 }));

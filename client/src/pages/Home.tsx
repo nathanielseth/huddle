@@ -1,5 +1,5 @@
-import { useEffect, useState } from "react";
-import { useNavigate } from "react-router";
+import { useState } from "react";
+import { Navigate } from "react-router";
 import { AnimatePresence, motion } from "motion/react";
 import { JoinBar } from "../components/home/JoinBar";
 import { GameGrid } from "../components/shared/GameGrid";
@@ -10,13 +10,10 @@ import type { Game } from "../types/game";
 export function Home() {
 	const [selected, setSelected] = useState<Game | null>(null);
 
-	const navigate = useNavigate();
 	const createRoom = useGameStore((s) => s.createRoom);
 	const roomCode = useGameStore((s) => s.roomCode);
 
-	useEffect(() => {
-		if (roomCode) navigate(`/room/${roomCode}`);
-	}, [roomCode, navigate]);
+	if (roomCode) return <Navigate to={`/room/${roomCode}`} replace />;
 
 	const handleSelect = (game: Game) => {
 		setSelected((prev) => (prev?.id === game.id ? null : game));

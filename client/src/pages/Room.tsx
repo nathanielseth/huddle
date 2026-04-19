@@ -1,7 +1,7 @@
-import { useEffect, useState } from "react";
-import { useNavigate } from "react-router";
+import { useState } from "react";
+import { useNavigate, Navigate } from "react-router";
 import { motion, AnimatePresence } from "motion/react";
-import { LogOut, Copy, Check, AlertCircle, X } from "lucide-react";
+import { LogOut, Copy, Check } from "lucide-react";
 import { useGameStore } from "../store/useGameStore";
 import { GAMES } from "../data/games";
 import { SabongGame } from "../games/sabong/SabongGame";
@@ -15,28 +15,18 @@ export function Room() {
 	const players = useGameStore((s) => s.players);
 	const gameId = useGameStore((s) => s.gameId);
 	const playerId = useGameStore((s) => s.playerId);
-	const error = useGameStore((s) => s.error);
 	const leaveRoom = useGameStore((s) => s.leaveRoom);
-	const clearError = useGameStore((s) => s.clearError);
 	const phase = useGameStore((s) => s.phase);
 	const startGame = useGameStore((s) => s.startGame);
 
 	const [copied, setCopied] = useState(false);
 
+	if (!roomCode) return <Navigate to="/" replace />;
+
 	const game = GAMES.find((g) => g.id === gameId) ?? null;
 	const connectedCount = players.filter((p) => p.isConnected).length;
 	const minPlayers = game?.playerCount[0] ?? 2;
 	const canStart = connectedCount >= minPlayers;
-
-	useEffect(() => {
-		if (!roomCode) navigate("/");
-	}, [roomCode, navigate]);
-
-	useEffect(() => {
-		if (!error) return;
-		const t = setTimeout(clearError, 4000);
-		return () => clearTimeout(t);
-	}, [error, clearError]);
 
 	function handleLeave() {
 		leaveRoom();
@@ -84,30 +74,6 @@ export function Room() {
 					Leave
 				</button>
 			</div>
-
-			{/* error toast */}
-			<AnimatePresence>
-				{error && (
-					<motion.div
-						className="fixed top-5 left-1/2 -translate-x-1/2 z-50 flex items-center gap-3 px-4 py-3 rounded-xl bg-red-500/10 border border-red-500/30 text-red-400 text-sm font-medium shadow-lg backdrop-blur-md whitespace-nowrap"
-						initial={{ opacity: 0, y: -8, scale: 0.96 }}
-						animate={{ opacity: 1, y: 0, scale: 1 }}
-						exit={{ opacity: 0, y: -8, scale: 0.96 }}
-						transition={{ duration: 0.2 }}
-					>
-						<AlertCircle size={15} className="shrink-0" />
-						{error}
-						<button
-							type="button"
-							onClick={clearError}
-							className="ml-1 text-red-400/60 hover:text-red-400 transition-colors cursor-pointer"
-							aria-label="Dismiss"
-						>
-							<X size={13} />
-						</button>
-					</motion.div>
-				)}
-			</AnimatePresence>
 
 			<div className="flex flex-col flex-1 items-center justify-center gap-12 px-6 py-12">
 				{role === "host" ? (
