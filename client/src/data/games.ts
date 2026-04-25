@@ -4,6 +4,7 @@ export const GAMES: Game[] = [
 	{
 		id: "flip-cards",
 		name: "Flip Cards",
+		thumbnail: "/games/flip_cards.avif",
 		placeholderColor: "#0ea5e9",
 		description:
 			"A fast-paced card game where bluffing beats luck. Play your hand, call out liars, survive.",
@@ -25,6 +26,7 @@ export const GAMES: Game[] = [
 	{
 		id: "believable-lies",
 		name: "Believable Lies",
+		thumbnail: "/games/believable_lies.avif",
 		placeholderColor: "#a855f7",
 		description:
 			"Everyone writes a fake answer. Everyone votes. The best liar wins.",
@@ -44,8 +46,9 @@ export const GAMES: Game[] = [
 		duration: 30,
 	},
 	{
-		id: "sussy-impostor",
-		name: "Sussy Impostor",
+		id: "sussy-impostors",
+		name: "Sussy Impostors",
+		thumbnail: "/games/sussy_impostors.avif",
 		placeholderColor: "#ef4444",
 		description:
 			"One player doesn't have the word. Blend in. Don't get caught. Chaos guaranteed.",
@@ -56,6 +59,7 @@ export const GAMES: Game[] = [
 	{
 		id: "art-school",
 		name: "Art School",
+		thumbnail: "/games/art_school.avif",
 		placeholderColor: "#10b981",
 		description:
 			"Draw the prompt with zero artistic talent. Everyone guesses. Someone always nails it.",

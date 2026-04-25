@@ -1,3 +1,4 @@
+import { z } from "zod";
 import type {
 	GameEngine,
 	GameContext,
@@ -17,38 +18,14 @@ import type {
 	SabongAction,
 } from "./types.js";
 import { SABONG_CONSTANTS } from "./types.js";
-import { getMatchupOdds, simulateBattle, type FighterStats } from "./battle.js";
+import { simulateBattle, type FighterStats } from "./battle.js";
+import { getMatchupOdds, predictWinProbability } from "./heuristic.js";
+import { SabongLogger } from "./logger.js";
+import { MANOK_NAMES } from "./names.js";
 
 const C = SABONG_CONSTANTS;
 
-// names pool
-
-const MANOK_NAMES: string[] = [
-	"Alfredo",
-	"Antonio",
-	"Bruno",
-	"Buto",
-	"Covid Bryant",
-	"Dick",
-	"Eduardo",
-	"Elena",
-	"Jacob",
-	"Jeppy",
-	"Jhenyfher",
-	"Jhemerlyn",
-	"Jhavascript",
-	"Jollybird",
-	"Jomar",
-	"Joseph",
-	"Juan",
-	"Maria",
-	"Mike Jordan",
-	"Pedro",
-	"Priest",
-	"Princess",
-	"Raphael",
-	"Rosebowl",
-];
+// constants
 
 const HIDEABLE_STATS = [
 	"health",
@@ -59,9 +36,13 @@ const HIDEABLE_STATS = [
 ] as const;
 type HideableStat = (typeof HIDEABLE_STATS)[number];
 
-const EVENT_DURATION_MS = 1200; // approximate ms per battle log event
-const FIGHT_BUFFER_MS = 3000; // extra breathing room after last event
+const EVENT_DURATION_MS = 1200;
+const FIGHT_BUFFER_MS = 3000;
 const PAYOUT_DURATION_MS = 6000;
+const MIN_STAT_DIFF = 10;
+
+const QF_COUNT = 4; // quarter-final match slots (indices 0-3)
+const FINAL_MATCH_INDEX = 6; // grand final slot index
 
 // pure helpers
 
@@ -81,11 +62,11 @@ function toFighterStats(m: ManokStats): FighterStats {
 	return {
 		id: m.id,
 		health: m.health,
-		attack: m.attack,
+		attack: m.isSabotaged ? Math.floor(m.attack * 0.8) : m.attack,
 		defense: m.defense,
 		speed: m.speed,
 		critRate: m.critRate,
-		determination: m.determination,
+		determination: m.isSabotaged ? 0 : m.determination,
 	};
 }
 
@@ -103,9 +84,7 @@ function estimateFightDuration(logLength: number): number {
 
 function generateHiddenStats(): Set<HideableStat> {
 	const shuffled = [...HIDEABLE_STATS].sort(() => Math.random() - 0.5);
-	// 1 or 2 hidden stats - determination is always hidden (server-only)
-	const count = Math.random() < 0.5 ? 1 : 2;
-	return new Set(shuffled.slice(0, count) as HideableStat[]);
+	return new Set(shuffled.slice(0, 2) as HideableStat[]);
 }
 
 function generateManok(id: string, name: string): ManokStats {
@@ -122,38 +101,164 @@ function generateManok(id: string, name: string): ManokStats {
 		determination: randInt(C.STAT_RANGES.determination),
 		attackBoost: 0,
 		hiddenStats: generateHiddenStats(),
+		isSabotaged: false,
 	};
 }
 
-// tries up to 30 times to produce a balanced pair.
-// falls back to unbalanced - clear favorites make for interesting betting.
+// matchup balancing
+
+/**
+ * adjusts f2's stats to ensure at least min_stat_diff_count stats differ
+ * by >= min_stat_diff between f1 and f2. targets low-impact stats first
+ * (speed -> critRate -> defense) to preserve balance.
+ */
+function enforceStatDifferences(f1: ManokStats, f2: ManokStats): void {
+	const differs = (a: number, b: number): boolean =>
+		Math.abs(a - b) >= MIN_STAT_DIFF;
+
+	let count = (
+		[
+			[f1.health, f2.health],
+			[f1.attack, f2.attack],
+			[f1.defense, f2.defense],
+			[f1.speed, f2.speed],
+			[f1.critRate, f2.critRate],
+		] as const
+	).filter(([a, b]) => differs(a, b)).length;
+
+	if (count >= C.MIN_STAT_DIFF_COUNT) return;
+
+	const clamp = (v: number, range: readonly [number, number]): number =>
+		Math.max(range[0], Math.min(range[1], v));
+
+	const candidates: Array<{ needsAdjust: () => boolean; adjust: () => void }> =
+		[
+			{
+				needsAdjust: () => !differs(f1.speed, f2.speed),
+				adjust: () => {
+					const shift = f2.speed <= f1.speed ? MIN_STAT_DIFF : -MIN_STAT_DIFF;
+					f2.speed = clamp(f2.speed + shift, C.STAT_RANGES.speed);
+				},
+			},
+			{
+				needsAdjust: () => !differs(f1.critRate, f2.critRate),
+				adjust: () => {
+					const shift =
+						f2.critRate <= f1.critRate ? MIN_STAT_DIFF : -MIN_STAT_DIFF;
+					f2.critRate = clamp(f2.critRate + shift, C.STAT_RANGES.critRate);
+				},
+			},
+			{
+				needsAdjust: () => !differs(f1.defense, f2.defense),
+				adjust: () => {
+					const shift =
+						f2.defense <= f1.defense ? MIN_STAT_DIFF : -MIN_STAT_DIFF;
+					f2.defense = clamp(f2.defense + shift, C.STAT_RANGES.defense);
+				},
+			},
+		];
+
+	for (const c of candidates) {
+		if (count >= C.MIN_STAT_DIFF_COUNT) break;
+		if (c.needsAdjust()) {
+			c.adjust();
+			count++;
+		}
+	}
+}
+
+/**
+ * fallback when 30 random attempts all fail the balance check.
+ * mirrors most stats to the opposite end of their range, then
+ * binary-searches opponent's attack (highest-weight stat) until
+ * the matchup lands within balance_tolerance.
+ *
+ * guarantees balance in o(8) heuristic evaluations - o(1) total.
+ */
+function createBalancedOpponent(
+	base: ManokStats,
+	id: string,
+	name: string,
+): ManokStats {
+	const clamp = (v: number, range: readonly [number, number]): number =>
+		Math.max(range[0], Math.min(range[1], v));
+
+	const opp: ManokStats = {
+		id,
+		name,
+		health: C.STAT_RANGES.health[0] + C.STAT_RANGES.health[1] - base.health,
+		maxHealth: 0,
+		attack: base.attack,
+		defense: C.STAT_RANGES.defense[0] + C.STAT_RANGES.defense[1] - base.defense,
+		speed: clamp(base.speed + randInt([-10, 10]), C.STAT_RANGES.speed),
+		critRate:
+			C.STAT_RANGES.critRate[0] + C.STAT_RANGES.critRate[1] - base.critRate,
+		determination: randInt(C.STAT_RANGES.determination),
+		attackBoost: 0,
+		hiddenStats: generateHiddenStats(),
+		isSabotaged: false,
+	};
+	opp.maxHealth = opp.health;
+
+	let lo = C.STAT_RANGES.attack[0];
+	let hi = C.STAT_RANGES.attack[1];
+
+	for (let iter = 0; iter < 8; iter++) {
+		const mid = Math.round((lo + hi) / 2);
+		opp.attack = mid;
+
+		const p = predictWinProbability(toFighterStats(base), toFighterStats(opp));
+
+		if (Math.abs(p - 0.5) <= C.BALANCE_TOLERANCE) break;
+
+		if (p > 0.5) lo = mid + 1;
+		else hi = mid - 1;
+	}
+
+	return opp;
+}
+
+/**
+ * returns a [m1, m2] pair within balance_tolerance.
+ *
+ * strategy:
+ *  1. try 30 random pairs - fast path, covers ~90% of cases.
+ *  2. binary-search fallback - guarantees balance, always resolves.
+ *  3. enforcestatdifferences - ensures visible stat contrast for betting.
+ */
 function generateBalancedPair(
 	id1: string,
 	name1: string,
 	id2: string,
 	name2: string,
 ): [ManokStats, ManokStats] {
+	let bestPair: [ManokStats, ManokStats] | null = null;
+	let bestDist = Infinity;
+
 	for (let attempt = 0; attempt < 30; attempt++) {
 		const m1 = generateManok(id1, name1);
 		const m2 = generateManok(id2, name2);
-		const { probability } = getMatchupOdds(
-			toFighterStats(m1),
-			toFighterStats(m2),
-			200,
-		);
-		const isBalanced =
-			probability.fighter1 >= 0.5 - C.BALANCE_TOLERANCE &&
-			probability.fighter1 <= 0.5 + C.BALANCE_TOLERANCE;
-		if (isBalanced) return [m1, m2];
+		const p = predictWinProbability(toFighterStats(m1), toFighterStats(m2));
+		const dist = Math.abs(p - 0.5);
+
+		if (dist < bestDist) {
+			bestDist = dist;
+			bestPair = [m1, m2];
+		}
+
+		if (dist <= C.BALANCE_TOLERANCE) {
+			enforceStatDifferences(m1, m2);
+			return [m1, m2];
+		}
 	}
-	return [generateManok(id1, name1), generateManok(id2, name2)];
+
+	const [base] = bestPair!;
+	const opp = createBalancedOpponent(base, id2, name2);
+	enforceStatDifferences(base, opp);
+	return [base, opp];
 }
 
-// bracket - slots 0–3: qf | slots 4–5: sf | slot 6: final
-// advancement map:
-//   qf0 winner → sf4.fighter1   qf1 winner → sf4.fighter2
-//   qf2 winner → sf5.fighter1   qf3 winner → sf5.fighter2
-//   sf4 winner → final6.fighter1  sf5 winner → final6.fighter2
+// bracket
 
 const ADVANCEMENT: Record<
 	number,
@@ -170,8 +275,7 @@ const ADVANCEMENT: Record<
 function buildInitialBracket(manoks: ManokStats[]): ServerBracketSlot[] {
 	const bracket: ServerBracketSlot[] = [];
 
-	// qf: pair manoks sequentially - 0v1, 2v3, 4v5, 6v7
-	for (let i = 0; i < 4; i++) {
+	for (let i = 0; i < QF_COUNT; i++) {
 		bracket.push({
 			matchIndex: i,
 			fighter1Id: manoks[i * 2]!.id,
@@ -181,8 +285,7 @@ function buildInitialBracket(manoks: ManokStats[]): ServerBracketSlot[] {
 		});
 	}
 
-	// sf + final - fighters filled in as winners advance
-	for (let i = 4; i < 7; i++) {
+	for (let i = QF_COUNT; i < QF_COUNT * 2 - 1; i++) {
 		bracket.push({
 			matchIndex: i,
 			fighter1Id: null,
@@ -201,16 +304,17 @@ function advanceBracket(
 	winnerId: string,
 ): void {
 	const next = ADVANCEMENT[completedMatchIndex];
-	if (!next) return; // final (6) - no advancement
+	if (!next) return;
 	bracket[next.slot]![next.position] = winnerId;
 }
 
 function computeSlotOdds(
 	slot: ServerBracketSlot,
 	manoks: Map<string, ManokStats>,
-): { fighter1: number; fighter2: number } {
-	const f1 = manoks.get(slot.fighter1Id!)!;
-	const f2 = manoks.get(slot.fighter2Id!)!;
+): { fighter1: number; fighter2: number } | null {
+	const f1 = slot.fighter1Id ? manoks.get(slot.fighter1Id) : undefined;
+	const f2 = slot.fighter2Id ? manoks.get(slot.fighter2Id) : undefined;
+	if (!f1 || !f2) return null;
 	return getMatchupOdds(toFighterStats(f1), toFighterStats(f2)).moneyline;
 }
 
@@ -224,19 +328,67 @@ function allBetsLocked(state: SabongServerState): boolean {
 	return [...state.players.values()].every((p) => p.betLocked);
 }
 
-// transition to betting: give ayuda to broke players, reset bets, compute odds.
 function openBetting(state: SabongServerState): void {
 	const slot = state.bracket[state.currentMatchIndex]!;
 
-	// compute odds if not already done (sf/final slots are filled late)
-	if (!slot.odds && slot.fighter1Id && slot.fighter2Id) {
-		slot.odds = computeSlotOdds(slot, state.manoks);
+	const sabotaged = new Set<string>();
+	for (const player of state.players.values()) {
+		if (!player.sabotageTargetId) continue;
+		if (sabotaged.has(player.sabotageTargetId)) {
+			state.logger.log("sabotage_applied", state.currentMatchIndex, {
+				manokId: player.sabotageTargetId,
+				byPlayer: player.playerId,
+				stacked: true,
+				note: "already sabotaged, no additional effect",
+			});
+			continue;
+		}
+
+		const manok = state.manoks.get(player.sabotageTargetId);
+		if (!manok) continue;
+
+		manok.isSabotaged = true;
+		sabotaged.add(player.sabotageTargetId);
+
+		state.logger.log("sabotage_applied", state.currentMatchIndex, {
+			manokId: manok.id,
+			manokName: manok.name,
+			byPlayer: player.playerId,
+			hiddenDebuff: {
+				attack: `${manok.attack} -> ${Math.floor(manok.attack * 0.8)} (hidden)`,
+				determination: `${manok.determination} -> 0 (hidden)`,
+			},
+			displayedAttack: manok.attack,
+		});
 	}
+
+	if (slot.fighter1Id && slot.fighter2Id) {
+		const preOdds = slot.odds;
+		slot.odds = computeSlotOdds(slot, state.manoks);
+
+		state.logger.log("odds_computed", state.currentMatchIndex, {
+			matchIndex: state.currentMatchIndex,
+			fighter1Id: slot.fighter1Id,
+			fighter2Id: slot.fighter2Id,
+			preOdds,
+			postOdds: slot.odds,
+			sabotageApplied: sabotaged.size > 0,
+		});
+	}
+
+	const ayuda = Math.round(
+		C.AYUDA_AMOUNT * (1 + state.currentMatchIndex * C.AYUDA_SCALE),
+	);
 
 	for (const player of state.players.values()) {
 		if (player.balance <= 0) {
-			player.balance = C.AYUDA_AMOUNT;
+			player.balance = ayuda;
 			player.receivedAyudaThisRound = true;
+			state.logger.log("ayuda_granted", state.currentMatchIndex, {
+				playerId: player.playerId,
+				amount: ayuda,
+				matchIndex: state.currentMatchIndex,
+			});
 		} else {
 			player.receivedAyudaThisRound = false;
 		}
@@ -247,12 +399,23 @@ function openBetting(state: SabongServerState): void {
 	state.phase = "betting";
 }
 
-// resolves bets once the winner is known. returns score deltas for the runner.
 function applyPayouts(state: SabongServerState): Record<string, number> {
 	const slot = state.bracket[state.currentMatchIndex]!;
 	const winnerId = slot.winnerId!;
 	const odds = slot.odds!;
 	const scoreDeltas: Record<string, number> = {};
+
+	let totalPool = 0;
+	let fighter1Pool = 0;
+	let fighter2Pool = 0;
+
+	for (const player of state.players.values()) {
+		if (!player.currentBet) continue;
+		const amount = player.currentBet.amount;
+		totalPool += amount;
+		if (player.currentBet.manokId === slot.fighter1Id) fighter1Pool += amount;
+		else fighter2Pool += amount;
+	}
 
 	for (const [playerId, player] of state.players) {
 		if (!player.currentBet) continue;
@@ -263,18 +426,23 @@ function applyPayouts(state: SabongServerState): Record<string, number> {
 
 		if (betOnWinner) {
 			const ml = betOnFighter1 ? odds.fighter1 : odds.fighter2;
-			const payout = Math.round(amount * moneylineToDecimal(ml));
-			player.balance += payout; // bet was already deducted on lock
-			scoreDeltas[playerId] = payout - amount; // net profit for room score
+			const sidePool = betOnFighter1 ? fighter1Pool : fighter2Pool;
+			const contraryRatio = totalPool > 0 ? 1 - sidePool / totalPool : 0;
+			const contraryMultiplier = 1 + contraryRatio * C.CONTRARIAN_BONUS_MAX;
+			const basePayout = Math.round(amount * moneylineToDecimal(ml));
+			const finalPayout = Math.round(basePayout * contraryMultiplier);
+
+			player.balance += finalPayout;
+			scoreDeltas[playerId] = finalPayout - amount;
 		} else {
-			scoreDeltas[playerId] = -amount; // already deducted - just record loss
+			scoreDeltas[playerId] = -amount;
 		}
 	}
 
 	return scoreDeltas;
 }
 
-// public state builder - strips hidden stats and server-only fields before broadcast.
+// public state builder
 
 function buildManokView(
 	manok: ManokStats,
@@ -302,7 +470,7 @@ function buildManokView(
 			critRate: manok.hiddenStats.has("critRate") ? null : manok.critRate,
 		},
 		maxHp: manok.maxHealth,
-		currentHp: null, // client derives hp from battlelog events
+		currentHp: null,
 		moneylineOdds,
 		winProbability,
 	};
@@ -337,6 +505,7 @@ function getPublicSabongState(state: SabongServerState): SabongState {
 			balance: p.balance,
 			bracketPickId: p.bracketPickId,
 			bracketPickLocked: p.bracketPickLocked,
+			sabotageTargetId: p.sabotageTargetId,
 			currentBet: p.currentBet,
 			betLocked: p.betLocked,
 		};
@@ -356,30 +525,21 @@ function getPublicSabongState(state: SabongServerState): SabongState {
 
 // action parsing
 
-function parseSabongAction(raw: unknown): SabongAction | null {
-	if (!raw || typeof raw !== "object") return null;
-	const a = raw as Record<string, unknown>;
-	if (typeof a["type"] !== "string") return null;
+const SabongActionSchema = z.discriminatedUnion("type", [
+	z.object({ type: z.literal("pick_bracket_winner"), manokId: z.string() }),
+	z.object({ type: z.literal("lock_bracket_pick") }),
+	z.object({
+		type: z.literal("place_bet"),
+		manokId: z.string(),
+		amount: z.number().int().min(1),
+	}),
+	z.object({ type: z.literal("sabotage_manok"), manokId: z.string() }),
+	z.object({ type: z.literal("lock_bet") }),
+]);
 
-	switch (a["type"]) {
-		case "pick_bracket_winner":
-			if (typeof a["manokId"] === "string")
-				return { type: "pick_bracket_winner", manokId: a["manokId"] };
-			break;
-		case "lock_bracket_pick":
-			return { type: "lock_bracket_pick" };
-		case "place_bet":
-			if (typeof a["manokId"] === "string" && typeof a["amount"] === "number")
-				return {
-					type: "place_bet",
-					manokId: a["manokId"],
-					amount: a["amount"],
-				};
-			break;
-		case "lock_bet":
-			return { type: "lock_bet" };
-	}
-	return null;
+function parseSabongAction(raw: unknown): SabongAction | null {
+	const result = SabongActionSchema.safeParse(raw);
+	return result.success ? result.data : null;
 }
 
 // engine
@@ -395,16 +555,18 @@ export const sabongEngine: GameEngine = {
 			currentMatchIndex: 0,
 			battleLog: null,
 			players: new Map(),
+			logger: new SabongLogger("pending"),
 		};
 	},
 
 	onStart(ctx: GameContext): EngineResult {
 		const state = ctx.room.gamePayload as SabongServerState;
+		state.logger = new SabongLogger(ctx.room.code);
+
 		const names = pickUniqueNames(C.MANOK_COUNT);
 		const manoks: ManokStats[] = [];
 
-		// generate 4 balanced qf pairs
-		for (let i = 0; i < 4; i++) {
+		for (let i = 0; i < QF_COUNT / 2; i++) {
 			const [m1, m2] = generateBalancedPair(
 				randId(),
 				names[i * 2]!,
@@ -418,14 +580,11 @@ export const sabongEngine: GameEngine = {
 		state.bracket = buildInitialBracket(manoks);
 		state.currentMatchIndex = 0;
 
-		// pre-compute odds for all 4 qf matchups so the full bracket is
-		// informative during pre_tournament before any betting starts.
-		for (let i = 0; i < 4; i++) {
+		for (let i = 0; i < QF_COUNT; i++) {
 			const slot = state.bracket[i]!;
 			slot.odds = computeSlotOdds(slot, state.manoks);
 		}
 
-		// initialize one player entry per room player
 		state.players = new Map(
 			Array.from(ctx.room.players.values()).map((p) => [
 				p.playerId,
@@ -434,6 +593,7 @@ export const sabongEngine: GameEngine = {
 					balance: C.STARTING_BALANCE,
 					bracketPickId: null,
 					bracketPickLocked: false,
+					sabotageTargetId: null,
 					currentBet: null,
 					betLocked: false,
 					receivedAyudaThisRound: false,
@@ -442,6 +602,31 @@ export const sabongEngine: GameEngine = {
 		);
 
 		state.phase = "pre_tournament";
+
+		state.logger.log("game_start", null, {
+			playerCount: state.players.size,
+			players: [...state.players.values()].map((p) => ({
+				id: p.playerId,
+				balance: p.balance,
+			})),
+			manoks: manoks.map((m) => ({
+				id: m.id,
+				name: m.name,
+				health: m.health,
+				attack: m.attack,
+				defense: m.defense,
+				speed: m.speed,
+				critRate: m.critRate,
+				determination: m.determination,
+				hiddenStats: [...m.hiddenStats],
+			})),
+			qfOdds: state.bracket.slice(0, QF_COUNT).map((s) => ({
+				matchIndex: s.matchIndex,
+				fighter1: s.fighter1Id,
+				fighter2: s.fighter2Id,
+				odds: s.odds,
+			})),
+		});
 
 		return {
 			serverPayload: state,
@@ -465,11 +650,35 @@ export const sabongEngine: GameEngine = {
 		if (!action || !player) return noOp();
 
 		switch (action.type) {
+			case "sabotage_manok": {
+				if (state.phase !== "pre_tournament") return noOp();
+				if (!state.manoks.has(action.manokId)) return noOp();
+
+				const previousTarget = player.sabotageTargetId;
+				player.sabotageTargetId = action.manokId;
+
+				state.logger.log("player_action", null, {
+					type: "sabotage_manok",
+					playerId,
+					manokId: action.manokId,
+					manokName: state.manoks.get(action.manokId)?.name,
+					previousTarget,
+				});
+				break;
+			}
+
 			case "pick_bracket_winner": {
 				if (state.phase !== "pre_tournament") return noOp();
 				if (player.bracketPickLocked) return noOp();
 				if (!state.manoks.has(action.manokId)) return noOp();
 				player.bracketPickId = action.manokId;
+
+				state.logger.log("player_action", null, {
+					type: "pick_bracket_winner",
+					playerId,
+					manokId: action.manokId,
+					manokName: state.manoks.get(action.manokId)?.name,
+				});
 				break;
 			}
 
@@ -478,16 +687,27 @@ export const sabongEngine: GameEngine = {
 				if (!player.bracketPickId) return noOp();
 				player.bracketPickLocked = true;
 
+				state.logger.log("player_action", null, {
+					type: "lock_bracket_pick",
+					playerId,
+					pickedManokId: player.bracketPickId,
+					sabotageTargetId: player.sabotageTargetId,
+				});
+
 				if (allPicksLocked(state)) {
+					state.logger.log("phase_transition", null, {
+						from: "pre_tournament",
+						to: "betting",
+						trigger: "all_picks_locked",
+					});
 					openBetting(state);
-					// all players locked manually - cancel pre_tournament timer, start betting
 					return {
 						serverPayload: state,
 						publicPayload: getPublicSabongState(state),
 						timer: { startsAt: Date.now(), duration: C.BETTING_DURATION_MS },
 					};
 				}
-				break; // still waiting - keep existing pre_tournament timer
+				break;
 			}
 
 			case "place_bet": {
@@ -500,12 +720,18 @@ export const sabongEngine: GameEngine = {
 					action.manokId === slot.fighter2Id;
 				if (!isValidTarget) return noOp();
 
-				// clamp to [1, balance] - enforces minimum and prevents over-betting
-				const amount = Math.min(
-					Math.max(Math.round(action.amount), 1),
-					player.balance,
-				);
+				// amount is already int >= 1 per zod schema; just cap to balance
+				const amount = Math.min(action.amount, player.balance);
 				player.currentBet = { manokId: action.manokId, amount };
+
+				state.logger.log("player_action", state.currentMatchIndex, {
+					type: "place_bet",
+					playerId,
+					manokId: action.manokId,
+					manokName: state.manoks.get(action.manokId)?.name,
+					amount,
+					playerBalance: player.balance,
+				});
 				break;
 			}
 
@@ -513,18 +739,25 @@ export const sabongEngine: GameEngine = {
 				if (state.phase !== "betting") return noOp();
 				if (!player.currentBet || player.betLocked) return noOp();
 
-				// deduct now - payout adds back winnings, losers have nothing more to do
 				player.balance -= player.currentBet.amount;
 				player.betLocked = true;
 
-				if (!allBetsLocked(state)) break; // waiting on others
+				state.logger.log("player_action", state.currentMatchIndex, {
+					type: "lock_bet",
+					playerId,
+					bet: player.currentBet,
+					balanceAfterDeduction: player.balance,
+				});
 
-				// everyone locked - run the fight
+				if (!allBetsLocked(state)) break;
+
 				const slot = state.bracket[state.currentMatchIndex]!;
 				if (!slot.fighter1Id || !slot.fighter2Id) return noOp();
 
-				const f1 = state.manoks.get(slot.fighter1Id)!;
-				const f2 = state.manoks.get(slot.fighter2Id)!;
+				const f1 = state.manoks.get(slot.fighter1Id);
+				const f2 = state.manoks.get(slot.fighter2Id);
+				if (!f1 || !f2) return noOp();
+
 				const { winnerId, log } = simulateBattle(
 					toFighterStats(f1),
 					toFighterStats(f2),
@@ -533,6 +766,25 @@ export const sabongEngine: GameEngine = {
 				slot.winnerId = winnerId;
 				state.battleLog = log;
 				state.phase = "fighting";
+
+				state.logger.log("fight_result", state.currentMatchIndex, {
+					matchIndex: state.currentMatchIndex,
+					fighter1: {
+						id: f1.id,
+						name: f1.name,
+						attack: f1.attack,
+						determination: f1.determination,
+					},
+					fighter2: {
+						id: f2.id,
+						name: f2.name,
+						attack: f2.attack,
+						determination: f2.determination,
+					},
+					winnerId,
+					winnerName: state.manoks.get(winnerId)?.name,
+					totalEvents: log.length,
+				});
 
 				return {
 					serverPayload: state,
@@ -560,7 +812,6 @@ export const sabongEngine: GameEngine = {
 			const manokIds = [...state.manoks.keys()];
 			for (const player of state.players.values()) {
 				if (!player.bracketPickId) {
-					// assign a random pick for players who never selected one
 					player.bracketPickId =
 						manokIds[Math.floor(Math.random() * manokIds.length)]!;
 				}
@@ -574,7 +825,6 @@ export const sabongEngine: GameEngine = {
 			};
 		}
 
-		// betting timer ran out - force-lock anyone still pending, then fight
 		if (state.phase === "betting") {
 			const slot = state.bracket[state.currentMatchIndex]!;
 			if (!slot.fighter1Id || !slot.fighter2Id) {
@@ -587,9 +837,7 @@ export const sabongEngine: GameEngine = {
 
 			for (const player of state.players.values()) {
 				if (player.betLocked) continue;
-
 				if (!player.currentBet) {
-					// no bet placed at all - minimum bet on a random side
 					const manokId =
 						Math.random() < 0.5 ? slot.fighter1Id : slot.fighter2Id;
 					const amount = Math.min(1, player.balance);
@@ -599,8 +847,16 @@ export const sabongEngine: GameEngine = {
 				player.betLocked = true;
 			}
 
-			const f1 = state.manoks.get(slot.fighter1Id)!;
-			const f2 = state.manoks.get(slot.fighter2Id)!;
+			const f1 = state.manoks.get(slot.fighter1Id);
+			const f2 = state.manoks.get(slot.fighter2Id);
+			if (!f1 || !f2) {
+				return {
+					serverPayload: state,
+					publicPayload: getPublicSabongState(state),
+					timer: null,
+				};
+			}
+
 			const { winnerId, log } = simulateBattle(
 				toFighterStats(f1),
 				toFighterStats(f2),
@@ -619,15 +875,41 @@ export const sabongEngine: GameEngine = {
 			};
 		}
 
-		// fight animation finished → payout
 		if (state.phase === "fighting") {
+			const completedSlot = state.bracket[state.currentMatchIndex];
+			if (!completedSlot?.winnerId) {
+				return {
+					serverPayload: state,
+					publicPayload: getPublicSabongState(state),
+					timer: null,
+				};
+			}
+
 			const scoreDeltas = applyPayouts(state);
+
+			state.logger.log("payout_calculated", state.currentMatchIndex, {
+				matchIndex: state.currentMatchIndex,
+				winnerId: completedSlot.winnerId,
+				winnerName: state.manoks.get(completedSlot.winnerId)?.name,
+				payouts: Object.entries(scoreDeltas).map(([pid, delta]) => ({
+					playerId: pid,
+					delta,
+					newBalance: state.players.get(pid)?.balance,
+				})),
+			});
+
 			advanceBracket(
 				state.bracket,
 				state.currentMatchIndex,
-				state.bracket[state.currentMatchIndex]!.winnerId!,
+				completedSlot.winnerId,
 			);
 			state.phase = "payout";
+
+			state.logger.log("phase_transition", state.currentMatchIndex, {
+				from: "fighting",
+				to: "payout",
+				trigger: "timer_expired",
+			});
 
 			return {
 				serverPayload: state,
@@ -637,14 +919,21 @@ export const sabongEngine: GameEngine = {
 			};
 		}
 
-		// payout screen finished → next match or end
 		if (state.phase === "payout") {
-			const isTournamentOver = state.currentMatchIndex === 6;
+			const isTournamentOver = state.currentMatchIndex === FINAL_MATCH_INDEX;
 
 			if (isTournamentOver) {
-				// award bracket pick bonuses
-				const finalSlot = state.bracket[6]!;
-				const tournamentWinner = finalSlot.winnerId;
+				const finalSlot = state.bracket[FINAL_MATCH_INDEX];
+				const tournamentWinner = finalSlot?.winnerId;
+
+				if (!tournamentWinner) {
+					return {
+						serverPayload: state,
+						publicPayload: getPublicSabongState(state),
+						timer: null,
+					};
+				}
+
 				const bonusDeltas: Record<string, number> = {};
 
 				for (const [playerId, player] of state.players) {
@@ -653,6 +942,17 @@ export const sabongEngine: GameEngine = {
 						bonusDeltas[playerId] = C.BRACKET_PICK_BONUS;
 					}
 				}
+
+				state.logger.log("tournament_complete", FINAL_MATCH_INDEX, {
+					finalStandings: [...state.players.values()].map((p) => ({
+						playerId: p.playerId,
+						balance: p.balance,
+						bracketPickId: p.bracketPickId,
+						correctPick: p.bracketPickId === tournamentWinner,
+					})),
+					tournamentWinnerId: tournamentWinner,
+					tournamentWinnerName: state.manoks.get(tournamentWinner)?.name,
+				});
 
 				state.phase = "finished";
 				state.battleLog = null;
@@ -666,10 +966,9 @@ export const sabongEngine: GameEngine = {
 				};
 			}
 
-			// advance to next match
 			state.currentMatchIndex += 1;
 			state.battleLog = null;
-			openBetting(state); // gives ayuda, resets bets, computes odds for next slot
+			openBetting(state);
 
 			return {
 				serverPayload: state,
@@ -678,7 +977,6 @@ export const sabongEngine: GameEngine = {
 			};
 		}
 
-		// unexpected timer fire
 		return {
 			serverPayload: state,
 			publicPayload: getPublicSabongState(state),
