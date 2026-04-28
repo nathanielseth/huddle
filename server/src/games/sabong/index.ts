@@ -19,7 +19,7 @@ import type {
 } from "./types.js";
 import { SABONG_CONSTANTS } from "./types.js";
 import { simulateBattle, type FighterStats } from "./battle.js";
-import { getMatchupOdds, predictWinProbability } from "./heuristic.js";
+import { getMatchupOdds, predictWinProbability } from "./odds.js";
 import { SabongLogger } from "./logger.js";
 import { MANOK_NAMES } from "./names.js";
 
@@ -566,7 +566,7 @@ export const sabongEngine: GameEngine = {
 		const names = pickUniqueNames(C.MANOK_COUNT);
 		const manoks: ManokStats[] = [];
 
-		for (let i = 0; i < QF_COUNT / 2; i++) {
+		for (let i = 0; i < QF_COUNT; i++) {
 			const [m1, m2] = generateBalancedPair(
 				randId(),
 				names[i * 2]!,

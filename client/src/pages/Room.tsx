@@ -27,6 +27,7 @@ export function Room() {
 	const connectedCount = players.filter((p) => p.isConnected).length;
 	const minPlayers = game?.playerCount[0] ?? 2;
 	const canStart = connectedCount >= minPlayers;
+	const isPartyLeader = players[0]?.id === playerId;
 
 	function handleLeave() {
 		leaveRoom();
@@ -187,16 +188,59 @@ export function Room() {
 							</span>
 						</motion.div>
 
-						<motion.p
-							className="text-white/50 text-sm"
-							initial={{ opacity: 0 }}
-							animate={{ opacity: 1 }}
-							transition={{ delay: 0.15, duration: 0.3 }}
-						>
-							Waiting for the host to start...
-						</motion.p>
+						{isPartyLeader ? (
+							<motion.div
+								className="flex flex-col items-center gap-2"
+								initial={{ opacity: 0 }}
+								animate={{ opacity: 1 }}
+								transition={{ delay: 0.15, duration: 0.3 }}
+							>
+								<p className="text-xs font-semibold tracking-[0.2em] uppercase text-huddle">
+									👑 You're the Party Leader
+								</p>
+								<p className="text-white/40 text-xs">
+									You can start the game whenever you're ready.
+								</p>
+							</motion.div>
+						) : (
+							<motion.p
+								className="text-white/50 text-sm"
+								initial={{ opacity: 0 }}
+								animate={{ opacity: 1 }}
+								transition={{ delay: 0.15, duration: 0.3 }}
+							>
+								Waiting for the host to start...
+							</motion.p>
+						)}
 
 						<PlayerList players={players} playerId={playerId} />
+
+						{isPartyLeader && (
+							<motion.div
+								className="flex flex-col items-center gap-2"
+								initial={{ opacity: 0 }}
+								animate={{ opacity: 1 }}
+								transition={{ delay: 0.2, duration: 0.3 }}
+							>
+								<button
+									type="button"
+									disabled={!canStart}
+									onClick={startGame}
+									className={`h-12 px-12 rounded-lg text-sm font-bold tracking-widest uppercase transition-all duration-150 ${
+										canStart
+											? "bg-huddle text-white cursor-pointer hover:opacity-85 active:opacity-70"
+											: "bg-white/5 text-white/20 cursor-not-allowed"
+									}`}
+								>
+									Start Game
+								</button>
+								{!canStart && (
+									<p className="text-xs text-white/30">
+										Need at least {minPlayers} players to start
+									</p>
+								)}
+							</motion.div>
+						)}
 					</>
 				)}
 			</div>
@@ -244,7 +288,7 @@ function PlayerList({
 						No players yet
 					</motion.p>
 				) : (
-					players.map((player) => (
+					players.map((player, index) => (
 						<motion.div
 							key={player.id}
 							className="flex items-center gap-3 px-4 py-3 rounded-xl bg-white/4 border border-border"
@@ -254,7 +298,7 @@ function PlayerList({
 							transition={{ duration: 0.2 }}
 						>
 							<div className="flex items-center justify-center w-8 h-8 rounded-lg bg-white/8 text-xs font-bold text-white/60 shrink-0 uppercase">
-								{player.name.slice(0, 2)}
+								{index === 0 ? "👑" : player.name.slice(0, 2)}
 							</div>
 							<span className="flex-1 text-sm font-medium text-white">
 								{player.name}

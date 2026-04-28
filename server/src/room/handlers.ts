@@ -114,7 +114,10 @@ export function registerHandlers(
 			socket.emit("room_error", "Invalid payload.");
 			return;
 		}
-		const { code, name, playerId } = result.data;
+
+		const { code, playerId } = result.data;
+		const name = result.data.name.trim();
+
 		const room = store.get(code);
 		if (!room) {
 			socket.emit("room_error", "Room not found.");
@@ -124,6 +127,17 @@ export function registerHandlers(
 			socket.emit("room_error", "Game already in progress.");
 			return;
 		}
+
+		// duplicate name guard
+		const nameLower = name.toLowerCase();
+		const nameTaken = Array.from(room.players.values()).some(
+			(p) => p.isConnected && p.name.toLowerCase() === nameLower,
+		);
+		if (nameTaken) {
+			socket.emit("room_error", "That name is already taken in this room.");
+			return;
+		}
+
 		const outcome = addPlayer(room, playerId, socket.id, name);
 		store.trackSocket(socket.id, code);
 		socket.join(code);
@@ -159,6 +173,9 @@ export function registerHandlers(
 			touchRoom(room);
 			console.log(`[room] host rejoined ${code}`);
 			broadcast(io, room);
+			if (room.phase === "in_game") {
+				runner.resendSecret(room, playerId, io);
+			}
 			return;
 		}
 
@@ -176,13 +193,21 @@ export function registerHandlers(
 		touchRoom(room);
 		console.log(`[room] player ${playerId} rejoined ${code}`);
 		broadcast(io, room);
+		if (room.phase === "in_game") {
+			runner.resendSecret(room, playerId, io);
+		}
 	});
 
 	socket.on("start_game", () => {
 		const room = store.findBySocket(socket.id);
 		if (!room) return;
-		if (!isHostSocket(room, socket.id)) return; // only host can start
-		if (room.phase !== "lobby") return; // can't restart mid-game
+		if (room.phase !== "lobby") return;
+
+		const isHost = isHostSocket(room, socket.id);
+		const firstPlayer = [...room.players.values()][0];
+		const isPartyLeader = firstPlayer?.socketId === socket.id;
+
+		if (!isHost && !isPartyLeader) return;
 
 		const ok = runner.startGame(room, io, store);
 		if (!ok) {

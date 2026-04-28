@@ -25,15 +25,12 @@ export interface BattleResult {
 
 const MOVE_ACCURACY = 0.9;
 const BUFF_INCREMENT = 20;
-const POWER_SCALE = Math.pow(20 / 150, 0.7); // derived from balancing
+const POWER_SCALE = Math.pow(20 / 150, 0.7);
 
 // derived stats
 
 interface DerivedStats {
-	/** damage variance window: 0.25 / (1 + speed × 0.01) — faster = less variance */
 	varRange: number;
-	// effdef is NOT precomputed here — it depends on the attacker's determination,
-	// not the defender's own. computed inline at strike time via calceffdef().
 }
 
 function deriveFighterStats(f: FighterStats): DerivedStats {
@@ -42,11 +39,6 @@ function deriveFighterStats(f: FighterStats): DerivedStats {
 	};
 }
 
-/**
- * attacker's determination penetrates the defender's armor.
- * high attacker determination → defender's effective defense is lower.
- * offensive penetration stat — NOT a self-debuff.
- */
 function calcEffDef(
 	defenderDefense: number,
 	attackerDetermination: number,
@@ -77,7 +69,7 @@ function calcDamage(
 	const isCrit = Math.random() * 100 <= critRate;
 	const critMult = isCrit ? CRIT_MULTIPLIER : 1.0;
 	const effDef = calcEffDef(defenderDefense, attackerDetermination);
-	const base = (2.5 * atk * atk) / (3.5 * effDef + atk); // damage formula from attack/defense ratio
+	const base = (2.5 * atk * atk) / (3.5 * effDef + atk);
 	const variance = 1.0 - varRange * Math.random();
 	return [
 		Math.max(Math.round(base * POWER_SCALE * variance * critMult), 1),
@@ -153,7 +145,7 @@ export function simulateBattle(
 			log.push({ type: "miss", turn, attackerId: attacker.id, move });
 		}
 
-		// second hit (double_strike only — both rolls are independent)
+		// second hit (double_strike only, both rolls are independent)
 		if (move === "double_strike" && Math.random() <= MOVE_ACCURACY) {
 			const [dmg, isCrit] = calcDamage(
 				effectiveAtk,
@@ -178,7 +170,7 @@ export function simulateBattle(
 		return "continue";
 	};
 
-	// speed tie broken by coinflip at the start of the fight (consistent for whole match)
+	// speed tie 50/50
 	const fighter1GoesFirst =
 		fighter1.speed > fighter2.speed
 			? true

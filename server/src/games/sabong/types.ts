@@ -1,3 +1,5 @@
+import type { SabongLogger } from "./logger.js";
+
 export interface ManokStats {
 	id: string;
 	name: string;
@@ -10,6 +12,7 @@ export interface ManokStats {
 	determination: number; // hidden from players
 	attackBoost: number; // mutable during battle, reset between matches
 	hiddenStats: Set<"health" | "attack" | "defense" | "speed" | "critRate">;
+	isSabotaged: boolean;
 }
 
 // server bracket slot
@@ -27,6 +30,7 @@ export interface SabongServerPlayer {
 	balance: number;
 	bracketPickId: string | null;
 	bracketPickLocked: boolean; // true = locked, cannot change tournament pick
+	sabotageTargetId: string | null;
 	currentBet: { manokId: string; amount: number } | null;
 	betLocked: boolean; // true = locked, waiting for other players
 	receivedAyudaThisRound: boolean; // prevents multiple ayuda per match
@@ -40,23 +44,27 @@ export interface SabongServerState {
 	currentMatchIndex: number;
 	battleLog: import("../../../../shared/sabong.js").BattleEvent[] | null;
 	players: Map<string, SabongServerPlayer>;
+	logger: SabongLogger;
 }
 
 // actions
 export type SabongAction =
 	| { type: "pick_bracket_winner"; manokId: string }
 	| { type: "lock_bracket_pick" } // confirms pick, no more changes
+	| { type: "sabotage_manok"; manokId: string }
 	| { type: "place_bet"; manokId: string; amount: number }
 	| { type: "lock_bet" }; // confirms bet, no more changes
 
 // constants
 export const SABONG_CONSTANTS = {
-	STARTING_BALANCE: 100,
-	AYUDA_AMOUNT: 20, // ayuda
-	BRACKET_PICK_BONUS: 300, // awarded if their tournament pick wins overall
+	STARTING_BALANCE: 200, // was 100 — more runway for strategy
+	AYUDA_AMOUNT: 40, // base ayuda, scaled by match index
+	AYUDA_SCALE: 0.25, // ayuda × (1 + matchIndex × 0.25)
+	// match 1: ₱40, match 4: ₱70, match 7: ₱100
+	BRACKET_PICK_BONUS: 150, // was 300 — meaningful but not game-defining
+	CONTRARIAN_BONUS_MAX: 0.5, // max 1.5× payout multiplier for going alone
 	MANOK_COUNT: 8,
 	MAX_TURNS: 100,
-	MONTE_CARLO_SIMS: 1000,
 	STAT_RANGES: {
 		health: [90, 150] as [number, number],
 		attack: [40, 100] as [number, number],
