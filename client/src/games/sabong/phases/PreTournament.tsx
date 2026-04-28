@@ -1,5 +1,6 @@
+import { useState } from "react";
 import { motion, AnimatePresence } from "motion/react";
-import { useSabongState } from "../useSabongState";
+import { useSabongState } from "../hooks/useSabongState";
 import { ManokCard } from "../components/ManokCard";
 import { TimerBar } from "../components/TimerBar";
 import { socket } from "../../../lib/socket";
@@ -8,21 +9,33 @@ import { cn } from "../../../utils/cn";
 // player view (phone)
 export function PreTournamentPlayer() {
 	const { sabong, myPlayer, manokList, players, timer } = useSabongState();
+	const [mode, setMode] = useState<"pick" | "sabotage">("pick");
 
 	if (!sabong || !myPlayer) return null;
 
 	const isLocked = myPlayer.bracketPickLocked;
 	const pickId = myPlayer.bracketPickId;
+	const sabotageId = myPlayer.sabotageTargetId;
 	const canLock = !!pickId && !isLocked;
 
-	const lockedPlayerCount = Object.values(sabong.players).filter(
+	const lockedCount = Object.values(sabong.players).filter(
 		(p) => p.bracketPickLocked,
 	).length;
-	const totalPlayers = players.length;
 
-	function handlePick(manokId: string) {
+	function handleCardTap(manokId: string) {
 		if (isLocked) return;
-		socket.emit("player_action", { type: "pick_bracket_winner", manokId });
+		if (mode === "pick") {
+			socket.emit("player_action", { type: "pick_bracket_winner", manokId });
+		} else {
+			const next = sabotageId === manokId ? null : manokId;
+			socket.emit("player_action", {
+				type: "sabotage_manok",
+				manokId: next ?? manokId,
+			});
+			if (sabotageId === manokId) {
+				setMode("pick");
+			}
+		}
 	}
 
 	function handleLock() {
@@ -39,42 +52,107 @@ export function PreTournamentPlayer() {
 						Super Sabong
 					</span>
 					<span className="text-xs text-white/30">
-						{lockedPlayerCount}/{totalPlayers} locked
+						{lockedCount}/{players.length} locked
 					</span>
 				</div>
 				<h1 className="font-display text-3xl font-black uppercase leading-none text-white">
-					Pick Your Champion
+					Study the Bracket
 				</h1>
-				<p className="text-xs text-white/50 leading-snug">
-					Study the stats. Some are hidden. Choose who wins the whole
-					tournament.
-				</p>
 				<TimerBar timer={timer} />
 			</div>
 
-			{/* manok grid */}
-			<div className="flex-1 overflow-y-auto px-4 py-5">
-				<div className="grid grid-cols-2 gap-3">
-					{manokList.map((manok) => (
-						<motion.div
-							key={manok.id}
-							layout
-							initial={{ opacity: 0, y: 12 }}
-							animate={{ opacity: 1, y: 0 }}
-							transition={{ duration: 0.2 }}
+			{/* mode toggle */}
+			{!isLocked && (
+				<div className="px-4 pt-4">
+					<div className="flex rounded-xl overflow-hidden border border-border bg-surface-raised p-1 gap-1">
+						<button
+							type="button"
+							onClick={() => setMode("pick")}
+							className={cn(
+								"flex-1 flex items-center justify-center gap-2 py-2 rounded-lg text-xs font-bold tracking-widest uppercase transition-all duration-150",
+								mode === "pick"
+									? "bg-orange-500 text-white"
+									: "text-white/40 hover:text-white/70",
+							)}
 						>
-							<ManokCard
-								manok={manok}
-								selected={pickId === manok.id}
-								onClick={() => handlePick(manok.id)}
-								disabled={isLocked}
-							/>
-						</motion.div>
-					))}
+							🏆 Pick Champion
+						</button>
+						<button
+							type="button"
+							onClick={() => setMode("sabotage")}
+							className={cn(
+								"flex-1 flex items-center justify-center gap-2 py-2 rounded-lg text-xs font-bold tracking-widest uppercase transition-all duration-150",
+								mode === "sabotage"
+									? "bg-red-600 text-white"
+									: "text-white/40 hover:text-white/70",
+							)}
+						>
+							💀 Sabotage
+						</button>
+					</div>
+
+					{/* contextual hint */}
+					<AnimatePresence mode="wait">
+						<motion.p
+							key={mode}
+							className="text-[10px] text-center text-white/30 mt-2"
+							initial={{ opacity: 0 }}
+							animate={{ opacity: 1 }}
+							exit={{ opacity: 0 }}
+							transition={{ duration: 0.15 }}
+						>
+							{mode === "pick"
+								? "Tap a manok to pick your tournament champion"
+								: "Tap a manok to secretly debuff it — no one else will know"}
+						</motion.p>
+					</AnimatePresence>
+				</div>
+			)}
+
+			{/* status pills */}
+			<div className="flex items-center gap-2 px-4 pt-3">
+				{pickId && (
+					<span className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-orange-500/10 border border-orange-500/20 text-[10px] font-bold text-orange-400 uppercase tracking-widest">
+						🏆 {manokList.find((m) => m.id === pickId)?.name ?? "picked"}
+					</span>
+				)}
+				{sabotageId && (
+					<span className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-red-500/10 border border-red-900/40 text-[10px] font-bold text-red-400 uppercase tracking-widest">
+						💀 {manokList.find((m) => m.id === sabotageId)?.name ?? "target"}
+					</span>
+				)}
+			</div>
+
+			{/* manok grid */}
+			<div className="flex-1 overflow-y-auto px-4 py-4">
+				<div className="grid grid-cols-2 gap-3">
+					{manokList.map((manok) => {
+						const isPickSelected = mode === "pick" && pickId === manok.id;
+						const isSabotageSelected =
+							mode === "sabotage" && sabotageId === manok.id;
+
+						return (
+							<motion.div
+								key={manok.id}
+								layout
+								initial={{ opacity: 0, y: 12 }}
+								animate={{ opacity: 1, y: 0 }}
+								transition={{ duration: 0.2 }}
+							>
+								<ManokCard
+									manok={manok}
+									selected={isPickSelected || isSabotageSelected}
+									onClick={() => handleCardTap(manok.id)}
+									disabled={isLocked}
+									sabotaged={sabotageId === manok.id}
+								/>
+							</motion.div>
+						);
+					})}
 				</div>
 			</div>
 
-			{/* lock bar — sticky at bottom with backdrop blur */}
+			{/* lock bar */}
 			<div className="sticky bottom-0 border-t border-border bg-bg/95 backdrop-blur-md px-4 py-4">
 				<AnimatePresence mode="wait">
 					{isLocked ? (
@@ -84,7 +162,7 @@ export function PreTournamentPlayer() {
 							initial={{ opacity: 0 }}
 							animate={{ opacity: 1 }}
 						>
-							✓ Locked in — waiting for others
+							✓ Locked in - waiting for others
 						</motion.div>
 					) : (
 						<motion.button
@@ -137,7 +215,7 @@ export function PreTournamentHost() {
 						Study the Bracket
 					</h1>
 					<p className="text-white/40 text-sm mt-1">
-						Players — pick your tournament champion on your phone
+						Players - pick your tournament champion on your phone
 					</p>
 				</div>
 				<div className="flex flex-col items-end gap-2">

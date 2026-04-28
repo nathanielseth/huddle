@@ -24,6 +24,9 @@ export function useSocketInit(): void {
 		const onRoomClosed = () => store()._closeRoom();
 		const onRejoinFailed = () => store()._closeRoom();
 		const onPlayerSecret = (payload: unknown) => store()._setSecret(payload);
+		const onReconnectAttempt = () => store()._setStatus("connecting");
+		const onReconnectFailed = () =>
+			store()._setError("Lost connection to server.");
 
 		socket.on("connect", onConnect);
 		socket.on("disconnect", onDisconnect);
@@ -33,6 +36,8 @@ export function useSocketInit(): void {
 		socket.on("room_closed", onRoomClosed);
 		socket.on("rejoin_failed", onRejoinFailed);
 		socket.on("player_secret", onPlayerSecret);
+		socket.io.on("reconnect_attempt", onReconnectAttempt);
+		socket.io.on("reconnect_failed", onReconnectFailed);
 
 		store().connect();
 
@@ -45,6 +50,8 @@ export function useSocketInit(): void {
 			socket.off("room_closed", onRoomClosed);
 			socket.off("rejoin_failed", onRejoinFailed);
 			socket.off("player_secret", onPlayerSecret);
+			socket.io.off("reconnect_attempt", onReconnectAttempt);
+			socket.io.off("reconnect_failed", onReconnectFailed);
 		};
 	}, []);
 }

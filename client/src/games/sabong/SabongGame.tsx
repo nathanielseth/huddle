@@ -15,7 +15,6 @@ type SabongPhase =
 	| "fighting"
 	| "payout"
 	| "finished";
-
 type PhaseMap = Partial<Record<SabongPhase, FC>>;
 
 const PLAYER_PHASES: PhaseMap = {
@@ -34,13 +33,14 @@ const HOST_PHASES: PhaseMap = {
 	finished: FinishedHost,
 };
 
+const WIPE_COLOR: [number, number, number] = [0.3, 0.04, 0.04];
+
 export function SabongGame() {
 	const role = useGameStore((s) => s.role);
 	const { sabong } = useSabongState();
-	const isHost = role === "host";
-	const phaseMap = isHost ? HOST_PHASES : PLAYER_PHASES;
-
 	const wipeRef = useRef<WipeHandle>(null);
+
+	const phaseMap = role === "host" ? HOST_PHASES : PLAYER_PHASES;
 
 	const visiblePhase = usePhaseWipe<SabongPhase>({
 		source: sabong?.phase as SabongPhase | undefined,
@@ -60,7 +60,7 @@ export function SabongGame() {
 	return (
 		<div className="relative w-full h-screen overflow-hidden bg-black">
 			{PhaseComponent && <PhaseComponent />}
-			<WipeCanvas ref={wipeRef} color={[0.3, 0.04, 0.04]} duration={0.7} />
+			<WipeCanvas ref={wipeRef} color={WIPE_COLOR} duration={0.7} />
 		</div>
 	);
 }
