@@ -1,6 +1,8 @@
 import type { GameTimer, RoomPhase } from "../../../shared/types.js";
 import type { Room } from "../room/rooms.js";
 
+export type Awaitable<T> = T | Promise<T>;
+
 export interface GameContext {
 	readonly room: Readonly<Room>;
 }
@@ -22,15 +24,22 @@ export interface GameEngine {
 	// fresh game-specific state, before onstart is called.
 	getInitialState(): unknown;
 
-	onStart(ctx: GameContext): EngineResult;
-
 	// a player acted
-	onAction(ctx: GameContext, playerId: string, action: unknown): EngineResult;
+	onAction(
+		ctx: GameContext,
+		playerId: string,
+		action: unknown,
+	): Awaitable<EngineResult>;
 
 	// the active timer expired
-	onTimerExpired(ctx: GameContext): EngineResult;
+	onTimerExpired(ctx: GameContext): Awaitable<EngineResult>;
+
+	onStart(ctx: GameContext): Awaitable<EngineResult>;
 }
 
 export interface GameEngineWithSecrets extends GameEngine {
-	getPlayerSecret(ctx: GameContext, playerId: string): unknown | null;
+	getPlayerSecret(
+		ctx: GameContext,
+		playerId: string,
+	): Awaitable<unknown | null>;
 }
