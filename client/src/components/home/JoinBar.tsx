@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useRef, useState } from "react";
 import { AnimatePresence, motion } from "motion/react";
 import { X } from "lucide-react";
 import { useGameStore } from "../../store/useGameStore";
@@ -18,13 +18,6 @@ export function JoinBar({ onFocus }: JoinBarProps) {
 	const nameRef = useRef<HTMLInputElement>(null);
 
 	const joinRoom = useGameStore((s) => s.joinRoom);
-	const error = useGameStore((s) => s.error);
-	const clearError = useGameStore((s) => s.clearError);
-
-	// clear stale errors when component mounts
-	useEffect(() => {
-		clearError();
-	}, []); // eslint-disable-line react-hooks/exhaustive-deps
 
 	const isValid = code.length === 4 && name.trim().length > 0;
 
@@ -41,14 +34,11 @@ export function JoinBar({ onFocus }: JoinBarProps) {
 	function handleCodeChange(e: React.ChangeEvent<HTMLInputElement>) {
 		const val = e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, "");
 		setCode(val);
-		if (error) clearError();
-		// auto-advance to name field when code is complete
 		if (val.length === 4) nameRef.current?.focus();
 	}
 
 	function handleNameChange(e: React.ChangeEvent<HTMLInputElement>) {
 		setName(e.target.value);
-		if (error) clearError();
 	}
 
 	function handleJoin() {
@@ -65,7 +55,7 @@ export function JoinBar({ onFocus }: JoinBarProps) {
 			<h2 className="text-sm font-semibold text-white">QUICK JOIN</h2>
 
 			<div className="flex flex-col sm:flex-row sm:items-end gap-3">
-				{/* room code field */}
+				{/* Room code field */}
 				<div className="flex flex-col gap-2 w-full sm:w-40 shrink-0">
 					<label
 						htmlFor="room-code"
@@ -100,10 +90,7 @@ export function JoinBar({ onFocus }: JoinBarProps) {
 									animate={{ opacity: 1, scale: 1 }}
 									exit={{ opacity: 0, scale: 0.7 }}
 									transition={{ duration: 0.12 }}
-									onClick={() => {
-										setCode("");
-										clearError();
-									}}
+									onClick={() => setCode("")}
 									className="absolute right-2.5 top-1/2 -translate-y-1/2 text-white/30 hover:text-white/70 transition-colors cursor-pointer"
 									tabIndex={-1}
 									aria-label="Clear room code"
@@ -115,7 +102,7 @@ export function JoinBar({ onFocus }: JoinBarProps) {
 					</motion.div>
 				</div>
 
-				{/* player name field with character counter */}
+				{/* player name field */}
 				<div className="flex flex-col gap-2 w-full sm:w-56 shrink-0">
 					<label
 						htmlFor="player-name"
@@ -138,7 +125,7 @@ export function JoinBar({ onFocus }: JoinBarProps) {
 							placeholder="Enter your name"
 							maxLength={10}
 							className={`h-11 w-full px-4 pr-10 rounded-lg bg-white/5 border text-sm placeholder:text-white/30 outline-none transition-colors ${
-								shakeName || error
+								shakeName
 									? "border-red-500/70"
 									: "border-border focus:border-white/40"
 							}`}
@@ -177,22 +164,6 @@ export function JoinBar({ onFocus }: JoinBarProps) {
 					</button>
 				</div>
 			</div>
-
-			{/* inline server error message */}
-			<AnimatePresence>
-				{error && (
-					<motion.p
-						key="joinbar-error"
-						className="text-xs text-red-400/80 -mt-1"
-						initial={{ opacity: 0, y: -4 }}
-						animate={{ opacity: 1, y: 0 }}
-						exit={{ opacity: 0, y: -4 }}
-						transition={{ duration: 0.15 }}
-					>
-						{error}
-					</motion.p>
-				)}
-			</AnimatePresence>
 		</div>
 	);
 }

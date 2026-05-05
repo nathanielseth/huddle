@@ -1,32 +1,73 @@
 import { useEffect } from "react";
 import { socket } from "../lib/socket";
 import { useGameStore } from "../store/useGameStore";
+import { toast } from "../lib/toast";
 import { loadRoomSession } from "../lib/session";
 import type { GameState } from "@shared/types";
 
-// wires up all socket.io listeners and kicks off the initial connection
+const CONN_TOAST_ID = "conn-status";
+
 export function useSocketInit(): void {
 	useEffect(() => {
 		const store = () => useGameStore.getState();
 
+		let hasConnectedOnce = false;
+
 		const onConnect = () => {
+			const wasDisconnected = hasConnectedOnce;
+			hasConnectedOnce = true;
 			store()._setStatus("connected");
+
+			if (wasDisconnected) {
+				toast.success("Reconnected!", {
+					id: CONN_TOAST_ID,
+					duration: 2500,
+				});
+			}
+
 			const session = loadRoomSession();
 			if (session) store()._attemptRejoin(session);
 		};
-		const onDisconnect = () => store()._setStatus("disconnected");
+
+		const onDisconnect = () => {
+			store()._setStatus("disconnected");
+			toast.warning("Connection lost. Reconnecting…", {
+				id: CONN_TOAST_ID,
+				duration: 0,
+			});
+		};
+
 		const onConnectError = () => {
 			store()._setStatus("error");
-			store()._setError("Could not connect to server.");
+			if (!hasConnectedOnce) {
+				toast.error("Could not connect to server.", {
+					id: CONN_TOAST_ID,
+					duration: 0,
+				});
+			}
 		};
+
 		const onGameState = (state: GameState) => store()._syncState(state);
-		const onRoomError = (msg: string) => store()._setError(msg);
+		const onRoomError = (msg: string) => toast.error(msg);
 		const onRoomClosed = () => store()._closeRoom();
 		const onRejoinFailed = () => store()._closeRoom();
 		const onPlayerSecret = (payload: unknown) => store()._setSecret(payload);
-		const onReconnectAttempt = () => store()._setStatus("connecting");
-		const onReconnectFailed = () =>
-			store()._setError("Lost connection to server.");
+
+		const onReconnectAttempt = () => {
+			store()._setStatus("connecting");
+			toast.warning("Connection lost. Reconnecting…", {
+				id: CONN_TOAST_ID,
+				duration: 0,
+			});
+		};
+
+		const onReconnectFailed = () => {
+			store()._setStatus("error");
+			toast.error("Could not reconnect. Try refreshing.", {
+				id: CONN_TOAST_ID,
+				duration: 0,
+			});
+		};
 
 		socket.on("connect", onConnect);
 		socket.on("disconnect", onDisconnect);
@@ -40,6 +81,7 @@ export function useSocketInit(): void {
 		socket.io.on("reconnect_failed", onReconnectFailed);
 
 		store().connect();
+		if (socket.connected) onConnect();
 
 		return () => {
 			socket.off("connect", onConnect);

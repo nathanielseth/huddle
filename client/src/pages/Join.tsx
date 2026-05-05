@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useRef, useState } from "react";
 import { useNavigate, useParams, Navigate } from "react-router";
 import { motion, AnimatePresence } from "motion/react";
 import { X } from "lucide-react";
@@ -11,25 +11,22 @@ export function Join() {
 	const navigate = useNavigate();
 	const joinRoom = useGameStore((s) => s.joinRoom);
 	const roomCode = useGameStore((s) => s.roomCode);
-	const error = useGameStore((s) => s.error);
-	const clearError = useGameStore((s) => s.clearError);
 
 	const [name, setName] = useState("");
 	const [shake, setShake] = useState(false);
 	const inputRef = useRef<HTMLInputElement>(null);
 
-	useEffect(() => {
-		clearError();
-		inputRef.current?.focus();
-	}, []); // eslint-disable-line react-hooks/exhaustive-deps
-
 	if (roomCode) return <Navigate to={`/room/${roomCode}`} replace />;
+
+	function triggerShake() {
+		setShake(true);
+		setTimeout(() => setShake(false), 400);
+	}
 
 	function handleJoin() {
 		const trimmed = name.trim();
 		if (!trimmed || !code) {
-			setShake(true);
-			setTimeout(() => setShake(false), 400);
+			triggerShake();
 			return;
 		}
 		joinRoom(code.toUpperCase(), trimmed);
@@ -84,15 +81,13 @@ export function Join() {
 								ref={inputRef}
 								type="text"
 								value={name}
-								onChange={(e) => {
-									setName(e.target.value.slice(0, 10));
-									if (error) clearError();
-								}}
+								onChange={(e) => setName(e.target.value.slice(0, 10))}
 								onKeyDown={handleKeyDown}
 								placeholder="Enter your name"
 								maxLength={10}
+								autoFocus
 								className={`h-11 w-full px-4 pr-10 rounded-lg bg-white/5 border text-sm placeholder:text-white/30 outline-none transition-colors ${
-									shake || error
+									shake
 										? "border-red-500/70"
 										: "border-border focus:border-white/40"
 								}`}
@@ -105,10 +100,7 @@ export function Join() {
 										animate={{ opacity: 1, scale: 1 }}
 										exit={{ opacity: 0, scale: 0.7 }}
 										transition={{ duration: 0.12 }}
-										onClick={() => {
-											setName("");
-											clearError();
-										}}
+										onClick={() => setName("")}
 										className="absolute right-3 top-1/2 -translate-y-1/2 text-white/30 hover:text-white/70 transition-colors cursor-pointer"
 										tabIndex={-1}
 										aria-label="Clear name"
@@ -118,21 +110,6 @@ export function Join() {
 								)}
 							</AnimatePresence>
 						</motion.div>
-
-						<AnimatePresence>
-							{error && (
-								<motion.p
-									key="join-error"
-									className="text-xs text-red-400/80"
-									initial={{ opacity: 0, y: -4 }}
-									animate={{ opacity: 1, y: 0 }}
-									exit={{ opacity: 0, y: -4 }}
-									transition={{ duration: 0.15 }}
-								>
-									{error}
-								</motion.p>
-							)}
-						</AnimatePresence>
 					</div>
 
 					<button
