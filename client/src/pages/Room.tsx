@@ -7,6 +7,7 @@ import { GAMES } from "../data/games";
 import { SabongGame } from "../games/sabong/SabongGame";
 import { FinishedHost, FinishedPlayer } from "../games/sabong/phases/Finished";
 import { QRCodeSVG } from "qrcode.react";
+import type { Player } from "@shared/types";
 
 export function Room() {
 	const navigate = useNavigate();
@@ -246,13 +247,6 @@ export function Room() {
 			</div>
 		</div>
 	);
-}
-
-// player list
-interface Player {
-	id: string;
-	name: string;
-	isConnected: boolean;
 }
 
 function PlayerList({

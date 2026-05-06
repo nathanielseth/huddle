@@ -1,10 +1,11 @@
-import { useRef, useState } from "react";
+import { useRef, useState, useEffect } from "react";
 import { useNavigate, useParams, Navigate } from "react-router";
 import { motion, AnimatePresence } from "motion/react";
-import { X } from "lucide-react";
+import { X, Loader2 } from "lucide-react";
 import { useGameStore } from "../store/useGameStore";
 
 const SHAKE = [0, -6, 6, -5, 5, -3, 3, 0];
+const JOIN_TIMEOUT_MS = 1_000;
 
 export function Join() {
 	const { code } = useParams<{ code: string }>();
@@ -14,7 +15,15 @@ export function Join() {
 
 	const [name, setName] = useState("");
 	const [shake, setShake] = useState(false);
+	const [isPending, setIsPending] = useState(false);
+	const pendingTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 	const inputRef = useRef<HTMLInputElement>(null);
+
+	useEffect(() => {
+		return () => {
+			if (pendingTimer.current) clearTimeout(pendingTimer.current);
+		};
+	}, []);
 
 	if (roomCode) return <Navigate to={`/room/${roomCode}`} replace />;
 
@@ -29,7 +38,17 @@ export function Join() {
 			triggerShake();
 			return;
 		}
+		if (isPending) return;
+
+		setIsPending(true);
 		joinRoom(code.toUpperCase(), trimmed);
+
+		if (pendingTimer.current) clearTimeout(pendingTimer.current);
+		pendingTimer.current = setTimeout(() => {
+			setIsPending(false);
+			pendingTimer.current = null;
+			triggerShake();
+		}, JOIN_TIMEOUT_MS);
 	}
 
 	function handleKeyDown(e: React.KeyboardEvent) {
@@ -39,7 +58,7 @@ export function Join() {
 	const roomCodeDisplay = code?.toUpperCase() ?? "????";
 
 	return (
-		<div className="flex flex-col items-center justify-center min-h-screen px-6 bg-bg">
+		<div className="flex flex-col items-center justify-center min-h-screen px-6 bg-bg text-white">
 			<motion.div
 				className="w-full max-w-sm flex flex-col gap-8"
 				initial={{ opacity: 0, y: 20 }}
@@ -81,7 +100,14 @@ export function Join() {
 								ref={inputRef}
 								type="text"
 								value={name}
-								onChange={(e) => setName(e.target.value.slice(0, 10))}
+								onChange={(e) => {
+									if (isPending) {
+										setIsPending(false);
+										if (pendingTimer.current)
+											clearTimeout(pendingTimer.current);
+									}
+									setName(e.target.value.slice(0, 10));
+								}}
 								onKeyDown={handleKeyDown}
 								placeholder="Enter your name"
 								maxLength={10}
@@ -115,13 +141,21 @@ export function Join() {
 					<button
 						type="button"
 						onClick={handleJoin}
-						className={`h-11 w-full rounded-lg text-sm font-bold tracking-widest uppercase transition-all duration-150 ${
-							name.trim().length > 0
+						disabled={isPending}
+						className={`h-11 w-full rounded-lg text-sm font-bold tracking-widest uppercase transition-all duration-150 flex items-center justify-center gap-2 ${
+							name.trim().length > 0 && !isPending
 								? "bg-huddle text-white cursor-pointer hover:opacity-85 active:opacity-70"
 								: "bg-white/8 text-white/30 cursor-default"
 						}`}
 					>
-						Join →
+						{isPending ? (
+							<>
+								<Loader2 size={16} className="animate-spin" />
+								Joining...
+							</>
+						) : (
+							"Join Room →"
+						)}
 					</button>
 				</div>
 

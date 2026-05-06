@@ -1,8 +1,10 @@
 import type { Game } from "../types/game";
 
 export const GAMES: Game[] = [
+	// HANGOUT PACK 1: BLACKBOX
 	{
 		id: "flip-cards",
+		packId: "pack-1",
 		name: "Flip Cards",
 		thumbnail: "/games/flip_cards.avif",
 		placeholderColor: "#0ea5e9",
@@ -14,6 +16,7 @@ export const GAMES: Game[] = [
 	},
 	{
 		id: "super-sabong",
+		packId: "pack-1",
 		name: "Super Sabong",
 		thumbnail: "/games/super_sabong.avif",
 		placeholderColor: "#f97316",
@@ -25,6 +28,7 @@ export const GAMES: Game[] = [
 	},
 	{
 		id: "believable-lies",
+		packId: "pack-1",
 		name: "Believable Lies",
 		thumbnail: "/games/believable_lies.avif",
 		placeholderColor: "#a855f7",
@@ -36,6 +40,7 @@ export const GAMES: Game[] = [
 	},
 	{
 		id: "wit-showdown",
+		packId: "pack-1",
 		name: "WitZone",
 		thumbnail: "/games/witzone.avif",
 		placeholderColor: "#eab308",
@@ -47,6 +52,7 @@ export const GAMES: Game[] = [
 	},
 	{
 		id: "sussy-impostors",
+		packId: "pack-1",
 		name: "Sussy Impostors",
 		thumbnail: "/games/sussy_impostors.avif",
 		placeholderColor: "#ef4444",
@@ -58,6 +64,7 @@ export const GAMES: Game[] = [
 	},
 	{
 		id: "art-school",
+		packId: "pack-1",
 		name: "Art School",
 		thumbnail: "/games/art_school.avif",
 		placeholderColor: "#10b981",
@@ -66,5 +73,79 @@ export const GAMES: Game[] = [
 		tags: ["drawing", "social"],
 		playerCount: [3, 8],
 		duration: 25,
+	},
+
+	// HANGOUT PACK 2: HOUSE RULES
+	{
+		id: "texas-holdem",
+		packId: "pack-2",
+		name: "Texas Hold'em",
+		thumbnail: "/games/texas_holdem.avif",
+		placeholderColor: "#16a34a",
+		description:
+			"No chips, no table needed. Real poker, real bluffing, right on your TV.",
+		tags: ["strategy", "betting"],
+		playerCount: [2, 8],
+		duration: 30,
+	},
+	{
+		id: "mafia",
+		packId: "pack-2",
+		name: "Mafia",
+		thumbnail: "/games/mafia.avif",
+		placeholderColor: "#1d4ed8",
+		description:
+			"The town sleeps. The mafia moves. Find the killers before it's too late.",
+		tags: ["deception", "social"],
+		playerCount: [5, 12],
+		duration: 25,
+	},
+	{
+		id: "guess-the-song",
+		packId: "pack-2",
+		name: "Guess the Song",
+		thumbnail: "/games/guess_the_song.avif",
+		placeholderColor: "#db2777",
+		description:
+			"First to name that tune wins the round. OPM to K-pop, classics to bangers.",
+		tags: ["music", "trivia"],
+		playerCount: [2, 10],
+		duration: 20,
+	},
+	{
+		id: "would-you-rather",
+		packId: "pack-2",
+		name: "Would You Rather",
+		thumbnail: "/games/would_you_rather.avif",
+		placeholderColor: "#0891b2",
+		description:
+			"Two terrible choices. One vote. Find out what your friends are actually made of.",
+		tags: ["social", "party"],
+		playerCount: [2, 10],
+		duration: 15,
+	},
+	{
+		id: "tbd-pack2-1",
+		packId: "pack-2",
+		name: "Coming Soon",
+		thumbnail: "/games/coming_soon.avif",
+		placeholderColor: "#374151",
+		description: "Something new is cooking. Stay tuned.",
+		tags: [],
+		playerCount: [2, 10],
+		duration: 0,
+		comingSoon: true,
+	},
+	{
+		id: "tbd-pack2-2",
+		packId: "pack-2",
+		name: "Coming Soon",
+		thumbnail: "/games/coming_soon.avif",
+		placeholderColor: "#374151",
+		description: "Something new is cooking. Stay tuned.",
+		tags: [],
+		playerCount: [2, 10],
+		duration: 0,
+		comingSoon: true,
 	},
 ];

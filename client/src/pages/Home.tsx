@@ -2,24 +2,54 @@ import { useState } from "react";
 import { Navigate } from "react-router";
 import { AnimatePresence, motion } from "motion/react";
 import { JoinBar } from "../components/home/JoinBar";
+import { PackTabs } from "../components/home/PackTabs";
+import { TagFilter } from "../components/home/TagFilter";
 import { GameGrid } from "../components/shared/GameGrid";
 import { GAMES } from "../data/games";
+import { PACKS } from "../data/packs";
 import { useGameStore } from "../store/useGameStore";
 import type { Game } from "../types/game";
 
+const ALL_TAGS = Array.from(
+	new Set(GAMES.filter((g) => !g.comingSoon).flatMap((g) => g.tags)),
+).sort();
+
 export function Home() {
 	const [selected, setSelected] = useState<Game | null>(null);
+	const [selectedPackId, setSelectedPackId] = useState<string>("all");
+	const [selectedTag, setSelectedTag] = useState<string>("all");
 
 	const createRoom = useGameStore((s) => s.createRoom);
 	const roomCode = useGameStore((s) => s.roomCode);
 
 	if (roomCode) return <Navigate to={`/room/${roomCode}`} replace />;
 
+	const filteredGames = GAMES.filter((g) => {
+		const packMatch = selectedPackId === "all" || g.packId === selectedPackId;
+		const tagMatch = selectedTag === "all" || g.tags.includes(selectedTag);
+		return packMatch && tagMatch;
+	});
+
 	const handleSelect = (game: Game) => {
+		if (game.comingSoon) return;
 		setSelected((prev) => (prev?.id === game.id ? null : game));
 	};
 
-	const clearSelected = () => setSelected(null);
+	const handlePackChange = (packId: string) => {
+		setSelectedPackId(packId);
+		// Tags don't reset — they're independent and global
+		// Only clear selected game if it's not in the new pack scope
+		if (selected && packId !== "all" && selected.packId !== packId) {
+			setSelected(null);
+		}
+	};
+
+	const handleTagChange = (tag: string) => {
+		setSelectedTag(tag);
+		if (selected && tag !== "all" && !selected.tags.includes(tag)) {
+			setSelected(null);
+		}
+	};
 
 	function handleCreateRoom() {
 		if (!selected) return;
@@ -39,14 +69,45 @@ export function Home() {
 						Party games for tropa hangouts
 					</p>
 				</header>
-				<JoinBar onFocus={clearSelected} />
+
+				<JoinBar onFocus={() => setSelected(null)} />
+
 				<section className="flex flex-col gap-5">
 					<h2 className="text-sm font-semibold text-white">HOST A GAME</h2>
-					<GameGrid
-						games={GAMES}
-						selectedId={selected?.id ?? null}
-						onSelect={handleSelect}
+
+					<PackTabs
+						packs={PACKS}
+						selectedPackId={selectedPackId}
+						onSelect={handlePackChange}
 					/>
+
+					<TagFilter
+						tags={ALL_TAGS}
+						selectedTag={selectedTag}
+						onSelect={handleTagChange}
+					/>
+
+					<AnimatePresence mode="wait">
+						<motion.div
+							key={`${selectedPackId}:${selectedTag}`}
+							initial={{ opacity: 0, y: 5 }}
+							animate={{ opacity: 1, y: 0 }}
+							exit={{ opacity: 0 }}
+							transition={{ duration: 0.14 }}
+						>
+							{filteredGames.length === 0 ? (
+								<p className="py-14 text-center text-sm text-white/20">
+									No games match those filters.
+								</p>
+							) : (
+								<GameGrid
+									games={filteredGames}
+									selectedId={selected?.id ?? null}
+									onSelect={handleSelect}
+								/>
+							)}
+						</motion.div>
+					</AnimatePresence>
 				</section>
 			</main>
 
@@ -113,7 +174,6 @@ export function Home() {
 									</motion.div>
 								</div>
 							</div>
-
 							<button
 								type="button"
 								onClick={handleCreateRoom}

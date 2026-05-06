@@ -128,40 +128,29 @@ function ToastItem({ t, onDismiss, reducedMotion }: ToastItemProps) {
 		}
 	}, [t.duration, t.createdAt, startRaf]);
 
-	// interaction handlers
-	const handlePause = useCallback(() => {
+	function handlePause() {
 		if (isPersistent) return;
 		pausedRef.current = true;
-	}, [isPersistent]);
+	}
 
-	const handleResume = useCallback(() => {
+	function handleResume() {
 		if (isPersistent) return;
 		lastTickRef.current = performance.now();
 		pausedRef.current = false;
-	}, [isPersistent]);
+	}
 
-	const handleDismiss = useCallback(() => {
+	function handleDismiss() {
 		dismissedRef.current = true;
 		stopRaf();
 		onDismiss(t.id);
-	}, [onDismiss, stopRaf, t.id]);
+	}
 
-	const handleDragEnd = useCallback(
-		(_: unknown, info: PanInfo) => {
-			handleResume();
-
-			const swipeThreshold = 60;
-			const velocityThreshold = 500;
-
-			if (
-				Math.abs(info.offset.x) > swipeThreshold ||
-				Math.abs(info.velocity.x) > velocityThreshold
-			) {
-				handleDismiss();
-			}
-		},
-		[handleResume, handleDismiss],
-	);
+	function handleDragEnd(_: unknown, info: PanInfo) {
+		handleResume();
+		if (Math.abs(info.offset.x) > 60 || Math.abs(info.velocity.x) > 500) {
+			handleDismiss();
+		}
+	}
 
 	const cfg = VARIANTS[t.variant];
 	const { Icon } = cfg;

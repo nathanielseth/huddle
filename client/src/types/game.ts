@@ -9,11 +9,21 @@ export type GameTag =
 
 export interface Game {
 	id: string;
+	packId: string;
 	name: string;
-	thumbnail?: string;
+	thumbnail: string;
 	placeholderColor: string;
 	description: string;
-	tags: GameTag[];
+	tags: string[];
 	playerCount: [number, number];
 	duration: number;
+	comingSoon?: boolean;
+}
+
+export interface Pack {
+	id: string;
+	number: number;
+	name: string;
+	tagline: string;
+	accentColor: string;
 }

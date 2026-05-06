@@ -7,6 +7,9 @@
   --color-surface-raised: #1c1c1c;
   --color-border: oklch(1 0 0 / 8%);
   --color-muted: oklch(1 0 0 / 40%);
+  --color-gold: #e8b93a;
+  --color-red-corner: #ef4444;
+  --color-blue-corner: #60a5fa;
   --font-display: 'Barlow Condensed', sans-serif;
   --font-body: 'Barlow', sans-serif;
 }
