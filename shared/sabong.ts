@@ -63,12 +63,12 @@ export type SabongPhase =
 
 // the full game payload, travels inside GameState.gamePayload
 export interface SabongState {
-	phase: SabongPhase;
-	manoks: Record<string, ManokView>;
-	bracket: BracketSlot[];
-	currentMatchIndex: number;
-	battleLog: BattleEvent[] | null;
-	players: Record<string, SabongPlayerView>;
-	allBracketPicksLocked: boolean;
-	matchCount: number;
+	readonly phase: SabongPhase;
+	readonly manoks: Readonly<Record<string, ManokView>>;
+	readonly bracket: ReadonlyArray<BracketSlot>;
+	readonly currentMatchIndex: number;
+	readonly battleLog: ReadonlyArray<BattleEvent> | null;
+	readonly players: Readonly<Record<string, SabongPlayerView>>;
+	readonly allBracketPicksLocked: boolean;
+	readonly matchCount: number;
 }

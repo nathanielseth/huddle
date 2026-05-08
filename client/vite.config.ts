@@ -12,7 +12,7 @@ export default defineConfig({
 	],
 	resolve: {
 		alias: {
-			"@huddle/shared": path.resolve(__dirname, "../shared"),
+			"@shared": path.resolve(__dirname, "../shared"), // was "@huddle/shared"
 		},
 		dedupe: ["react", "react-dom"],
 	},

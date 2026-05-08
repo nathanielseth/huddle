@@ -23,7 +23,7 @@ export const GAMES: Game[] = [
 		description:
 			"Bet on AI-powered manoks fighting it out. Read the odds, go all in, lose everything.",
 		tags: ["betting", "social"],
-		playerCount: [2, 10],
+		playerCount: [2, 8],
 		duration: 15,
 	},
 	{
@@ -47,7 +47,7 @@ export const GAMES: Game[] = [
 		description:
 			"Roast the prompt, outshine the room. Votes decide who's actually funny.",
 		tags: ["writing", "social"],
-		playerCount: [3, 10],
+		playerCount: [3, 8],
 		duration: 30,
 	},
 	{
@@ -59,7 +59,7 @@ export const GAMES: Game[] = [
 		description:
 			"One player doesn't have the word. Blend in. Don't get caught. Chaos guaranteed.",
 		tags: ["deception", "social"],
-		playerCount: [4, 10],
+		playerCount: [3, 6],
 		duration: 20,
 	},
 	{
@@ -71,7 +71,7 @@ export const GAMES: Game[] = [
 		description:
 			"Draw the prompt with zero artistic talent. Everyone guesses. Someone always nails it.",
 		tags: ["drawing", "social"],
-		playerCount: [3, 8],
+		playerCount: [3, 6],
 		duration: 25,
 	},
 

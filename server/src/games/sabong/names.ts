@@ -23,4 +23,4 @@ export const MANOK_NAMES: string[] = [
 	"Princess",
 	"Raphael",
 	"Rosebowl",
-];
+] as const;

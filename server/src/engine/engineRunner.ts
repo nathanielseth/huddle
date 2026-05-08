@@ -1,8 +1,3 @@
-import type { Server } from "socket.io";
-import type {
-	ServerToClientEvents,
-	ClientToServerEvents,
-} from "../../../shared/events.js";
 import type {
 	GameEngine,
 	EngineResult,
@@ -11,14 +6,12 @@ import type {
 import type { RoomStore } from "../room/rooms.js";
 import { type Room, getPublicState, touchRoom } from "../room/rooms.js";
 import type { GameTimer } from "../../../shared/types.js";
-
-type IO = Server<ClientToServerEvents, ServerToClientEvents>;
+import type { IO } from "../types.js";
+import { parseEngineResult, parsePlayerAction } from "./schemas.js";
 
 export class EngineRunner {
 	private readonly engines = new Map<string, GameEngine>();
 	private readonly timers = new Map<string, NodeJS.Timeout>();
-
-	// prevents async race conditions per room
 	private readonly roomQueues = new Map<string, Promise<void>>();
 
 	register(engine: GameEngine): void {
@@ -30,22 +23,20 @@ export class EngineRunner {
 		return gameId !== null && this.engines.has(gameId);
 	}
 
-	// wraps room execution in sequential queue with error boundary
 	private async executeSafely(
 		roomCode: string,
 		io: IO,
 		task: () => Promise<EngineResult> | EngineResult,
 		onSuccess: (result: EngineResult) => void,
 	): Promise<void> {
-		const previousTask = this.roomQueues.get(roomCode) || Promise.resolve();
+		const previousTask = this.roomQueues.get(roomCode) ?? Promise.resolve();
 
 		const nextTask = previousTask
 			.then(async () => {
 				const result = await task();
 				onSuccess(result);
 			})
-			.catch((error) => {
-				// engine crashed but server survives
+			.catch((error: unknown) => {
 				console.error(`[engine] CRASH in room ${roomCode}:`, error);
 				io.to(roomCode).emit(
 					"room_error",
@@ -55,7 +46,6 @@ export class EngineRunner {
 
 		this.roomQueues.set(roomCode, nextTask);
 
-		// prevents memory leaks for dead rooms
 		nextTask.finally(() => {
 			if (this.roomQueues.get(roomCode) === nextTask) {
 				this.roomQueues.delete(roomCode);
@@ -74,7 +64,7 @@ export class EngineRunner {
 			room.code,
 			io,
 			() => engine.onStart({ room }),
-			(result) => this.applyResult(result, room, io, store),
+			(result) => this.applyResult(result, engine.gameId, room, io, store),
 		);
 	}
 
@@ -88,11 +78,18 @@ export class EngineRunner {
 		const engine = this.resolveEngine(room.gameId);
 		if (!engine || room.phase !== "in_game") return;
 
+		// only runs if the engine opts in via actionSchema
+		const validatedAction = engine.actionSchema
+			? parsePlayerAction(engine.actionSchema, action, engine.gameId)
+			: action;
+
+		if (engine.actionSchema && validatedAction === null) return;
+
 		this.executeSafely(
 			room.code,
 			io,
-			() => engine.onAction({ room }, playerId, action),
-			(result) => this.applyResult(result, room, io, store),
+			() => engine.onAction({ room }, playerId, validatedAction),
+			(result) => this.applyResult(result, engine.gameId, room, io, store),
 		);
 	}
 
@@ -131,38 +128,37 @@ export class EngineRunner {
 
 	private applyResult(
 		result: EngineResult,
+		engineId: string,
 		room: Room,
 		io: IO,
 		store: RoomStore,
 	): void {
-		// apply score changes
-		if (result.scoreDeltas) {
-			for (const [playerId, delta] of Object.entries(result.scoreDeltas)) {
+		// still validates at runtime in case a buggy engine slips past the type system
+		const validated = parseEngineResult(result, engineId);
+
+		if (validated.scoreDeltas) {
+			for (const [playerId, delta] of Object.entries(validated.scoreDeltas)) {
 				const player = room.players.get(playerId);
 				if (player) player.score += delta;
 			}
 		}
 
-		// update payloads
-		room.gamePayload = result.serverPayload;
-		room.publicPayload = result.publicPayload;
-		if (result.roomPhase) room.phase = result.roomPhase;
+		room.gamePayload = validated.serverPayload;
+		room.publicPayload = validated.publicPayload;
+		if (validated.roomPhase) room.phase = validated.roomPhase;
 
-		// handle timers cleanly
 		this.cancelTimer(room.code);
-		room.timer = result.timer;
+		room.timer = validated.timer;
 
-		if (result.timer) {
-			this.scheduleTimer(result.timer, room, io, store);
+		if (validated.timer) {
+			this.scheduleTimer(validated.timer, room, io, store);
 		}
 
-		// broadcast updated state
 		touchRoom(room);
 		io.to(room.code).emit("game_state", getPublicState(room));
 
-		// send private secrets to specific players
-		if (result.privatePayloads) {
-			for (const [playerId, secret] of result.privatePayloads) {
+		if (validated.privatePayloads) {
+			for (const [playerId, secret] of validated.privatePayloads) {
 				const player = room.players.get(playerId);
 				if (player?.socketId) {
 					io.to(player.socketId).emit("player_secret", secret);
@@ -188,7 +184,7 @@ export class EngineRunner {
 				room.code,
 				io,
 				() => engine.onTimerExpired({ room }),
-				(result) => this.applyResult(result, room, io, store),
+				(result) => this.applyResult(result, engine.gameId, room, io, store),
 			);
 		}, delay);
 

@@ -5,6 +5,7 @@ import { LogOut, Copy, Check } from "lucide-react";
 import { useGameStore } from "../store/useGameStore";
 import { GAMES } from "../data/games";
 import { SabongGame } from "../games/sabong/SabongGame";
+import { SussyGame } from "../games/sussy/SussyGame";
 import { FinishedHost, FinishedPlayer } from "../games/sabong/phases/Finished";
 import { QRCodeSVG } from "qrcode.react";
 import type { Player } from "@shared/types";
@@ -43,12 +44,14 @@ export function Room() {
 
 	if (phase === "in_game") {
 		if (gameId === "super-sabong") return <SabongGame />;
+		if (gameId === "sussy-impostors") return <SussyGame />;
 	}
 
 	if (phase === "ended") {
 		if (gameId === "super-sabong") {
 			return role === "host" ? <FinishedHost /> : <FinishedPlayer />;
 		}
+		if (gameId === "sussy-impostors") return <SussyGame />; 
 		return (
 			<div className="flex items-center justify-center min-h-screen bg-bg text-white/40 text-sm">
 				Game over.

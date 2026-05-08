@@ -1,4 +1,5 @@
 import type { SabongLogger } from "./logger.js";
+import type { SabongPhase, BattleEvent } from "../../../../shared/sabong.js";
 
 export interface ManokStats {
 	id: string;
@@ -38,11 +39,11 @@ export interface SabongServerPlayer {
 
 // lives in room.gamepayload on the server as the private source of truth
 export interface SabongServerState {
-	phase: import("../../../../shared/sabong.js").SabongPhase;
-	manoks: Map<string, ManokStats>; // id -> full stats
+	phase: SabongPhase;
+	manoks: Map<string, ManokStats>;
 	bracket: ServerBracketSlot[];
 	currentMatchIndex: number;
-	battleLog: import("../../../../shared/sabong.js").BattleEvent[] | null;
+	battleLog: BattleEvent[] | null;
 	players: Map<string, SabongServerPlayer>;
 	logger: SabongLogger;
 }
@@ -79,4 +80,17 @@ export const SABONG_CONSTANTS = {
 	MIN_STAT_DIFF_COUNT: 3, // stats must differ by 10+ to consider manoks distinct
 	PRE_TOURNAMENT_DURATION_MS: 90_000, // 90s to study bracket + pick winner
 	BETTING_DURATION_MS: 60_000, // 60s to place and lock bet
+	FIGHT_EVENT_DURATION_MS: 1_200, // ms per battle log event
+	FIGHT_BUFFER_MS: 3_000, // extra buffer after events finish
+	PAYOUT_DURATION_MS: 6_000,
 } as const;
+
+export const HIDEABLE_STATS = [
+	"health",
+	"attack",
+	"defense",
+	"speed",
+	"critRate",
+] as const;
+
+export type HideableStat = (typeof HIDEABLE_STATS)[number];

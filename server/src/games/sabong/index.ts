@@ -17,28 +17,20 @@ import type {
 	ServerBracketSlot,
 	SabongAction,
 } from "./types.js";
-import { SABONG_CONSTANTS } from "./types.js";
 import { simulateBattle, type FighterStats } from "./battle.js";
 import { getMatchupOdds, predictWinProbability } from "./odds.js";
 import { SabongLogger } from "./logger.js";
 import { MANOK_NAMES } from "./names.js";
+import {
+	SABONG_CONSTANTS,
+	HIDEABLE_STATS,
+	type HideableStat,
+} from "./types.js";
 
 const C = SABONG_CONSTANTS;
 
 // constants
 
-const HIDEABLE_STATS = [
-	"health",
-	"attack",
-	"defense",
-	"speed",
-	"critRate",
-] as const;
-type HideableStat = (typeof HIDEABLE_STATS)[number];
-
-const EVENT_DURATION_MS = 1200;
-const FIGHT_BUFFER_MS = 3000;
-const PAYOUT_DURATION_MS = 6000;
 const MIN_STAT_DIFF = 10;
 
 const QF_COUNT = 4; // quarter-final match slots (indices 0-3)
@@ -76,8 +68,9 @@ function moneylineToDecimal(ml: number): number {
 	return 2.0;
 }
 
+
 function estimateFightDuration(logLength: number): number {
-	return logLength * EVENT_DURATION_MS + FIGHT_BUFFER_MS;
+	return logLength * C.FIGHT_EVENT_DURATION_MS + C.FIGHT_BUFFER_MS;
 }
 
 // manok generation
@@ -914,7 +907,7 @@ export const sabongEngine: GameEngine = {
 			return {
 				serverPayload: state,
 				publicPayload: getPublicSabongState(state),
-				timer: { startsAt: Date.now(), duration: PAYOUT_DURATION_MS },
+				timer: { startsAt: Date.now(), duration: C.PAYOUT_DURATION_MS },
 				scoreDeltas,
 			};
 		}
