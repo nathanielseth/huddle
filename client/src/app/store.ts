@@ -1,10 +1,10 @@
 import { create } from "zustand";
-import { socket } from "../lib/socket";
+import { socket } from "../lib/network/socket";
 import {
 	saveRoomSession,
 	clearRoomSession,
 	type RoomSession,
-} from "../lib/session";
+} from "../lib/network/session";
 import type {
 	Player,
 	RoomPhase,

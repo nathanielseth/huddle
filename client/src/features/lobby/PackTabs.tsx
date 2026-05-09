@@ -1,6 +1,6 @@
 import { motion } from "motion/react";
 import type { Pack } from "../../types/game";
-import { cn } from "../../utils/cn";
+import { cn } from "../../lib/utils/cn";
 
 interface PackTabsProps {
 	packs: Pack[];

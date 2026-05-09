@@ -1,7 +1,7 @@
-import { useRef, useState, useEffect } from "react";
+import { useRef, useState } from "react";
 import { AnimatePresence, motion } from "motion/react";
 import { X, Loader2 } from "lucide-react";
-import { useGameStore } from "../../store/useGameStore";
+import { useGameStore } from "../../app/store";
 
 interface JoinBarProps {
 	onFocus: () => void;
@@ -24,12 +24,6 @@ export function JoinBar({ onFocus }: JoinBarProps) {
 	const joinRoom = useGameStore((s) => s.joinRoom);
 
 	const isValid = code.length === 4 && name.trim().length > 0;
-
-	useEffect(() => {
-		return () => {
-			if (pendingTimer.current) clearTimeout(pendingTimer.current);
-		};
-	}, []);
 
 	function shake(field: "code" | "name") {
 		if (field === "code") {

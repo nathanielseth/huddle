@@ -1,5 +1,5 @@
 import { useRef, type FC } from "react";
-import { useGameStore } from "../../store/useGameStore";
+import { useGameStore } from "../../app/store";
 import { useSabongState } from "./hooks/useSabongState";
 import { usePhaseWipe } from "./hooks/usePhaseWipe";
 import { WipeCanvas, type WipeHandle } from "./components/WipeCanvas";
@@ -35,7 +35,7 @@ const HOST_PHASES: PhaseMap = {
 
 const WIPE_COLOR: [number, number, number] = [0.3, 0.04, 0.04];
 
-export function SabongGame() {
+export function Sabong() {
 	const role = useGameStore((s) => s.role);
 	const { sabong } = useSabongState();
 	const wipeRef = useRef<WipeHandle>(null);

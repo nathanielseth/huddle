@@ -1,73 +1,81 @@
 export interface ManokView {
-	id: string;
-	name: string;
-	stats: {
-		health: number | null;
-		attack: number | null;
-		defense: number | null;
-		speed: number | null;
-		critRate: number | null;
+	readonly id: string;
+	readonly name: string;
+	readonly stats: {
+		readonly health: number | null;
+		readonly attack: number | null;
+		readonly defense: number | null;
+		readonly speed: number | null;
+		readonly critRate: number | null;
 	};
-	maxHp: number;
-	currentHp: number | null;
-	moneylineOdds: number;
-	winProbability: number;
+	readonly maxHp: number;
+	readonly currentHp: number | null;
+	readonly moneylineOdds: number;
+	readonly winProbability: number;
 }
 
 export interface BracketSlot {
-	matchIndex: number; // 0-6, order of fights in tournament
-	fighter1Id: string | null;
-	fighter2Id: string | null;
-	winnerId: string | null;
+	readonly matchIndex: number;
+	readonly fighter1Id: string | null;
+	readonly fighter2Id: string | null;
+	readonly winnerId: string | null;
 }
 
-// battle log
 export type BattleEvent =
 	| {
-			type: "move";
-			turn: number;
-			attackerId: string;
-			move: "strike" | "double_strike";
-			damage: number;
-			crit: boolean;
-			defenderHp: number;
+			readonly type: "move";
+			readonly turn: number;
+			readonly attackerId: string;
+			readonly move: "strike" | "double_strike";
+			readonly damage: number;
+			readonly crit: boolean;
+			readonly defenderHp: number;
 	  }
 	| {
-			type: "miss";
-			turn: number;
-			attackerId: string;
-			move: "strike" | "double_strike";
+			readonly type: "miss";
+			readonly turn: number;
+			readonly attackerId: string;
+			readonly move: "strike" | "double_strike";
 	  }
-	| { type: "buff"; turn: number; attackerId: string; newAttackBoost: number }
-	| { type: "ko"; loserId: string }
-	| { type: "timeout"; winnerId: string; reason: "hp_advantage" | "coinflip" };
+	| {
+			readonly type: "buff";
+			readonly turn: number;
+			readonly attackerId: string;
+			readonly newAttackBoost: number;
+	  }
+	| { readonly type: "ko"; readonly loserId: string }
+	| {
+			readonly type: "timeout";
+			readonly winnerId: string;
+			readonly reason: "hp_advantage" | "coinflip";
+	  };
 
-// player betting state
 export interface SabongPlayerView {
-	playerId: string;
-	balance: number;
-	bracketPickId: string | null; // which manok they picked to win the whole tournament
-	bracketPickLocked: boolean;
-	sabotageTargetId: string | null;
-	currentBet: { manokId: string; amount: number } | null;
-	betLocked: boolean; // true = they're done betting this match, waiting for others
+	readonly playerId: string;
+	readonly balance: number;
+	readonly bracketPickId: string | null;
+	readonly bracketPickLocked: boolean;
+	readonly sabotageTargetId: string | null;
+	readonly currentBet: {
+		readonly manokId: string;
+		readonly amount: number;
+	} | null;
+	readonly betLocked: boolean;
 }
 
-// sabong-specific phases
 export type SabongPhase =
-	| "pre_tournament" // players pick tournament winner + study matchups
-	| "betting" // current match open for bets
-	| "fighting" // pre-computed battle log streaming on client
-	| "payout" // results shown, balances updated
-	| "finished"; // all 7 matches done, final leaderboard
+	| "pre_tournament"
+	| "betting"
+	| "fighting"
+	| "payout"
+	| "finished";
 
-// the full game payload, travels inside GameState.gamePayload
 export interface SabongState {
 	readonly phase: SabongPhase;
 	readonly manoks: Readonly<Record<string, ManokView>>;
-	readonly bracket: ReadonlyArray<BracketSlot>;
+	readonly bracket: readonly BracketSlot[];
 	readonly currentMatchIndex: number;
-	readonly battleLog: ReadonlyArray<BattleEvent> | null;
+	readonly battleLog: readonly BattleEvent[] | null;
 	readonly players: Readonly<Record<string, SabongPlayerView>>;
 	readonly allBracketPicksLocked: boolean;
 	readonly matchCount: number;

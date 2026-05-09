@@ -19,67 +19,66 @@ export type TaskType =
 export type PlayerRole = "crew" | "impostor";
 
 export type SussyResponse =
-	| { type: "show_of_hands"; raised: boolean }
-	| { type: "finger_pointing"; targetId: string | null }
-	| { type: "finger_blast"; count: number }
-	| { type: "thumb_shot"; choices: boolean[] }
-	| { type: "face_turn"; emoji: string | null }
-	| { type: "glitch_in_the_chat"; answers: string[] };
+	| { readonly type: "show_of_hands"; readonly raised: boolean }
+	| { readonly type: "finger_pointing"; readonly targetId: string | null }
+	| { readonly type: "finger_blast"; readonly count: number }
+	| { readonly type: "thumb_shot"; readonly choices: readonly boolean[] }
+	| { readonly type: "face_turn"; readonly emoji: string | null }
+	| {
+			readonly type: "glitch_in_the_chat";
+			readonly answers: readonly string[];
+	  };
 
 export interface SussyPlayerSecret {
-	role: PlayerRole;
-	prompt: string | [string, string, string] | null;
-	isGlitchRound: boolean;
-	taskNumber: 1 | 2 | 3;
+	readonly role: PlayerRole;
+	readonly prompt: string | readonly [string, string, string] | null;
+	readonly isGlitchRound: boolean;
+	readonly taskNumber: 1 | 2 | 3;
 }
 
 export interface SussyPlayerView {
-	playerId: string;
-	score: number;
-	sleuthedCount: number;
-	survivedCount: number;
-	hasResponded: boolean;
-	hasVoted: boolean;
-	response: SussyResponse | null;
-	voteTargetId: string | null;
-	isEliminated: boolean;
+	readonly playerId: string;
+	readonly score: number;
+	readonly sleuthedCount: number;
+	readonly survivedCount: number;
+	readonly hasResponded: boolean;
+	readonly hasVoted: boolean;
+	readonly response: SussyResponse | null;
+	readonly voteTargetId: string | null;
+	readonly isEliminated: boolean;
 }
 
 export interface SussyTaskVoteResult {
-	taskNumber: 1 | 2 | 3;
-	wasCaught: boolean;
-	voteBreakdown: Record<string, string | null>;
-	scoreDeltas: Record<string, number>;
+	readonly taskNumber: 1 | 2 | 3;
+	readonly wasCaught: boolean;
+	readonly voteBreakdown: Readonly<Record<string, string | null>>;
+	readonly scoreDeltas: Readonly<Record<string, number>>;
 }
 
 export interface SussyRoundResult {
-	roundNumber: number;
-	taskType: TaskType;
-	impostorId: string;
-	taskResults: SussyTaskVoteResult[];
-	crewPrompt: string | [string, string, string];
-	impostorPrompt: string | [string, string, string] | null;
+	readonly roundNumber: number;
+	readonly taskType: TaskType;
+	readonly impostorId: string;
+	readonly taskResults: readonly SussyTaskVoteResult[];
+	readonly crewPrompt: string | readonly [string, string, string];
+	readonly impostorPrompt: string | readonly [string, string, string] | null;
 }
 
 export interface SussyState {
-	phase: SussyPhase;
-	mode: SussyMode;
-	roundNumber: number;
-	taskNumber: 1 | 2 | 3;
-	taskType: TaskType;
-	chooserPlayerId: string | null;
-	players: Record<string, SussyPlayerView>;
-	lastRoundResult: SussyRoundResult | null;
-	allResponded: boolean;
-	allVoted: boolean;
-	/**
-	 * Non-null during voting when a player has reached strict majority.
-	 * Client uses this for real-time "consensus reached" feedback.
-	 */
-	majorityTargetId: string | null;
+	readonly phase: SussyPhase;
+	readonly mode: SussyMode;
+	readonly roundNumber: number;
+	readonly taskNumber: 1 | 2 | 3;
+	readonly taskType: TaskType;
+	readonly chooserPlayerId: string | null;
+	readonly players: Readonly<Record<string, SussyPlayerView>>;
+	readonly lastRoundResult: SussyRoundResult | null;
+	readonly allResponded: boolean;
+	readonly allVoted: boolean;
+	readonly majorityTargetId: string | null;
 }
 
 export type SussyAction =
-	| { type: "select_category"; category: TaskType }
-	| { type: "submit_response"; response: SussyResponse }
-	| { type: "cast_vote"; targetId: string };
+	| { readonly type: "select_category"; readonly category: TaskType }
+	| { readonly type: "submit_response"; readonly response: SussyResponse }
+	| { readonly type: "cast_vote"; readonly targetId: string };

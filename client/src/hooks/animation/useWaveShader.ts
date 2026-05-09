@@ -1,4 +1,4 @@
-import { useEffect, useRef, useCallback, type RefObject } from "react";
+import { useEffect, useRef, type RefObject } from "react";
 
 // shaders
 const VERT = `#version 300 es
@@ -198,7 +198,7 @@ export function useWaveShader(canvasRef: RefObject<HTMLCanvasElement | null>) {
 	}, [canvasRef]); // refobject identity is stable across renders
 
 	// raf loop
-	const startLoop = useCallback(() => {
+	const startLoop = () => {
 		const s = glState.current;
 		if (!s) return;
 
@@ -232,16 +232,16 @@ export function useWaveShader(canvasRef: RefObject<HTMLCanvasElement | null>) {
 
 		cancelAnimationFrame(s.raf);
 		s.raf = requestAnimationFrame(tick);
-	}, []);
+	};
 
-	const stopLoop = useCallback(() => {
+	const stopLoop = () => {
 		const s = glState.current;
 		if (s) cancelAnimationFrame(s.raf);
-	}, []);
+	};
 
-	const updateParams = useCallback((next: Partial<WaveParams>) => {
+	const updateParams = (next: Partial<WaveParams>) => {
 		Object.assign(params.current, next);
-	}, []);
+	};
 
 	return { startLoop, stopLoop, updateParams } as const;
 }

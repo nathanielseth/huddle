@@ -1,15 +1,7 @@
-import { createBrowserRouter, RouterProvider } from "react-router";
-import { Home } from "./pages/Home";
-import { Room } from "./pages/Room";
-import { Join } from "./pages/Join";
-import { Toaster } from "./components/ui/Toaster";
-import { useSocketInit } from "./hooks/useSocketInit";
-
-const router = createBrowserRouter([
-	{ path: "/", element: <Home /> },
-	{ path: "/room/:code", element: <Room /> },
-	{ path: "/join/:code", element: <Join /> },
-]);
+import { RouterProvider } from "react-router";
+import { router } from "@/app/router";
+import { Toaster } from "@/components/ui/Toaster";
+import { useSocketInit } from "@/hooks/network/useSocketInit";
 
 export default function App() {
 	useSocketInit();

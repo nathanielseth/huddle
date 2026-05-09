@@ -39,7 +39,7 @@ export const GAMES: Game[] = [
 		duration: 25,
 	},
 	{
-		id: "wit-showdown",
+		id: "witzone",
 		packId: "pack-1",
 		name: "WitZone",
 		thumbnail: "/games/witzone.avif",

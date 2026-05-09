@@ -3,7 +3,7 @@ import { useSabongState } from "../hooks/useSabongState";
 import { TimerBar } from "../components/TimerBar";
 import { BracketViewFull, BracketViewQF } from "../components/BracketView";
 import { ManokCard } from "../components/ManokCard";
-import { cn } from "../../../utils/cn";
+import { cn } from "../../../lib/utils/cn";
 
 export function PayoutPlayer() {
 	const { sabong, myPlayer, fighter1, fighter2, timer } = useSabongState();

@@ -2,13 +2,12 @@ import { useState } from "react";
 import { useNavigate, Navigate } from "react-router";
 import { motion, AnimatePresence } from "motion/react";
 import { LogOut, Copy, Check } from "lucide-react";
-import { useGameStore } from "../store/useGameStore";
+import { useGameStore } from "../app/store";
 import { GAMES } from "../data/games";
-import { SabongGame } from "../games/sabong/SabongGame";
-import { SussyGame } from "../games/sussy/SussyGame";
 import { FinishedHost, FinishedPlayer } from "../games/sabong/phases/Finished";
 import { QRCodeSVG } from "qrcode.react";
 import type { Player } from "@shared/types";
+import { GAME_REGISTRY } from "@/app/registry";
 
 export function Room() {
 	const navigate = useNavigate();
@@ -43,15 +42,16 @@ export function Room() {
 	}
 
 	if (phase === "in_game") {
-		if (gameId === "super-sabong") return <SabongGame />;
-		if (gameId === "sussy-impostors") return <SussyGame />;
+		const entry = GAME_REGISTRY.find((g) => g.id === gameId);
+		if (entry) return <entry.inGame />;
 	}
 
 	if (phase === "ended") {
 		if (gameId === "super-sabong") {
 			return role === "host" ? <FinishedHost /> : <FinishedPlayer />;
 		}
-		if (gameId === "sussy-impostors") return <SussyGame />; 
+		const entry = GAME_REGISTRY.find((g) => g.id === gameId);
+		if (entry?.ended) return <entry.ended />;
 		return (
 			<div className="flex items-center justify-center min-h-screen bg-bg text-white/40 text-sm">
 				Game over.

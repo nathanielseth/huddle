@@ -1,13 +1,13 @@
 import { useState } from "react";
 import { Navigate } from "react-router";
 import { AnimatePresence, motion } from "motion/react";
-import { JoinBar } from "../components/home/JoinBar";
-import { PackTabs } from "../components/home/PackTabs";
-import { TagFilter } from "../components/home/TagFilter";
-import { GameGrid } from "../components/shared/GameGrid";
+import { JoinBar } from "../features/lobby/JoinBar";
+import { PackTabs } from "../features/lobby/PackTabs";
+import { TagFilter } from "../features/lobby/TagFilter";
+import { GameGrid } from "../components/layout/GameGrid";
 import { GAMES } from "../data/games";
 import { PACKS } from "../data/packs";
-import { useGameStore } from "../store/useGameStore";
+import { useGameStore } from "../app/store";
 import type { Game } from "../types/game";
 
 const ALL_TAGS = Array.from(

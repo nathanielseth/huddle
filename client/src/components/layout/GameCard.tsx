@@ -1,6 +1,6 @@
-import { use3DTilt } from "../../hooks/use3DTilt";
+import { use3DTilt } from "../../hooks/animation/use3DTilt";
 import type { Game } from "../../types/game";
-import { cn } from "../../utils/cn";
+import { cn } from "../../lib/utils/cn";
 
 interface GameCardProps {
 	game: Game;

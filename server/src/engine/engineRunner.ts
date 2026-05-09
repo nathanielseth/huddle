@@ -23,6 +23,18 @@ export class EngineRunner {
 		return gameId !== null && this.engines.has(gameId);
 	}
 
+	get timerCount(): number {
+		return this.timers.size;
+	}
+
+	get queueSize(): number {
+		return this.roomQueues.size;
+	}
+
+	clearQueue(roomCode: string): void {
+		this.roomQueues.delete(roomCode);
+	}
+
 	private async executeSafely(
 		roomCode: string,
 		io: IO,
@@ -78,7 +90,6 @@ export class EngineRunner {
 		const engine = this.resolveEngine(room.gameId);
 		if (!engine || room.phase !== "in_game") return;
 
-		// only runs if the engine opts in via actionSchema
 		const validatedAction = engine.actionSchema
 			? parsePlayerAction(engine.actionSchema, action, engine.gameId)
 			: action;
@@ -117,7 +128,7 @@ export class EngineRunner {
 				io.to(player.socketId).emit("player_secret", secret);
 			}
 		} catch (err) {
-			console.error(`[engine] Error fetching secret for ${playerId}:`, err);
+			console.error(`[engine] error fetching secret for ${playerId}:`, err);
 		}
 	}
 
@@ -133,7 +144,6 @@ export class EngineRunner {
 		io: IO,
 		store: RoomStore,
 	): void {
-		// still validates at runtime in case a buggy engine slips past the type system
 		const validated = parseEngineResult(result, engineId);
 
 		if (validated.scoreDeltas) {

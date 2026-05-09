@@ -1,8 +1,8 @@
-import { useRef, useState, useEffect } from "react";
+import { useRef, useState } from "react";
 import { useNavigate, useParams, Navigate } from "react-router";
 import { motion, AnimatePresence } from "motion/react";
 import { X, Loader2 } from "lucide-react";
-import { useGameStore } from "../store/useGameStore";
+import { useGameStore } from "../app/store";
 
 const SHAKE = [0, -6, 6, -5, 5, -3, 3, 0];
 const JOIN_TIMEOUT_MS = 1_000;
@@ -18,12 +18,6 @@ export function Join() {
 	const [isPending, setIsPending] = useState(false);
 	const pendingTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 	const inputRef = useRef<HTMLInputElement>(null);
-
-	useEffect(() => {
-		return () => {
-			if (pendingTimer.current) clearTimeout(pendingTimer.current);
-		};
-	}, []);
 
 	if (roomCode) return <Navigate to={`/room/${roomCode}`} replace />;
 

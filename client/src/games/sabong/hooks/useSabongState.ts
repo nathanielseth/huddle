@@ -1,4 +1,4 @@
-import { useGameStore } from "../../../store/useGameStore";
+import { useGameStore } from "../../../app/store";
 import type { SabongState, ManokView } from "@shared/sabong";
 
 export function useSabongState() {

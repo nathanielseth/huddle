@@ -1,7 +1,7 @@
 import { motion } from "motion/react";
-import { useGameStore } from "../../../store/useGameStore";
+import { useGameStore } from "../../../app/store";
 import { useSabongState } from "../hooks/useSabongState";
-import { cn } from "../../../utils/cn";
+import { cn } from "../../../lib/utils/cn";
 
 function getRankSuffix(rank: number): string {
 	if (rank === 1) return "st";
@@ -23,8 +23,11 @@ function Leaderboard({ compact = false }: { compact?: boolean }) {
 		? sabong.manoks[tournamentWinnerId]
 		: null;
 
-	// sort by score descending
-	const ranked = [...storePlayers].sort((a, b) => b.score - a.score);
+	const ranked = [...storePlayers].sort((a, b) => {
+		const balA = sabong.players[a.id]?.balance ?? 0;
+		const balB = sabong.players[b.id]?.balance ?? 0;
+		return balB - balA;
+	});
 
 	return (
 		<div className="flex flex-col gap-2">
@@ -32,6 +35,7 @@ function Leaderboard({ compact = false }: { compact?: boolean }) {
 				const rank = i + 1;
 				const isFirst = rank === 1;
 				const sabongP = sabong.players[player.id];
+				const balance = sabongP?.balance ?? 0;
 				const pickedWinner =
 					tournamentWinnerId && sabongP?.bracketPickId === tournamentWinnerId;
 
@@ -49,7 +53,6 @@ function Leaderboard({ compact = false }: { compact?: boolean }) {
 						animate={{ opacity: 1, x: 0 }}
 						transition={{ delay: i * 0.07, duration: 0.25 }}
 					>
-						{/* rank */}
 						<span
 							className={cn(
 								"font-display font-black tabular-nums leading-none shrink-0",
@@ -63,7 +66,6 @@ function Leaderboard({ compact = false }: { compact?: boolean }) {
 							</span>
 						</span>
 
-						{/* name + bracket pick badge */}
 						<div className="flex flex-col flex-1 min-w-0">
 							<span
 								className={cn(
@@ -81,7 +83,6 @@ function Leaderboard({ compact = false }: { compact?: boolean }) {
 							)}
 						</div>
 
-						{/* final score */}
 						<span
 							className={cn(
 								"font-display font-black tabular-nums shrink-0",
@@ -89,7 +90,7 @@ function Leaderboard({ compact = false }: { compact?: boolean }) {
 								isFirst ? "text-yellow-400" : "text-white/60",
 							)}
 						>
-							₱{player.score}
+							₱{balance}
 						</span>
 					</motion.div>
 				);
@@ -145,11 +146,13 @@ export function FinishedPlayer() {
 
 	const myRank =
 		[...storePlayers]
-			.sort((a, b) => b.score - a.score)
-			.findIndex((p) => {
-				const sp = sabong.players[p.id];
-				return sp?.playerId === myPlayer.playerId;
-			}) + 1;
+			.sort((a, b) => {
+				const balA = sabong.players[a.id]?.balance ?? 0;
+				const balB = sabong.players[b.id]?.balance ?? 0;
+				return balB - balA;
+			})
+			.findIndex((p) => sabong.players[p.id]?.playerId === myPlayer.playerId) +
+		1;
 
 	return (
 		<div className="flex flex-col min-h-screen bg-bg">

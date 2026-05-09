@@ -1,8 +1,3 @@
-import type { Server, Socket } from "socket.io";
-import type {
-	ServerToClientEvents,
-	ClientToServerEvents,
-} from "../../../shared/events.js";
 import {
 	createRoom,
 	addPlayer,
@@ -22,11 +17,10 @@ import {
 	RejoinRoomSchema,
 } from "./schemas.js";
 import { EngineRunner } from "../engine/engineRunner.js";
-
-type IO = Server<ClientToServerEvents, ServerToClientEvents>;
-type ClientSocket = Socket<ClientToServerEvents, ServerToClientEvents>;
+import type { IO, ClientSocket } from "../types.js";
 
 const HOST_GRACE_MS = 45_000;
+const ACTION_RATE_LIMIT_MS = 100;
 
 const hostGraceTimers = new Map<string, ReturnType<typeof setTimeout>>();
 
@@ -38,13 +32,11 @@ function clearHostGrace(roomCode: string): void {
 	}
 }
 
-// sends fresh game state to everyone in the room
 function broadcast(io: IO, room: Room): void {
 	touchRoom(room);
 	io.to(room.code).emit("game_state", getPublicState(room));
 }
 
-// deletes room and notifies players
 function closeRoom(
 	io: IO,
 	store: RoomStore,
@@ -54,12 +46,12 @@ function closeRoom(
 ): void {
 	clearHostGrace(room.code);
 	runner.cancelTimer(room.code);
+	runner.clearQueue(room.code);
 	io.to(room.code).emit("room_closed");
 	store.delete(room.code);
 	console.log(`[room] ${room.code} closed — ${reason}`);
 }
 
-// player clicked leave button
 function handleIntentionalLeave(
 	io: IO,
 	socket: ClientSocket,
@@ -70,7 +62,6 @@ function handleIntentionalLeave(
 	if (!room) return;
 	store.untrackSocket(socket.id);
 	if (isHostSocket(room, socket.id)) {
-		// intentional leave
 		closeRoom(io, store, room, "host left", runner);
 		return;
 	}
@@ -79,7 +70,6 @@ function handleIntentionalLeave(
 	broadcast(io, room);
 }
 
-// socket lost connection
 function handleDisconnect(
 	io: IO,
 	socket: ClientSocket,
@@ -95,23 +85,27 @@ function handleDisconnect(
 		console.log(
 			`[room] host disconnected from ${room.code} (${reason}) — starting ${HOST_GRACE_MS / 1000}s grace period`,
 		);
-
 		io.to(room.code).emit(
 			"room_error",
 			"Host disconnected. Waiting for them to reconnect…",
 		);
 
 		const timer = setTimeout(() => {
-			// grace period expired
 			hostGraceTimers.delete(room.code);
 
 			// room might have been cleaned up by another path already
 			if (!store.get(room.code)) return;
-
 			closeRoom(io, store, room, `host never rejoined (${reason})`, runner);
 		}, HOST_GRACE_MS);
-
 		hostGraceTimers.set(room.code, timer);
+		return;
+	}
+
+	const player = findPlayerBySocket(room, socket.id);
+	if (!player) {
+		console.log(
+			`[room] ignoring stale disconnect for ${socket.id} in ${room.code} — player already rejoined`,
+		);
 		return;
 	}
 
@@ -125,7 +119,8 @@ export function registerHandlers(
 	store: RoomStore,
 	runner: EngineRunner,
 ): void {
-	// host creates new game room
+	let lastActionAt = 0;
+
 	socket.on("create_room", (payload) => {
 		const result = CreateRoomSchema.safeParse(payload);
 		if (!result.success) {
@@ -142,17 +137,14 @@ export function registerHandlers(
 		broadcast(io, room);
 	});
 
-	// player joins existing room by code
 	socket.on("join_room", (payload) => {
 		const result = JoinRoomSchema.safeParse(payload);
 		if (!result.success) {
 			socket.emit("room_error", "Invalid payload.");
 			return;
 		}
-
 		const { code, playerId } = result.data;
 		const name = result.data.name.trim();
-
 		const room = store.get(code);
 		if (!room) {
 			socket.emit("room_error", "Room not found.");
@@ -162,8 +154,6 @@ export function registerHandlers(
 			socket.emit("room_error", "Game already in progress.");
 			return;
 		}
-
-		// duplicate name guard
 		const nameLower = name.toLowerCase();
 		const nameTaken = Array.from(room.players.values()).some(
 			(p) => p.isConnected && p.name.toLowerCase() === nameLower,
@@ -172,7 +162,6 @@ export function registerHandlers(
 			socket.emit("room_error", "That name is already taken in this room.");
 			return;
 		}
-
 		const outcome = addPlayer(room, playerId, socket.id, name);
 		store.trackSocket(socket.id, code);
 		socket.join(code);
@@ -181,7 +170,6 @@ export function registerHandlers(
 		broadcast(io, room);
 	});
 
-	// client reconnects to existing room (page refresh / network recovery)
 	socket.on("rejoin_room", (payload) => {
 		const result = RejoinRoomSchema.safeParse(payload);
 		if (!result.success) {
@@ -200,15 +188,10 @@ export function registerHandlers(
 				socket.emit("rejoin_failed");
 				return;
 			}
-
-			// cancels the grace-period kill timer
 			if (hostGraceTimers.has(room.code)) {
 				clearHostGrace(room.code);
 				console.log(`[room] host rejoined ${room.code} within grace period`);
-				// broadcast() below pushes fresh game_state which is the client's cue to dismiss the warning
 			}
-
-			// replace stale host socket
 			store.untrackSocket(room.hostSocketId);
 			room.hostSocketId = socket.id;
 			store.trackSocket(socket.id, code);
@@ -222,7 +205,6 @@ export function registerHandlers(
 			return;
 		}
 
-		// replace stale player socket
 		const existing = room.players.get(playerId);
 		if (existing) store.untrackSocket(existing.socketId);
 
@@ -245,13 +227,10 @@ export function registerHandlers(
 		const room = store.findBySocket(socket.id);
 		if (!room) return;
 		if (room.phase !== "lobby") return;
-
 		const isHost = isHostSocket(room, socket.id);
 		const firstPlayer = [...room.players.values()][0];
 		const isPartyLeader = firstPlayer?.socketId === socket.id;
-
 		if (!isHost && !isPartyLeader) return;
-
 		if (!runner.hasEngine(room.gameId)) {
 			socket.emit("room_error", "Unknown game.");
 			return;
@@ -260,11 +239,14 @@ export function registerHandlers(
 	});
 
 	socket.on("player_action", (payload) => {
+		const now = Date.now();
+		if (now - lastActionAt < ACTION_RATE_LIMIT_MS) return;
+		lastActionAt = now;
+
 		const room = store.findBySocket(socket.id);
 		if (!room) return;
 		const player = findPlayerBySocket(room, socket.id);
-		if (!player) return; // host can't submit player actions
-
+		if (!player) return;
 		runner.handleAction(room, player.playerId, payload, io, store);
 	});
 

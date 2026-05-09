@@ -4,8 +4,8 @@ import {
 	useRef,
 	useLayoutEffect,
 } from "react";
-import { animate } from "motion";
-import { useWaveShader } from "../../../hooks/useWaveShader";
+import { useWaveShader } from "../../../hooks/animation/useWaveShader";
+import { tweenRaf } from "../../../lib/animation/tweenRaf";
 
 export interface WipeHandle {
 	wipe(onMidpoint: () => void): Promise<void>;
@@ -30,33 +30,38 @@ export const WipeCanvas = forwardRef<WipeHandle, Props>(
 			() => ({
 				wipe(onMidpoint) {
 					return new Promise<void>((resolve) => {
-						const ease = [0.76, 0, 0.24, 1] as const;
+						const ms = duration * 1000;
+						let cancelCurrent: (() => void) | null = null;
 
-						// wipe in
+						const runWipeOut = () => {
+							updateParams({ flip: 1.0, threshold: -0.15 });
+							cancelCurrent = tweenRaf(
+								-0.15,
+								1.0,
+								ms,
+								(v) => updateParams({ threshold: v }),
+								() => {
+									stopLoop();
+									resolve();
+								},
+							);
+						};
+
 						updateParams({ flip: 0.0, threshold: -0.15 });
 						startLoop();
 
-						animate(-0.15, 1.0, {
-							duration,
-							ease,
-							onUpdate: (v) => updateParams({ threshold: v }),
-							onComplete: () => {
+						cancelCurrent = tweenRaf(
+							-0.15,
+							1.0,
+							ms,
+							(v) => updateParams({ threshold: v }),
+							() => {
 								onMidpoint();
-
-								// wipe out
-								updateParams({ flip: 1.0, threshold: -0.15 });
-
-								animate(-0.15, 1.0, {
-									duration,
-									ease,
-									onUpdate: (v) => updateParams({ threshold: v }),
-									onComplete: () => {
-										stopLoop();
-										resolve();
-									},
-								});
+								runWipeOut();
 							},
-						});
+						);
+
+						return () => cancelCurrent?.();
 					});
 				},
 			}),

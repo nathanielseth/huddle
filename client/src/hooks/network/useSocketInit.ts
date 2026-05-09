@@ -1,44 +1,58 @@
 import { useEffect } from "react";
-import { socket } from "../lib/socket";
-import { useGameStore } from "../store/useGameStore";
-import { toast } from "../lib/toast";
-import { loadRoomSession } from "../lib/session";
+import { socket } from "../../lib/network/socket";
+import { useGameStore } from "../../app/store";
+import { toast } from "../../lib/utils/toast";
+import { loadRoomSession } from "../../lib/network/session";
 import type { GameState } from "@shared/types";
 
 const CONN_TOAST_ID = "conn-status";
 
+// call this before socket.disconnect() to suppress the spurious warning toast
+// e.g. when the user intentionally leaves a room
+export function markIntentionalDisconnect() {
+	_intentional = true;
+}
+
+let _intentional = false;
+
 export function useSocketInit(): void {
 	useEffect(() => {
-		const store = () => useGameStore.getState();
-
+		const getStore = () => useGameStore.getState();
 		let hasConnectedOnce = false;
 
 		const onConnect = () => {
 			const wasDisconnected = hasConnectedOnce;
 			hasConnectedOnce = true;
-			store()._setStatus("connected");
+			getStore()._setStatus("connected");
+
+			toast.dismiss(CONN_TOAST_ID);
 
 			if (wasDisconnected) {
-				toast.success("Reconnected!", {
-					id: CONN_TOAST_ID,
-					duration: 2500,
-				});
+				toast.success("Reconnected!", { id: CONN_TOAST_ID, duration: 2500 });
 			}
 
 			const session = loadRoomSession();
-			if (session) store()._attemptRejoin(session);
+			if (session) getStore()._attemptRejoin(session);
 		};
 
 		const onDisconnect = () => {
-			store()._setStatus("disconnected");
-			toast.warning("Connection lost. Reconnecting…", {
-				id: CONN_TOAST_ID,
-				duration: 0,
-			});
+			getStore()._setStatus("disconnected");
+
+			if (_intentional) {
+				// user-triggered — no toast needed
+				_intentional = false;
+				return;
+			}
+
+			// don't show a toast here — onReconnectAttempt fires immediately after
+			// and is the right place for it. showing here would cause a double-set
+			// on the same id within the same tick.
 		};
 
 		const onConnectError = () => {
-			store()._setStatus("error");
+			getStore()._setStatus("error");
+
+			// only show on the very first attempt — after that onReconnectAttempt covers it
 			if (!hasConnectedOnce) {
 				toast.error("Could not connect to server.", {
 					id: CONN_TOAST_ID,
@@ -47,14 +61,8 @@ export function useSocketInit(): void {
 			}
 		};
 
-		const onGameState = (state: GameState) => store()._syncState(state);
-		const onRoomError = (msg: string) => toast.error(msg);
-		const onRoomClosed = () => store()._closeRoom();
-		const onRejoinFailed = () => store()._closeRoom();
-		const onPlayerSecret = (payload: unknown) => store()._setSecret(payload);
-
 		const onReconnectAttempt = () => {
-			store()._setStatus("connecting");
+			getStore()._setStatus("connecting");
 			toast.warning("Connection lost. Reconnecting…", {
 				id: CONN_TOAST_ID,
 				duration: 0,
@@ -62,12 +70,22 @@ export function useSocketInit(): void {
 		};
 
 		const onReconnectFailed = () => {
-			store()._setStatus("error");
-			toast.error("Could not reconnect. Try refreshing.", {
+			getStore()._setStatus("error");
+			toast.error("Could not reconnect.", {
 				id: CONN_TOAST_ID,
 				duration: 0,
+				action: {
+					label: "Refresh",
+					onClick: () => window.location.reload(),
+				},
 			});
 		};
+
+		const onGameState = (state: GameState) => getStore()._syncState(state);
+		const onRoomError = (msg: string) => toast.error(msg);
+		const onRoomClosed = () => getStore()._closeRoom();
+		const onRejoinFailed = () => getStore()._closeRoom();
+		const onPlayerSecret = (payload: unknown) => getStore()._setSecret(payload);
 
 		socket.on("connect", onConnect);
 		socket.on("disconnect", onDisconnect);
@@ -80,7 +98,8 @@ export function useSocketInit(): void {
 		socket.io.on("reconnect_attempt", onReconnectAttempt);
 		socket.io.on("reconnect_failed", onReconnectFailed);
 
-		store().connect();
+		getStore().connect();
+
 		if (socket.connected) onConnect();
 
 		return () => {

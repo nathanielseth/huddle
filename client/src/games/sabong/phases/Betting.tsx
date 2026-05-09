@@ -3,8 +3,8 @@ import { useState } from "react";
 import { useSabongState } from "../hooks/useSabongState";
 import { ManokCard } from "../components/ManokCard";
 import { TimerBar } from "../components/TimerBar";
-import { socket } from "../../../lib/socket";
-import { cn } from "../../../utils/cn";
+import { socket } from "../../../lib/network/socket";
+import { cn } from "../../../lib/utils/cn";
 
 // player
 export function BettingPlayer() {

@@ -1,12 +1,11 @@
-import { useEffect, useRef, useState, useCallback } from "react";
+import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { AnimatePresence, motion, type PanInfo } from "motion/react";
 import { useStore } from "zustand";
 import { X, CheckCircle2, AlertTriangle, XCircle, Info } from "lucide-react";
-import { toastStore, type Toast } from "../../lib/toast";
-import { useReducedMotion } from "../../hooks/useReducedMotion";
+import { toastStore, type Toast } from "../../lib/utils/toast";
+import { useReducedMotion } from "../../hooks/a11y/useReducedMotion";
 
-// variant config
 const VARIANTS = {
 	success: {
 		Icon: CheckCircle2,
@@ -34,7 +33,6 @@ const VARIANTS = {
 	},
 } as const;
 
-// motion presets
 const SPRING = {
 	type: "spring" as const,
 	stiffness: 420,
@@ -59,7 +57,9 @@ function getAnimationProps(reduced: boolean) {
 	};
 }
 
+
 // ToastItem
+
 interface ToastItemProps {
 	t: Toast;
 	onDismiss: (id: string) => void;
@@ -73,32 +73,20 @@ function ToastItem({ t, onDismiss, reducedMotion }: ToastItemProps) {
 	const remainingRef = useRef(t.duration);
 	const lastTickRef = useRef(0);
 	const rafRef = useRef<number | null>(null);
-	const pausedRef = useRef(false);
 	const dismissedRef = useRef(false);
+	const tickRef = useRef<((now: number) => void) | null>(null);
 
-	const stopRaf = useCallback(() => {
-		if (rafRef.current !== null) {
-			cancelAnimationFrame(rafRef.current);
-			rafRef.current = null;
-		}
-	}, []);
+	// synchronizes the component with the browser's animation frame 
+	useEffect(() => {
+		if (isPersistent) return;
 
-	const startRaf = useCallback(() => {
-		if (isPersistent || dismissedRef.current) return;
-		lastTickRef.current = performance.now();
+		remainingRef.current = t.duration;
+		dismissedRef.current = false;
 
-		function tick(now: number) {
-			if (pausedRef.current) {
-				rafRef.current = requestAnimationFrame(tick);
-				return;
-			}
-
-			const delta = now - lastTickRef.current;
-			const safeDelta = Math.min(delta, 50);
-
+		const tick = (now: number) => {
+			const delta = Math.min(now - lastTickRef.current, 50);
 			lastTickRef.current = now;
-			remainingRef.current = Math.max(0, remainingRef.current - safeDelta);
-
+			remainingRef.current = Math.max(0, remainingRef.current - delta);
 			setProgress(remainingRef.current / t.duration);
 
 			if (remainingRef.current <= 0 && !dismissedRef.current) {
@@ -108,40 +96,45 @@ function ToastItem({ t, onDismiss, reducedMotion }: ToastItemProps) {
 			}
 
 			rafRef.current = requestAnimationFrame(tick);
-		}
+		};
 
-		rafRef.current = requestAnimationFrame(tick);
-	}, [isPersistent, t.duration, t.id]);
-
-	useEffect(() => {
-		startRaf();
-		return stopRaf;
-	}, [startRaf, stopRaf]);
-
-	useEffect(() => {
-		remainingRef.current = t.duration;
+		tickRef.current = tick;
 		lastTickRef.current = performance.now();
-		dismissedRef.current = false;
+		rafRef.current = requestAnimationFrame(tick);
 
-		if (t.duration > 0 && !pausedRef.current) {
-			startRaf();
-		}
-	}, [t.duration, t.createdAt, startRaf]);
+		return () => {
+			tickRef.current = null;
+			if (rafRef.current !== null) {
+				cancelAnimationFrame(rafRef.current);
+				rafRef.current = null;
+			}
+		};
+	}, [t.duration, t.createdAt, t.id, isPersistent]);
 
 	function handlePause() {
-		if (isPersistent) return;
-		pausedRef.current = true;
+		if (isPersistent || rafRef.current === null) return;
+		cancelAnimationFrame(rafRef.current);
+		rafRef.current = null;
 	}
 
 	function handleResume() {
-		if (isPersistent) return;
+		if (
+			isPersistent ||
+			rafRef.current !== null ||
+			dismissedRef.current ||
+			!tickRef.current
+		)
+			return;
 		lastTickRef.current = performance.now();
-		pausedRef.current = false;
+		rafRef.current = requestAnimationFrame(tickRef.current);
 	}
 
 	function handleDismiss() {
 		dismissedRef.current = true;
-		stopRaf();
+		if (rafRef.current !== null) {
+			cancelAnimationFrame(rafRef.current);
+			rafRef.current = null;
+		}
 		onDismiss(t.id);
 	}
 
@@ -152,6 +145,7 @@ function ToastItem({ t, onDismiss, reducedMotion }: ToastItemProps) {
 		}
 	}
 
+	// render
 	const cfg = VARIANTS[t.variant];
 	const { Icon } = cfg;
 	const animProps = getAnimationProps(reducedMotion);
@@ -174,7 +168,6 @@ function ToastItem({ t, onDismiss, reducedMotion }: ToastItemProps) {
 			aria-live={t.variant === "error" ? "assertive" : "polite"}
 			aria-atomic="true"
 		>
-			{/* left accent bar */}
 			<span
 				className={`absolute inset-y-0 left-0 w-0.75 rounded-l-xl ${cfg.bar}`}
 			/>
@@ -220,7 +213,6 @@ function ToastItem({ t, onDismiss, reducedMotion }: ToastItemProps) {
 				</button>
 			</div>
 
-			{/* progress drain bar */}
 			{!isPersistent && (
 				<div className="mx-4 mb-2.5 h-px overflow-hidden rounded-full bg-white/6">
 					<div
@@ -234,11 +226,15 @@ function ToastItem({ t, onDismiss, reducedMotion }: ToastItemProps) {
 }
 
 // Toaster
+
 export function Toaster() {
 	const toasts = useStore(toastStore, (s) => s.toasts);
 	const queueLength = useStore(toastStore, (s) => s.queue.length);
-	const dismiss = toastStore.getState()._dismiss;
 	const reducedMotion = useReducedMotion();
+
+	function dismiss(id: string) {
+		toastStore.getState()._dismiss(id);
+	}
 
 	return createPortal(
 		<section
@@ -258,7 +254,6 @@ export function Toaster() {
 				</AnimatePresence>
 			</ul>
 
-			{/* queue overflow badge */}
 			<AnimatePresence>
 				{queueLength > 0 && (
 					<motion.p

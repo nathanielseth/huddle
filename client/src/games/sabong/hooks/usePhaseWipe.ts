@@ -1,4 +1,10 @@
-import { useRef, useState, useEffect, useCallback } from "react";
+import {
+	useRef,
+	useState,
+	useEffect,
+	useLayoutEffect,
+	useCallback,
+} from "react";
 
 type UsePhaseWipeOptions<T> = {
 	source: T | undefined;
@@ -11,57 +17,56 @@ export function usePhaseWipe<T>({ source, onWipe }: UsePhaseWipeOptions<T>) {
 	const visiblePhaseRef = useRef(visiblePhase);
 	const isWiping = useRef(false);
 	const pendingPhase = useRef<T | null>(null);
+	const processWipeRef = useRef<((next: T) => Promise<void>) | null>(null);
+
+	const onWipeRef = useRef(onWipe);
+	useLayoutEffect(() => {
+		onWipeRef.current = onWipe;
+	});
+
+	const swap = useCallback((next: T) => {
+		visiblePhaseRef.current = next;
+		setVisiblePhase(next);
+	}, []);
 
 	const processWipe = useCallback(
-		async (nextPhase: T) => {
+		async (next: T) => {
 			isWiping.current = true;
 			try {
-				const task = onWipe(() => {
-					visiblePhaseRef.current = nextPhase;
-					setVisiblePhase(nextPhase);
-				});
+				const task = onWipeRef.current(() => swap(next));
 				if (task instanceof Promise) await task;
 			} catch (err) {
-				console.error("[usePhaseWipe] Wipe transition failed:", err);
-				visiblePhaseRef.current = nextPhase;
-				setVisiblePhase(nextPhase);
+				console.error("[usePhaseWipe] transition failed:", err);
+				swap(next);
 			} finally {
 				isWiping.current = false;
-				if (
-					pendingPhase.current &&
-					pendingPhase.current !== visiblePhaseRef.current
-				) {
-					const next = pendingPhase.current;
-					pendingPhase.current = null;
-					processWipe(next);
-				} else {
-					pendingPhase.current = null;
+				const queued = pendingPhase.current;
+				pendingPhase.current = null;
+				if (queued !== null && queued !== visiblePhaseRef.current) {
+					processWipeRef.current?.(queued);
 				}
 			}
 		},
-		[onWipe],
+		[swap],
 	);
 
+	useLayoutEffect(() => {
+		processWipeRef.current = processWipe;
+	});
+
 	useEffect(() => {
-		const target = source;
-		if (!target) return;
-
-		// initial snap
+		if (!source) return;
 		if (!visiblePhaseRef.current) {
-			visiblePhaseRef.current = target;
-			setVisiblePhase(target);
+			swap(source);
 			return;
 		}
-
-		if (target === visiblePhaseRef.current) return;
-
+		if (source === visiblePhaseRef.current) return;
 		if (isWiping.current) {
-			pendingPhase.current = target;
+			pendingPhase.current = source;
 			return;
 		}
-
-		processWipe(target);
-	}, [source, processWipe]);
+		processWipe(source);
+	}, [source, processWipe, swap]);
 
 	return visiblePhase;
 }
