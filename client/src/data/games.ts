@@ -18,7 +18,7 @@ export const GAMES: Game[] = [
 		id: "super-sabong",
 		packId: "pack-1",
 		name: "Super Sabong",
-		thumbnail: "/games/super_sabong.avif",
+		thumbnail: "/assets/games/super_sabong.avif",
 		placeholderColor: "#f97316",
 		description:
 			"Bet on AI-powered manoks fighting it out. Read the odds, go all in, lose everything.",

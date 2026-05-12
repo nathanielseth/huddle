@@ -57,7 +57,6 @@ function getAnimationProps(reduced: boolean) {
 	};
 }
 
-
 // ToastItem
 
 interface ToastItemProps {
@@ -76,7 +75,9 @@ function ToastItem({ t, onDismiss, reducedMotion }: ToastItemProps) {
 	const dismissedRef = useRef(false);
 	const tickRef = useRef<((now: number) => void) | null>(null);
 
-	// synchronizes the component with the browser's animation frame 
+	const [swipeX, setSwipeX] = useState<number | null>(null);
+	const isSwipingAwayRef = useRef(false);
+
 	useEffect(() => {
 		if (isPersistent) return;
 
@@ -139,13 +140,19 @@ function ToastItem({ t, onDismiss, reducedMotion }: ToastItemProps) {
 	}
 
 	function handleDragEnd(_: unknown, info: PanInfo) {
-		handleResume();
 		if (Math.abs(info.offset.x) > 60 || Math.abs(info.velocity.x) > 500) {
-			handleDismiss();
+			dismissedRef.current = true;
+			if (rafRef.current !== null) {
+				cancelAnimationFrame(rafRef.current);
+				rafRef.current = null;
+			}
+			isSwipingAwayRef.current = true;
+			setSwipeX(window.innerWidth + 100);
+		} else {
+			handleResume();
 		}
 	}
 
-	// render
 	const cfg = VARIANTS[t.variant];
 	const { Icon } = cfg;
 	const animProps = getAnimationProps(reducedMotion);
@@ -154,7 +161,19 @@ function ToastItem({ t, onDismiss, reducedMotion }: ToastItemProps) {
 		<motion.li
 			layout
 			layoutId={t.id}
-			{...animProps}
+			initial={animProps.initial}
+			animate={swipeX !== null ? { x: swipeX, opacity: 0 } : animProps.animate}
+			exit={animProps.exit}
+			transition={
+				swipeX !== null
+					? { duration: 0.28, ease: [0.32, 0, 0.67, 0] }
+					: animProps.transition
+			}
+			onAnimationComplete={() => {
+				if (isSwipingAwayRef.current) {
+					onDismiss(t.id);
+				}
+			}}
 			onMouseEnter={handlePause}
 			onMouseLeave={handleResume}
 			drag={reducedMotion ? false : "x"}

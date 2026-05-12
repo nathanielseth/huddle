@@ -9,7 +9,7 @@ interface JoinBarProps {
 
 const SHAKE = [0, -6, 6, -5, 5, -3, 3, 0];
 const SHAKE_TRANSITION = { type: "tween" as const, duration: 0.4 };
-const JOIN_TIMEOUT_MS = 500;
+const JOIN_TIMEOUT_MS = 350;
 
 export function JoinBar({ onFocus }: JoinBarProps) {
 	const [code, setCode] = useState("");

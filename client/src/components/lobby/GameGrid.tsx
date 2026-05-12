@@ -1,5 +1,12 @@
 import type { Game } from "../../types/game";
 import { GameCard } from "./GameCard";
+import { GAMES } from "../../data/games";
+
+if (typeof window !== "undefined") {
+	for (const { thumbnail } of GAMES) {
+		if (thumbnail) new Image().src = thumbnail;
+	}
+}
 
 interface GameGridProps {
 	games: Game[];

@@ -18,34 +18,21 @@ export function TagFilter({ tags, selectedTag, onSelect }: TagFilterProps) {
 		const el = scrollRef.current;
 		if (!el) return;
 
-		const checkScroll = () => {
+		const checkEdges = () => {
 			setCanScrollLeft(el.scrollLeft > 2);
 			setCanScrollRight(el.scrollLeft < el.scrollWidth - el.clientWidth - 2);
 		};
 
-		checkScroll();
-		el.addEventListener("scroll", checkScroll, { passive: true });
-
-		const ro = new ResizeObserver(checkScroll);
+		checkEdges();
+		el.addEventListener("scroll", checkEdges, { passive: true });
+		const ro = new ResizeObserver(checkEdges);
 		ro.observe(el);
 
 		return () => {
-			el.removeEventListener("scroll", checkScroll);
+			el.removeEventListener("scroll", checkEdges);
 			ro.disconnect();
 		};
 	}, [tags]);
-
-	useEffect(() => {
-		const el = scrollRef.current;
-		if (!el) return;
-
-		const selected = el.querySelector('[data-selected="true"]') as HTMLElement;
-		selected?.scrollIntoView({
-			behavior: "smooth",
-			block: "nearest",
-			inline: "center",
-		});
-	}, [selectedTag]);
 
 	const scroll = (dir: "left" | "right") => {
 		scrollRef.current?.scrollBy({
@@ -88,7 +75,7 @@ export function TagFilter({ tags, selectedTag, onSelect }: TagFilterProps) {
 
 			<div
 				ref={scrollRef}
-				className="overflow-x-auto [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none] w-full"
+				className="overflow-x-auto [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] scrollbar-none w-full"
 				style={{ maskImage: mask, WebkitMaskImage: mask }}
 			>
 				<div className="flex gap-2 w-max px-1 py-0.5">
@@ -97,7 +84,14 @@ export function TagFilter({ tags, selectedTag, onSelect }: TagFilterProps) {
 							key={tag}
 							type="button"
 							data-selected={selectedTag === tag}
-							onClick={() => onSelect(tag)}
+							onClick={(e) => {
+								onSelect(tag);
+								e.currentTarget.scrollIntoView({
+									behavior: "smooth",
+									block: "nearest",
+									inline: "center",
+								});
+							}}
 							className={cn(
 								"shrink-0 px-3 py-1.5 text-[10px] font-bold tracking-[0.15em] uppercase rounded-full transition-all duration-150 cursor-pointer",
 								selectedTag === tag

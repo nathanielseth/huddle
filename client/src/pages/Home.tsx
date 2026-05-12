@@ -1,14 +1,16 @@
 import { useState } from "react";
 import { Navigate } from "react-router";
 import { AnimatePresence, motion } from "motion/react";
-import { JoinBar } from "../features/lobby/JoinBar";
-import { PackTabs } from "../features/lobby/PackTabs";
-import { TagFilter } from "../features/lobby/TagFilter";
-import { GameGrid } from "../components/layout/GameGrid";
+import { JoinBar } from "../components/lobby/JoinBar";
+import { PackTabs } from "../components/lobby/PackTabs";
+import { TagFilter } from "../components/lobby/TagFilter";
+import { GameGrid } from "../components/lobby/GameGrid";
 import { GAMES } from "../data/games";
 import { PACKS } from "../data/packs";
 import { useGameStore } from "../app/store";
+import { toast } from "../lib/utils/toast";
 import type { Game } from "../types/game";
+import { checkCreateRateLimit, nextAngryMessage } from "@/lib/utils/roomLimiter";
 
 const ALL_TAGS = Array.from(
 	new Set(GAMES.filter((g) => !g.comingSoon).flatMap((g) => g.tags)),
@@ -37,8 +39,6 @@ export function Home() {
 
 	const handlePackChange = (packId: string) => {
 		setSelectedPackId(packId);
-		// Tags don't reset — they're independent and global
-		// Only clear selected game if it's not in the new pack scope
 		if (selected && packId !== "all" && selected.packId !== packId) {
 			setSelected(null);
 		}
@@ -53,6 +53,10 @@ export function Home() {
 
 	function handleCreateRoom() {
 		if (!selected) return;
+		if (!checkCreateRateLimit()) {
+			toast.error(nextAngryMessage(), { duration: 3000 });
+			return;
+		}
 		createRoom(selected.id);
 	}
 
