@@ -7,20 +7,20 @@ import {
 	isHostSocket,
 	getPublicState,
 	touchRoom,
-	findPlayerBySocket,
 	type Room,
-	type RoomStore,
-} from "./rooms.js";
+	type RoomRegistry,
+} from "./registry.js";
 import {
 	CreateRoomSchema,
 	JoinRoomSchema,
 	RejoinRoomSchema,
 } from "./schemas.js";
-import { EngineRunner } from "../engine/engineRunner.js";
+import type { GameRunner } from "../engine/GameRunner.js";
 import type { IO, ClientSocket } from "../types.js";
 
 const HOST_GRACE_MS = 45_000;
 const ACTION_RATE_LIMIT_MS = 100;
+const MAX_ROOMS = 100; // hard cap — emit room_error if reached
 
 const hostGraceTimers = new Map<string, ReturnType<typeof setTimeout>>();
 
@@ -39,10 +39,10 @@ function broadcast(io: IO, room: Room): void {
 
 function closeRoom(
 	io: IO,
-	store: RoomStore,
+	store: RoomRegistry,
 	room: Room,
 	reason: string,
-	runner: EngineRunner,
+	runner: GameRunner,
 ): void {
 	clearHostGrace(room.code);
 	runner.cancelTimer(room.code);
@@ -55,8 +55,8 @@ function closeRoom(
 function handleIntentionalLeave(
 	io: IO,
 	socket: ClientSocket,
-	store: RoomStore,
-	runner: EngineRunner,
+	store: RoomRegistry,
+	runner: GameRunner,
 ): void {
 	const room = store.findBySocket(socket.id);
 	if (!room) return;
@@ -73,9 +73,9 @@ function handleIntentionalLeave(
 function handleDisconnect(
 	io: IO,
 	socket: ClientSocket,
-	store: RoomStore,
+	store: RoomRegistry,
 	reason: string,
-	runner: EngineRunner,
+	runner: GameRunner,
 ): void {
 	const room = store.findBySocket(socket.id);
 	if (!room) return;
@@ -92,8 +92,6 @@ function handleDisconnect(
 
 		const timer = setTimeout(() => {
 			hostGraceTimers.delete(room.code);
-
-			// room might have been cleaned up by another path already
 			if (!store.get(room.code)) return;
 			closeRoom(io, store, room, `host never rejoined (${reason})`, runner);
 		}, HOST_GRACE_MS);
@@ -101,8 +99,8 @@ function handleDisconnect(
 		return;
 	}
 
-	const player = findPlayerBySocket(room, socket.id);
-	if (!player) {
+	const found = store.findPlayerBySocket(socket.id);
+	if (!found) {
 		console.log(
 			`[room] ignoring stale disconnect for ${socket.id} in ${room.code} — player already rejoined`,
 		);
@@ -116,8 +114,8 @@ function handleDisconnect(
 export function registerHandlers(
 	io: IO,
 	socket: ClientSocket,
-	store: RoomStore,
-	runner: EngineRunner,
+	store: RoomRegistry,
+	runner: GameRunner,
 ): void {
 	let lastActionAt = 0;
 
@@ -127,13 +125,23 @@ export function registerHandlers(
 			socket.emit("room_error", "Invalid payload.");
 			return;
 		}
+
+		// Hard cap — prevents runaway room accumulation
+		if (store.size >= MAX_ROOMS) {
+			socket.emit("room_error", "Server is full right now. Try again later.");
+			console.log(`[room] create_room rejected — at capacity (${MAX_ROOMS})`);
+			return;
+		}
+
 		const { gameId, playerId } = result.data;
 		const code = store.generateCode();
 		const room = createRoom(code, playerId, socket.id, gameId);
 		store.save(room);
 		store.trackSocket(socket.id, code);
 		socket.join(code);
-		console.log(`[room] created ${code} — host ${socket.id}`);
+		console.log(
+			`[room] created ${code} — host ${socket.id} (${store.size}/${MAX_ROOMS} rooms)`,
+		);
 		broadcast(io, room);
 	});
 
@@ -163,7 +171,7 @@ export function registerHandlers(
 			return;
 		}
 		const outcome = addPlayer(room, playerId, socket.id, name);
-		store.trackSocket(socket.id, code);
+		store.trackSocket(socket.id, code, playerId);
 		socket.join(code);
 		touchRoom(room);
 		console.log(`[room] ${name} ${outcome} ${code}`);
@@ -213,7 +221,7 @@ export function registerHandlers(
 			socket.emit("rejoin_failed");
 			return;
 		}
-		store.trackSocket(socket.id, code);
+		store.trackSocket(socket.id, code, playerId);
 		socket.join(code);
 		touchRoom(room);
 		console.log(`[room] player ${playerId} rejoined ${code}`);
@@ -243,11 +251,9 @@ export function registerHandlers(
 		if (now - lastActionAt < ACTION_RATE_LIMIT_MS) return;
 		lastActionAt = now;
 
-		const room = store.findBySocket(socket.id);
-		if (!room) return;
-		const player = findPlayerBySocket(room, socket.id);
-		if (!player) return;
-		runner.handleAction(room, player.playerId, payload, io, store);
+		const found = store.findPlayerBySocket(socket.id);
+		if (!found) return;
+		runner.handleAction(found.room, found.playerId, payload, io, store);
 	});
 
 	socket.on("leave_room", () =>

@@ -29,9 +29,10 @@ export interface Room {
 
 const CODE_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
 
-export class RoomStore {
+export class RoomRegistry {
 	private rooms = new Map<string, Room>();
 	private socketToCode = new Map<string, string>();
+	private socketToPlayerId = new Map<string, string>(); // NEW: O(1) player lookup
 
 	get(code: string): Room | undefined {
 		return this.rooms.get(code);
@@ -46,8 +47,10 @@ export class RoomStore {
 		const room = this.rooms.get(code);
 		if (room) {
 			this.socketToCode.delete(room.hostSocketId);
+			this.socketToPlayerId.delete(room.hostSocketId); // NEW
 			for (const p of room.players.values()) {
 				this.socketToCode.delete(p.socketId);
+				this.socketToPlayerId.delete(p.socketId); // NEW
 			}
 		}
 		this.rooms.delete(code);
@@ -61,18 +64,31 @@ export class RoomStore {
 		return this.rooms.entries();
 	}
 
-	// find room by socket id
 	findBySocket(socketId: string): Room | null {
 		const code = this.socketToCode.get(socketId);
 		return code !== undefined ? (this.rooms.get(code) ?? null) : null;
 	}
 
-	trackSocket(socketId: string, roomCode: string): void {
+	findPlayerBySocket(
+		socketId: string,
+	): { room: Room; playerId: string } | null {
+		const code = this.socketToCode.get(socketId);
+		const playerId = this.socketToPlayerId.get(socketId);
+		if (!code || !playerId) return null;
+		const room = this.rooms.get(code);
+		if (!room) return null;
+		return { room, playerId };
+	}
+
+	// pass playerId when the socket belongs to a player (omit for host-only sockets)
+	trackSocket(socketId: string, roomCode: string, playerId?: string): void {
 		this.socketToCode.set(socketId, roomCode);
+		if (playerId) this.socketToPlayerId.set(socketId, playerId); // NEW
 	}
 
 	untrackSocket(socketId: string): void {
 		this.socketToCode.delete(socketId);
+		this.socketToPlayerId.delete(socketId);
 	}
 
 	// generate unique 4-char room code
@@ -172,17 +188,6 @@ export function markDisconnected(room: Room, socketId: string): void {
 	}
 }
 
-// find player by socket id
-export function findPlayerBySocket(
-	room: Room,
-	socketId: string,
-): RoomPlayer | null {
-	for (const player of room.players.values()) {
-		if (player.socketId === socketId) return player;
-	}
-	return null;
-}
-
 // check if socket is the room host
 export function isHostSocket(room: Room, socketId: string): boolean {
 	return room.hostSocketId === socketId;
@@ -206,7 +211,7 @@ export function getPublicState(room: Room): GameState {
 	};
 }
 
-// expire after 2h of inactivity
+// consider room expired if no activity for 15+ minutes
 export function isExpired(room: Room): boolean {
-	return Date.now() - room.lastActiveAt > 1000 * 60 * 120;
+	return Date.now() - room.lastActiveAt > 1000 * 60 * 15;
 }

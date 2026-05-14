@@ -1,6 +1,6 @@
 import type { z } from "zod";
 import type { GameTimer, RoomPhase } from "../../../shared/types.js";
-import type { Room } from "../room/rooms.js";
+import type { Room } from "../room/registry.js";
 
 export type Awaitable<T> = T | Promise<T>;
 

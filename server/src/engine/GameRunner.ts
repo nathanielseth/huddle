@@ -1,15 +1,15 @@
 import type {
 	GameEngine,
-	EngineResult,
 	GameEngineWithSecrets,
-} from "./engine.js";
-import type { RoomStore } from "../room/rooms.js";
-import { type Room, getPublicState, touchRoom } from "../room/rooms.js";
+	EngineResult,
+} from "./GameEngine.js";
+import { getPublicState, touchRoom, type Room } from "../room/registry.js";
+import type { RoomRegistry } from "../room/registry.js";
 import type { GameTimer } from "../../../shared/types.js";
 import type { IO } from "../types.js";
 import { parseEngineResult, parsePlayerAction } from "./schemas.js";
 
-export class EngineRunner {
+export class GameRunner {
 	private readonly engines = new Map<string, GameEngine>();
 	private readonly timers = new Map<string, NodeJS.Timeout>();
 	private readonly roomQueues = new Map<string, Promise<void>>();
@@ -38,6 +38,7 @@ export class EngineRunner {
 	private async executeSafely(
 		roomCode: string,
 		io: IO,
+		store: RoomRegistry,
 		task: () => Promise<EngineResult> | EngineResult,
 		onSuccess: (result: EngineResult) => void,
 	): Promise<void> {
@@ -45,6 +46,7 @@ export class EngineRunner {
 
 		const nextTask = previousTask
 			.then(async () => {
+				if (!store.get(roomCode)) return;
 				const result = await task();
 				onSuccess(result);
 			})
@@ -65,7 +67,7 @@ export class EngineRunner {
 		});
 	}
 
-	startGame(room: Room, io: IO, store: RoomStore): void {
+	startGame(room: Room, io: IO, store: RoomRegistry): void {
 		const engine = this.resolveEngine(room.gameId);
 		if (!engine) return;
 
@@ -75,6 +77,7 @@ export class EngineRunner {
 		this.executeSafely(
 			room.code,
 			io,
+			store,
 			() => engine.onStart({ room }),
 			(result) => this.applyResult(result, engine.gameId, room, io, store),
 		);
@@ -85,7 +88,7 @@ export class EngineRunner {
 		playerId: string,
 		action: unknown,
 		io: IO,
-		store: RoomStore,
+		store: RoomRegistry,
 	): void {
 		const engine = this.resolveEngine(room.gameId);
 		if (!engine || room.phase !== "in_game") return;
@@ -99,6 +102,7 @@ export class EngineRunner {
 		this.executeSafely(
 			room.code,
 			io,
+			store,
 			() => engine.onAction({ room }, playerId, validatedAction),
 			(result) => this.applyResult(result, engine.gameId, room, io, store),
 		);
@@ -142,7 +146,7 @@ export class EngineRunner {
 		engineId: string,
 		room: Room,
 		io: IO,
-		store: RoomStore,
+		store: RoomRegistry,
 	): void {
 		const validated = parseEngineResult(result, engineId);
 
@@ -181,7 +185,7 @@ export class EngineRunner {
 		timer: GameTimer,
 		room: Room,
 		io: IO,
-		store: RoomStore,
+		store: RoomRegistry,
 	): void {
 		const delay = Math.max(timer.startsAt + timer.duration - Date.now(), 0);
 
@@ -193,6 +197,7 @@ export class EngineRunner {
 			this.executeSafely(
 				room.code,
 				io,
+				store,
 				() => engine.onTimerExpired({ room }),
 				(result) => this.applyResult(result, engine.gameId, room, io, store),
 			);
