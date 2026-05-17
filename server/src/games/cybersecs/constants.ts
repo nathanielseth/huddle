@@ -30,6 +30,27 @@ export const C = {
 	MAX_REJECTIONS: 5,
 } as const;
 
+// computed from C so it can never drift
+export const MAX_TEAM_SIZE = Math.max(
+	...(
+		Object.values(C.MISSION_TEAM_SIZES) as readonly (readonly number[])[]
+	).flat(),
+);
+
+// roles guaranteed at most once per game
+export const SINGLETON_ROLES = new Set<CybsecsRole>([
+	"sysadmin",
+	"doxxer",
+	"analyst",
+	"ethical_hacker",
+	"black_hat",
+	"trojan",
+	"obfuscator",
+	"spoofer",
+	"intern",
+]);
+
+// probability distribution for 6+ player games, must sum to 1
 export const MODE_WEIGHTS = {
 	baseline: 0.3,
 	exposure: 0.35,
@@ -58,6 +79,7 @@ export const ROLE_ALIGNMENT: Record<CybsecsRole, CybsecsAlignment> = {
 	obfuscator: "hacker",
 };
 
+// number of hack submissions required to compromise a mission
 export function requiredHacksFor(
 	playerCount: number,
 	missionIndex: number,

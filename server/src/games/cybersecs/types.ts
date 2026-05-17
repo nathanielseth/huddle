@@ -6,14 +6,14 @@ import type {
 	MissionAction,
 	VoteChoice,
 	MissionResult,
+	ObfuscatorIntel,
 	WinReason,
 	EhIntel,
-	ObfuscatorIntel,
 	CybsecsAction,
 } from "../../../../shared/cybersecs.js";
 
 // engine mutates state in place. readonly on identity fields prevents reassignment
-// phase-scoped submission fields reset to null on each phase entry
+// phase-scoped fields reset to null on each phase entry
 export interface CybsecsServerPlayer {
 	readonly playerId: string;
 	readonly role: CybsecsRole;
@@ -33,34 +33,37 @@ export interface CybsecsServerPlayer {
 	// ethical hacker state
 	ehUsesLeft: number; // 2 for EH, 0 otherwise
 	ehIntel: EhIntel | null; // set on backfire, persists for reconnect
+	ehIntelMissionIndex: number | null; // mission when intel was generated, for UI gating
 
 	// obfuscator state
 	obfuscatorUsesLeft: number; // 1 for obfuscator, 0 otherwise, decremented on use
-	// armed for current mission cycle, toggled during nominating/voting/mission,
-	// persists across rejections, consumed when mission resolves
+	// armed via toggle_obfuscate, persists across rejections, consumed on mission resolve
 	obfuscateArmed: boolean;
-	// true mission result delivered privately on obfuscated resolve, persists for reconnect
+	// true result delivered privately on obfuscated resolve, persists for reconnect
 	obfuscatorIntel: ObfuscatorIntel | null;
+	obfuscatorIntelMissionIndex: number | null; // mission when intel was set, for UI gating
 }
 
-// returned by resolveMission, applied by applyMissionResult. pure calculation, no mutation
+// pure output of resolveMission when EH uses an ability. applied by applyMissionResult
+// intel: null = block (no new info), EhIntel = backfire (presence detected)
+// applyMissionResult only writes ehIntel when intel !== null
 export interface EhEffect {
 	readonly playerId: string;
 	readonly usesLeft: number;
 	readonly intel: EhIntel | null;
 }
 
-// returned by resolveMission when obfuscation is active
+// pure output of resolveMission when obfuscation is active
 export interface ObfuscatorEffect {
 	readonly recipientId: string; // player who receives the true result privately
-	readonly trueResult: MissionResult; // the unmasked result
+	readonly trueResult: Extract<MissionResult, { obfuscated: false }>; // never masked
 }
 
 export interface MissionResolution {
-	// public result pushed to state.missionResults, dummy values when obfuscated
+	// pushed to state.missionResults, obfuscated variant when ability active
 	readonly publicResult: MissionResult;
-	// true result for win detection, always accurate
-	readonly trueResult: MissionResult;
+	// drives secureds/hacked and win detection, always non-obfuscated
+	readonly trueResult: Extract<MissionResult, { obfuscated: false }>;
 	readonly ehEffect?: EhEffect; // present when EH used ability
 	readonly obfuscatorEffect?: ObfuscatorEffect; // present when obfuscator armed and consumed
 }
@@ -74,8 +77,10 @@ export interface CybsecsServerState {
 	rejectionCount: number;
 	nominatedTeam: string[];
 	teamSize: number;
+	// accumulates across rejections within a mission, resets on new mission index
 	passedPlayerIds: string[];
 	players: Map<string, CybsecsServerPlayer>;
+	roleIndex: Map<CybsecsRole, string>;
 	// public mission results, contains obfuscated entries when ability was active
 	missionResults: MissionResult[];
 	// true secured count, drives win detection, not published directly

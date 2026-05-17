@@ -1,12 +1,16 @@
 import type { GameMode, CybsecsRole } from "../../../../shared/cybersecs.js";
 import type { CybsecsServerPlayer } from "./types.js";
-import { ROLE_ALIGNMENT, MODE_WEIGHTS } from "./constants.js";
+import { ROLE_ALIGNMENT, MODE_WEIGHTS, SINGLETON_ROLES } from "./constants.js";
 
 function assertInvariant(
 	condition: boolean,
 	message: string,
 ): asserts condition {
 	if (!condition) throw new Error(`Invariant violation: ${message}`);
+}
+
+function assertNever(x: never): never {
+	throw new Error(`Unhandled role: ${String(x)}`);
 }
 
 const BASELINE_THRESHOLD = MODE_WEIGHTS.baseline;
@@ -217,6 +221,9 @@ export function buildKnowledge(
 					.map(([id]) => id),
 				knownEthicalHackerId: null,
 			};
+
+		default:
+			return assertNever(role);
 	}
 }
 
@@ -258,9 +265,11 @@ export function assignRoles(
 			missionAction: null,
 			ehUsesLeft: role === "ethical_hacker" ? 2 : 0,
 			ehIntel: null,
+			ehIntelMissionIndex: null,
 			obfuscatorUsesLeft: role === "obfuscator" ? 1 : 0,
 			obfuscateArmed: false,
 			obfuscatorIntel: null,
+			obfuscatorIntelMissionIndex: null,
 		});
 	}
 
@@ -284,4 +293,17 @@ export function assignRoles(
 	}
 
 	return playerMap;
+}
+
+// only singleton roles indexed, agent/hacker excluded
+export function buildRoleIndex(
+	players: Map<string, CybsecsServerPlayer>,
+): Map<CybsecsRole, string> {
+	const index = new Map<CybsecsRole, string>();
+	for (const [id, p] of players) {
+		if (SINGLETON_ROLES.has(p.role)) {
+			index.set(p.role, id);
+		}
+	}
+	return index;
 }

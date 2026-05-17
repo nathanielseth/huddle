@@ -39,26 +39,23 @@ export type WinReason =
 // detects hacker presence on the team, not actions or counts
 export type EhIntel = "hacker_detected" | "no_hacker_detected";
 
-// delivered privately when an obfuscated mission resolves: to obfuscator if on
-// team, else to a random mission participant. EH backfire intel unaffected
-export interface ObfuscatorIntel {
-	readonly missionIndex: number;
-	readonly hackCount: number;
-	readonly requiredHacks: number;
-	readonly secured: boolean;
-}
+// discriminated union on obfuscated
+export type MissionResult =
+	| {
+			readonly obfuscated: true;
+			readonly missionIndex: number;
+			readonly requiredHacks: number;
+	  }
+	| {
+			readonly obfuscated: false;
+			readonly missionIndex: number;
+			readonly hackCount: number;
+			readonly requiredHacks: number;
+			readonly secured: boolean;
+	  };
 
-export interface MissionResult {
-	readonly missionIndex: number;
-	// effective hacks after override neutralization. 0 (dummy) when obfuscated,
-	// always check obfuscated flag before reading
-	readonly hackCount: number;
-	readonly requiredHacks: number;
-	// false (dummy) when obfuscated, always check obfuscated flag before reading
-	readonly secured: boolean;
-	// true when obfuscator's ability masked this outcome
-	readonly obfuscated: boolean;
-}
+// true result delivered privately on obfuscated resolve
+export type ObfuscatorIntel = Extract<MissionResult, { obfuscated: false }>;
 
 export interface CybsecsPlayerView {
 	readonly playerId: string;
@@ -81,8 +78,7 @@ export interface CybsecsState {
 	readonly skipVotedIds: readonly string[];
 	readonly passedPlayerIds: readonly string[];
 	readonly missionResults: readonly MissionResult[];
-	// apparent counts exclude obfuscated missions. intel recipient can derive true
-	// total from their ObfuscatorIntel
+	// apparent counts exclude obfuscated missions
 	readonly secureds: number;
 	readonly hacked: number;
 	readonly players: Readonly<Record<string, CybsecsPlayerView>>;
@@ -102,14 +98,22 @@ export interface CybsecsSecret {
 	readonly knownHackerIds: readonly string[];
 	readonly knownEthicalHackerId: string | null; // black hat only
 	readonly ethicalHackerUsesLeft: number; // 2 for EH, 0 otherwise
-	readonly ehIntel: EhIntel | null; // set on EH backfire, detects presence not actions
+	// set on EH backfire, null until first backfire
+	// use ehIntelMissionIndex to gate notification UI
+	readonly ehIntel: EhIntel | null;
+	// missionIndex when ehIntel was set, null until first backfire
+	// frontend gates on: secret.ehIntelMissionIndex === state.missionIndex
+	readonly ehIntelMissionIndex: number | null;
 	readonly flaggedCandidateIds: readonly [string, string] | null; // analyst only, sysadmin+spoofer
 	readonly obfuscatorUsesLeft: number; // 1 for obfuscator, 0 otherwise
 	// armed for current mission cycle, persists across rejections, consumed on resolve
 	readonly obfuscateArmed: boolean;
 	// set when obfuscated mission resolves and this player is the intel recipient,
-	// persists for reconnect
+	// persists for reconnect. use obfuscatorIntelMissionIndex to gate notification UI
 	readonly obfuscatorIntel: ObfuscatorIntel | null;
+	// missionIndex when obfuscatorIntel was set, null until first delivery
+	// frontend gates on: secret.obfuscatorIntelMissionIndex === state.missionIndex
+	readonly obfuscatorIntelMissionIndex: number | null;
 }
 
 export type CybsecsAction =

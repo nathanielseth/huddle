@@ -1,7 +1,6 @@
 import { z } from "zod";
-import { C } from "./constants.js";
+import { MAX_TEAM_SIZE } from "./constants.js";
 
-const MAX_TEAM_SIZE = Math.max(...Object.values(C.MISSION_TEAM_SIZES).flat());
 const playerId = z.string().trim().min(1);
 
 export const CybsecsActionSchema = z.discriminatedUnion("type", [
