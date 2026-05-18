@@ -2,6 +2,9 @@ import { Sabong } from "@/games/sabong/Sabong";
 import { Sussy } from "@/games/sussy/Sussy";
 import { BelievableLies } from "@/games/believable-lies/BelievableLies";
 import { Witzone } from "@/games/witzone/Witzone";
+import { Poker } from "@/games/poker/Poker";
+import { Cybersecs } from "@/games/cybersecs/Cybersecs";
+import { Squadoodle } from "@/games/squadoodle/Squadoodle";
 import type { ComponentType } from "react";
 
 interface GameEntry {
@@ -30,5 +33,20 @@ export const GAME_REGISTRY: GameEntry[] = [
 		id: "witzone",
 		inGame: Witzone,
 		ended: Witzone,
+	},
+	{
+		id: "poker",
+		inGame: Poker,
+		ended: Poker,
+	},
+	{
+		id: "cybersecs",
+		inGame: Cybersecs,
+		ended: Cybersecs,
+	},
+	{
+		id: "squadoodle",
+		inGame: Squadoodle,
+		ended: Squadoodle,
 	},
 ];

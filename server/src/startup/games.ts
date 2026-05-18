@@ -4,6 +4,8 @@ import { sussyEngine } from "../games/sussy/index.js";
 import { believableLiesEngine } from "../games/believable-lies/index.js";
 import { witzoneEngine } from "../games/witzone/index.js";
 import { pokerEngine } from "../games/poker/index.js";
+import { cybsecsEngine } from "../games/cybersecs/index.js";
+import { squadoodleEngine } from "../games/squadoodle/index.js";
 import { logger } from "../lib/logger.js";
 import type { GameEngine } from "../engine/GameEngine.js";
 
@@ -13,6 +15,8 @@ const ENGINES: readonly GameEngine[] = [
 	believableLiesEngine,
 	witzoneEngine,
 	pokerEngine,
+	cybsecsEngine,
+	squadoodleEngine
 ];
 
 export function registerGames(runner: GameRunner): void {
