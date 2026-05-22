@@ -321,7 +321,7 @@ export function makeAIAction(
 			"activeLines not initialized — initializeRangeModels must be called before makeAIAction",
 		);
 	}
-
+	const isPFAggressor = state.pfAggressorId === playerId;
 	const currentLine = state.activeLines.get(playerId) ?? null;
 	const activeLine = selectLine(
 		equity,
@@ -330,6 +330,7 @@ export function makeAIAction(
 		streetIndex,
 		currentLine,
 		personality.bluffFrequency,
+		isPFAggressor,
 	);
 
 	state.activeLines.set(playerId, activeLine);

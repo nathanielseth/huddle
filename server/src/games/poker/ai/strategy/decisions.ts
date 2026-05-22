@@ -29,6 +29,7 @@ function sprAfterBet(
 function sprAdjustedFraction(
 	sampledFraction: number,
 	ctx: AIDecisionContext,
+	personality: AIPersonality,
 ): number {
 	const { equity, effectivePot, betLevel, stack, callAmount, streetIndex } =
 		ctx;
@@ -53,9 +54,10 @@ function sprAdjustedFraction(
 		}
 	}
 
-	return Math.abs(bestFraction - sampledFraction) >= 0.33
-		? bestFraction
-		: sampledFraction;
+	const gap = Math.abs(bestFraction - sampledFraction);
+	const minJump = 0.33;
+	const maxJump = 0.33 + personality.aggression * 0.67;
+	return gap >= minJump && gap <= maxJump ? bestFraction : sampledFraction;
 }
 
 // computes a concrete raise-to chip amount
@@ -87,7 +89,7 @@ function computeRaiseTo(
 
 	const streetMultiplier = STREET_SIZING_MULTIPLIER[streetIndex] ?? 1.0;
 	let baseFraction = sampleBetFraction(sizingWeights, spr, streetIndex);
-	baseFraction = sprAdjustedFraction(baseFraction, ctx);
+	baseFraction = sprAdjustedFraction(baseFraction, ctx, personality);
 
 	const scaledFraction = baseFraction * streetMultiplier;
 	const raw = fractionToBetAmount(scaledFraction, effectivePot, betLevel);
@@ -178,11 +180,15 @@ export function scoreActions(
 				potCommitBonus
 			: -Infinity;
 
-	// free action: value of not committing chips
+	// prevents passive archetypes from checking the near-nuts
+	const equityDamper = Math.max(0.1, 1 - Math.max(0, equity - 0.7) * 3);
+
 	const checkScore = canCheck
 		? Math.max(
 				0.05,
-				(1 - Math.max(0, evEdge) * personality.aggression * 2) * 0.55,
+				(1 - Math.max(0, evEdge) * personality.aggression * 2) *
+					0.55 *
+					equityDamper,
 			)
 		: -Infinity;
 

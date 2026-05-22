@@ -25,3 +25,5 @@ prisma/dev.db
 *.sw?
 
 *.py
+
+harness.ts

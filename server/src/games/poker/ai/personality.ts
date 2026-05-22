@@ -6,31 +6,31 @@ export const PERSONALITIES = {
 		id: "nit",
 		displayName: "The Rock",
 		tightness: 0.8,
-		aggression: 0.35,
+		aggression: 0.42,
 		bluffFrequency: 0.05,
-		sizingWeights: [4, 5, 1, 0] as const,
+		sizingWeights: [4, 5, 1, 1] as const,
 		noise: 0.08,
 		thinkTimeMs: [600, 1_800] as const,
 
-		openRangePct: 12,
-		threeBetRangePct: 4,
-		coldCallPct: 8,
+		openRangePct: 16,
+		threeBetRangePct: 5,
+		coldCallPct: 12,
 	},
 
 	// disciplined pro
 	tag: {
 		id: "tag",
 		displayName: "The Shark",
-		tightness: 0.58,
+		tightness: 0.60,
 		aggression: 0.72,
-		bluffFrequency: 0.25,
+		bluffFrequency: 0.26,
 		sizingWeights: [2, 4, 3, 1] as const,
-		noise: 0.1,
+		noise: 0.09,
 		thinkTimeMs: [400, 1_400] as const,
 
-		openRangePct: 22,
-		threeBetRangePct: 9,
-		coldCallPct: 15,
+		openRangePct: 30,
+		threeBetRangePct: 12,
+		coldCallPct: 18,
 	},
 
 	// creative aggressor
@@ -39,14 +39,14 @@ export const PERSONALITIES = {
 		displayName: "The Predator",
 		tightness: 0.38,
 		aggression: 0.82,
-		bluffFrequency: 0.38,
+		bluffFrequency: 0.34,
 		sizingWeights: [1, 3, 4, 2] as const,
 		noise: 0.18,
 		thinkTimeMs: [300, 1_100] as const,
 
-		openRangePct: 34,
-		threeBetRangePct: 16,
-		coldCallPct: 30,
+		openRangePct: 46,
+		threeBetRangePct: 22,
+		coldCallPct: 28,
 	},
 
 	// unhinged
@@ -55,14 +55,14 @@ export const PERSONALITIES = {
 		displayName: "The Maniac",
 		tightness: 0.3,
 		aggression: 0.95,
-		bluffFrequency: 0.55,
+		bluffFrequency: 0.42,
 		sizingWeights: [1, 2, 5, 2] as const,
 		noise: 0.2,
 		thinkTimeMs: [150, 700] as const,
 
-		openRangePct: 50,
-		threeBetRangePct: 18,
-		coldCallPct: 30,
+		openRangePct: 68,
+		threeBetRangePct: 28,
+		coldCallPct: 44,
 	},
 
 	// just sit like damian priest
@@ -72,13 +72,13 @@ export const PERSONALITIES = {
 		tightness: 0.28,
 		aggression: 0.18,
 		bluffFrequency: 0.07,
-		sizingWeights: [4, 5, 1, 0] as const,
+		sizingWeights: [4, 5, 1, 1] as const,
 		noise: 0.16,
 		thinkTimeMs: [400, 1_400] as const,
 
-		openRangePct: 26,
-		threeBetRangePct: 6,
-		coldCallPct: 38,
+		openRangePct: 35,
+		threeBetRangePct: 11,
+		coldCallPct: 55,
 	},
 } as const satisfies Record<string, AIPersonality>;
 
@@ -94,7 +94,7 @@ export const BOT_ROSTER = {
 	maniac: [ "Mudkip",],
 	station: [
 		"Cooper",
-		"Bruno",
+		"Bamboo",
 		"Reshi",
 	],
 } as const satisfies Record<PersonalityId, readonly string[]>;

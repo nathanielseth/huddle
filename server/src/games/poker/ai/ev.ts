@@ -95,7 +95,7 @@ export function estimateFoldEquity(
 
 // range penalty for multi-way pots
 export function multiWayPenalty(numOpponents: number): number {
-	return Math.max(0.5, 1.0 - (numOpponents - 1) * 0.1);
+	return Math.max(0.75, 1.0 - (numOpponents - 1) * 0.04);
 }
 
 // per-street scalar applied to sampled bet fraction in computeRaiseTo

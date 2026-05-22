@@ -63,6 +63,7 @@ export function selectLine(
 	streetIndex: number,
 	current: ActiveLine | null,
 	bluffFrequency: number = 0.2,
+	isPFAggressor: boolean = false,
 ): ActiveLine | null {
 	if (streetIndex === 0) return null;
 	if (current?.active) return current;
@@ -77,14 +78,16 @@ export function selectLine(
 		} else if (!inPosition && spr > 7 && equity > 0.82 && Math.random() < 0.2) {
 			line = "slowplay_trap";
 		} else {
-			line = "bet_call_barrel";
+			line = inPosition || isPFAggressor ? "bet_call_barrel" : "check_raise";
 		}
 	} else if (equity > 0.45) {
 		// medium hand - top pair, overpair, two pair
 		if (!inPosition && spr > 4 && streetIndex <= 2) {
 			line = Math.random() < 0.3 ? "check_raise" : "check_call_float";
 		} else {
-			line = inPosition ? "bet_call_barrel" : "check_call_float";
+			// IP or preflop aggressor barrels; otherwise OOP floats
+			line =
+				inPosition || isPFAggressor ? "bet_call_barrel" : "check_call_float";
 		}
 	} else if (equity > 0.3) {
 		// drawing hand, semi-bluff territory
@@ -104,8 +107,13 @@ export function selectLine(
 
 		if (canSemiBluff && wantsToBluff) {
 			line = streetIndex === 1 ? "bluff_2barrel" : "bet_fold";
-		} else if (inPosition && spr > 3) {
-			line = "bet_fold";
+		} else if (inPosition && streetIndex === 1) {
+			line =
+				Math.random() < bluffFrequency * 2
+					? "bluff_2barrel"
+					: isPFAggressor
+						? "give_up"
+						: "bet_fold";
 		} else {
 			line = "give_up";
 		}
@@ -132,6 +140,15 @@ export function expireLine(
 	if (!narrative?.active) return narrative;
 
 	const { line, streetSelected } = narrative;
+
+	// draw bricked, don't fire the second barrel into a calling range
+	if (
+		line === "bluff_2barrel" &&
+		equity < 0.28 &&
+		streetIndex > streetSelected
+	) {
+		return { ...narrative, active: false };
+	}
 
 	// single-street bluff: spent as soon as the raise is fired
 	if (line === "bet_fold" && chosenAction === "raise") {

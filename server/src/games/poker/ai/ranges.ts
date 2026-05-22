@@ -7,12 +7,12 @@ function cc(r: number, s: number): number {
 	return getCardCode(`${RANK_CHARS[r]}${SUIT_CHARS[s]}`);
 }
 
-// all 52 card codes, rank-major order, frozen after build
-const ALL_52: readonly number[] = Object.freeze(
-	Array.from({ length: 13 }, (_, r) =>
-		Array.from({ length: 4 }, (__, s) => cc(r, s)),
-	).flat(),
-);
+const CARD_TO_SUIT = new Map<number, number>();
+for (let r = 0; r <= 12; r++) {
+	for (let s = 0; s < 4; s++) {
+		CARD_TO_SUIT.set(cc(r, s), s);
+	}
+}
 
 export interface HandType {
 	readonly index: number; // 0–168
@@ -203,6 +203,17 @@ function _boardScore(
 	return 7462;
 }
 
+// returns the fraction of board cards sharing the most common suit [0, 1]
+function boardFlushTexture(boardCodes: readonly number[]): number {
+	if (boardCodes.length === 0) return 0;
+	const counts = [0, 0, 0, 0];
+	for (const code of boardCodes) {
+		const suit = CARD_TO_SUIT.get(code) ?? 0;
+		counts[suit] = (counts[suit] ?? 0) + 1;
+	}
+	return Math.max(...counts) / boardCodes.length;
+}
+
 // fraction of range to remove when opponent bets. scales with bet size
 const CULL_BASE = 0.3;
 const CULL_SCALE = 0.22;
@@ -268,11 +279,17 @@ export function narrowPostflopRange(
 	scored.sort((a, b) => a.score - b.score);
 
 	if (action === "raise" || action === "all_in") {
+		// on flush-heavy boards, villain also barrels non-flush hands for protection and fold equity
+		const flushTexture = boardFlushTexture(boardCodes);
+		const adjustedBase = CULL_BASE * (1 - flushTexture * 0.35);
 		const clamped = Math.max(0.2, Math.min(betFraction, 3));
-		const cullPct = Math.min(CULL_MAX, CULL_BASE + clamped * CULL_SCALE);
+		const cullPct = Math.min(CULL_MAX, adjustedBase + clamped * CULL_SCALE);
 		_cull(result, scored, cullPct, true);
 	} else if (action === "check") {
 		_cull(result, scored, CHECK_CULL_PCT, false);
+	} else if (action === "call") {
+		const clamped = Math.max(0.2, Math.min(betFraction, 1.5));
+		_cull(result, scored, 0.06 + clamped * 0.04, false);
 	}
 
 	return result;
