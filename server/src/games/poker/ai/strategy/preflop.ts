@@ -174,6 +174,15 @@ function handleOpen(
 		}
 	}
 
+	// passive personalities occasionally limp rather than fold
+	if (
+		ctx.canCall &&
+		ctx.positionFactor > 0.6 &&
+		Math.random() < (1 - personality.aggression) * 0.07
+	) {
+		return { type: "call" };
+	}
+
 	return { type: "fold" };
 }
 

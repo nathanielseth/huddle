@@ -1,20 +1,21 @@
 import type { AIPersonality } from "./types";
+import { shuffle } from "../../lib/random";
 
 export const PERSONALITIES = {
 	// cautious coward
 	nit: {
 		id: "nit",
 		displayName: "The Rock",
-		tightness: 0.8,
+		tightness: 0.76,
 		aggression: 0.42,
 		bluffFrequency: 0.05,
 		sizingWeights: [4, 5, 1, 1] as const,
 		noise: 0.08,
 		thinkTimeMs: [600, 1_800] as const,
 
-		openRangePct: 16,
-		threeBetRangePct: 5,
-		coldCallPct: 12,
+		openRangePct: 21,
+		threeBetRangePct: 9,
+		coldCallPct: 14,
 	},
 
 	// disciplined pro
@@ -30,7 +31,7 @@ export const PERSONALITIES = {
 
 		openRangePct: 30,
 		threeBetRangePct: 12,
-		coldCallPct: 18,
+		coldCallPct: 16,
 	},
 
 	// creative aggressor
@@ -46,7 +47,7 @@ export const PERSONALITIES = {
 
 		openRangePct: 46,
 		threeBetRangePct: 22,
-		coldCallPct: 28,
+		coldCallPct: 24,
 	},
 
 	// unhinged
@@ -55,14 +56,14 @@ export const PERSONALITIES = {
 		displayName: "The Maniac",
 		tightness: 0.3,
 		aggression: 0.95,
-		bluffFrequency: 0.42,
+		bluffFrequency: 0.41,
 		sizingWeights: [1, 2, 5, 2] as const,
 		noise: 0.2,
 		thinkTimeMs: [150, 700] as const,
 
-		openRangePct: 68,
-		threeBetRangePct: 28,
-		coldCallPct: 44,
+		openRangePct: 62,
+		threeBetRangePct: 26,
+		coldCallPct: 41,
 	},
 
 	// just sit like damian priest
@@ -70,15 +71,15 @@ export const PERSONALITIES = {
 		id: "station",
 		displayName: "The Station",
 		tightness: 0.28,
-		aggression: 0.18,
-		bluffFrequency: 0.07,
+		aggression: 0.22,
+		bluffFrequency: 0.15,
 		sizingWeights: [4, 5, 1, 1] as const,
 		noise: 0.16,
 		thinkTimeMs: [400, 1_400] as const,
 
 		openRangePct: 35,
 		threeBetRangePct: 11,
-		coldCallPct: 55,
+		coldCallPct: 49,
 	},
 } as const satisfies Record<string, AIPersonality>;
 
@@ -88,10 +89,11 @@ export const BOT_ROSTER = {
 	nit: [
 		"Dora",
 		"Yona",
+		"Tofu",
 	],
-	tag: ["Lalo", "Tintin",],
-	lag: ["Cotton", ],
-	maniac: [ "Mudkip",],
+	tag: ["Lalo", "Tintin", "Ratgon"],
+	lag: ["Cotton", "Mochi", "Chonkers"],
+	maniac: [ "Mudkip", "Monke", "Ichimo"],
 	station: [
 		"Cooper",
 		"Bamboo",
@@ -104,7 +106,7 @@ export type BotDisplayName = string & { readonly __brand: "BotDisplayName" };
 export class NameDispenser {
 	private readonly pools = new Map<PersonalityId, string[]>();
 	private readonly issued = new Set<string>();
-	private readonly suffixCounters = new Map<string, number>();
+	private globalFallback: string[] | null = null;
 
 	issue(personalityId: PersonalityId): BotDisplayName {
 		const pool = this._pool(personalityId);
@@ -117,39 +119,34 @@ export class NameDispenser {
 			}
 		}
 
-		const roster = BOT_ROSTER[personalityId];
-		const base = roster[Math.floor(Math.random() * roster.length)]!;
-		return this._suffixed(base);
+		return this._issueFromFallback();
+	}
+
+	private _issueFromFallback(): BotDisplayName {
+		if (!this.globalFallback) {
+			const allNames = Object.values(BOT_ROSTER).flat();
+			this.globalFallback = shuffle(allNames);
+		}
+
+		while (this.globalFallback.length > 0) {
+			const candidate = this.globalFallback.pop()!;
+			if (!this.issued.has(candidate)) {
+				this.issued.add(candidate);
+				return candidate as BotDisplayName;
+			}
+		}
+
+		throw new Error("name pool exhausted");
 	}
 
 	private _pool(personalityId: PersonalityId): string[] {
 		const existing = this.pools.get(personalityId);
 		if (existing) return existing;
 
-		const copy = [...BOT_ROSTER[personalityId]];
-		for (let i = copy.length - 1; i > 0; i--) {
-			const j = Math.floor(Math.random() * (i + 1));
-			[copy[i], copy[j]] = [copy[j]!, copy[i]!];
-		}
+		const shuffledPool = shuffle(BOT_ROSTER[personalityId]);
+		this.pools.set(personalityId, shuffledPool);
 
-		this.pools.set(personalityId, copy);
-		return copy;
-	}
-
-	private _suffixed(base: string): BotDisplayName {
-		const count = (this.suffixCounters.get(base) ?? 1) + 1;
-		this.suffixCounters.set(base, count);
-
-		let candidate = `${base}${count}`;
-		// extremely unlikely, but guard against the suffixed form also colliding
-		while (this.issued.has(candidate)) {
-			const next = (this.suffixCounters.get(base) ?? count) + 1;
-			this.suffixCounters.set(base, next);
-			candidate = `${base}${next}`;
-		}
-
-		this.issued.add(candidate);
-		return candidate as BotDisplayName;
+		return shuffledPool;
 	}
 
 	has(name: string): boolean {

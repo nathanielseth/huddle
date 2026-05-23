@@ -31,7 +31,7 @@ type ActionKey = "fold" | "check" | "call" | "raise" | "all_in";
 
 const LINE_BIAS: Record<Line, Partial<Record<ActionKey, number>>> = {
 	// single-street bluff: fire once, then abandon if called
-	bet_fold: { raise: 0.45, check: -0.2 },
+	bet_fold: { raise: 0.55, check: -0.45 },
 
 	// two-street value/semi-bluff: bet flop, continue on turn
 	bet_call_barrel: { raise: 0.5, call: 0.25 },
@@ -46,7 +46,7 @@ const LINE_BIAS: Record<Line, Partial<Record<ActionKey, number>>> = {
 	slowplay_trap: { check: 2.5, call: 1.2, raise: -3.0 },
 
 	// two-barrel bluff: fire both streets aggressively
-	bluff_2barrel: { raise: 0.55, check: -0.2 },
+	bluff_2barrel: { raise: 0.3, check: -0.08 },
 
 	// polarised overbet: commit chips with strong made hand or credible bluff
 	overbet_polar: { raise: 0.5, all_in: 0.4 },
@@ -94,7 +94,11 @@ export function selectLine(
 		if (!inPosition && spr > 3 && streetIndex === 1) {
 			line = Math.random() < 0.25 ? "check_raise" : "check_call_float";
 		} else if (inPosition && streetIndex === 1) {
-			line = "bluff_2barrel";
+			line =
+				Math.random() < bluffFrequency
+					? "bluff_2barrel"
+					: "check_call_float";
+					
 		} else if (inPosition) {
 			line = "bet_fold";
 		} else {
@@ -102,18 +106,18 @@ export function selectLine(
 		}
 	} else {
 		// weak / air — equity < 0.30
-		const canSemiBluff = inPosition && spr > 3 && streetIndex <= 2;
-		const wantsToBluff = Math.random() < bluffFrequency * 1.4;
+		const canSemiBluff = inPosition && spr > 3 && streetIndex === 1;
+		const wantsToBluff = Math.random() < bluffFrequency * 0.75;
 
 		if (canSemiBluff && wantsToBluff) {
 			line = streetIndex === 1 ? "bluff_2barrel" : "bet_fold";
 		} else if (inPosition && streetIndex === 1) {
 			line =
-				Math.random() < bluffFrequency * 2
+				Math.random() < bluffFrequency * 0.75
 					? "bluff_2barrel"
 					: isPFAggressor
-						? "give_up"
-						: "bet_fold";
+						? "bet_fold"
+						: "give_up";
 		} else {
 			line = "give_up";
 		}
@@ -152,6 +156,11 @@ export function expireLine(
 
 	// single-street bluff: spent as soon as the raise is fired
 	if (line === "bet_fold" && chosenAction === "raise") {
+		return { ...narrative, active: false };
+	}
+
+	// if the bot called while intending to bet-fold, the plan is broken
+	if (line === "bet_fold" && chosenAction === "call") {
 		return { ...narrative, active: false };
 	}
 

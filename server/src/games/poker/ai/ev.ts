@@ -1,3 +1,5 @@
+import type { BoardTexture } from "./ranges";
+
 export function gaussianSample(stdDev: number): number {
 	const u1 = Math.random() + Number.EPSILON; // guard against log(0)
 	const u2 = Math.random();
@@ -41,6 +43,7 @@ export function sampleBetFraction(
 	baseWeights: readonly [number, number, number, number],
 	spr: number,
 	streetIndex: number,
+	texture?: BoardTexture,
 ): number {
 	const w: [number, number, number, number] = [
 		baseWeights[0],
@@ -49,26 +52,41 @@ export function sampleBetFraction(
 		baseWeights[3],
 	];
 
-	// deep-stacked: build pot regardless of hand strength
+	// existing SPR + street adjustments (unchanged)
 	if (spr > 6) {
 		w[2] *= 1.3;
 		w[3] *= 1.4;
 	}
-
 	if (streetIndex === 3) {
 		w[1] *= 0.5;
 		w[2] *= 1.2;
 		w[3] *= 1.4;
 	}
 
+	// board texture sizing adjustments
+	if (texture && streetIndex > 0) {
+		const wet = texture.wetness;
+		if (wet > 0.15) {
+			// wet boards: charge draws, bet for protection, shift toward larger sizes
+			w[0] *= Math.max(0.4, 1 - wet * 0.45); // shrink 0.33x
+			w[2] *= 1 + wet * 0.55; // grow 1.0x pot
+			w[3] *= 1 + wet * 0.85; // grow 1.5x overbet
+		}
+		if (texture.monotone && streetIndex >= 2) {
+			// monotone turn/river: polarize hard 
+			w[0] *= 1.3;
+			w[1] *= 0.65;
+			w[2] *= 0.75;
+			w[3] *= 1.5;
+		}
+	}
+
 	const total = w[0] + w[1] + w[2] + w[3];
 	let roll = Math.random() * total;
-
 	for (let i = 0; i < 4; i++) {
 		roll -= w[i]!;
 		if (roll <= 0) return BET_FRACTIONS[i]!;
 	}
-
 	return BET_FRACTIONS[2]!;
 }
 

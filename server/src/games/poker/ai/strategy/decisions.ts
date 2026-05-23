@@ -88,7 +88,12 @@ function computeRaiseTo(
 			: personality.sizingWeights;
 
 	const streetMultiplier = STREET_SIZING_MULTIPLIER[streetIndex] ?? 1.0;
-	let baseFraction = sampleBetFraction(sizingWeights, spr, streetIndex);
+	let baseFraction = sampleBetFraction(
+		sizingWeights,
+		spr,
+		streetIndex,
+		ctx.boardTexture,
+	);
 	baseFraction = sprAdjustedFraction(baseFraction, ctx, personality);
 
 	const scaledFraction = baseFraction * streetMultiplier;
@@ -144,7 +149,7 @@ export function scoreActions(
 		streetIndex < 3 &&
 		Math.random() < personality.bluffFrequency * (1 - equity * 0.5);
 	const bluffBonus = bluffFired
-		? foldEquity * (0.28 + (inPosition ? 0.1 : 0))
+		? foldEquity * (0.28 + (inPosition ? 0.1 : 0)) * personality.aggression
 		: 0;
 
 	// pot commitment and positional bonuses

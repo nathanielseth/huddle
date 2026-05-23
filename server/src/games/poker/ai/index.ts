@@ -16,8 +16,10 @@ import {
 	uniformRange,
 	narrowPreflopRange,
 	narrowPostflopRange,
+	computeBoardTexture,
 	type RangeWeights,
 	type RangeProfile,
+	type BoardTexture,
 } from "./ranges";
 import {
 	selectLine,
@@ -219,7 +221,7 @@ export function makeAIAction(
 		getCardCode(player.holeCards[1]),
 	];
 	const boardCodes = toCardCodes(state.communityCards);
-
+	const boardTexture = computeBoardTexture(boardCodes);
 	const numOpponents = Math.max(1, countInHandPlayers(state) - 1);
 	const activeOpponents = _countActiveOpponents(state, playerId);
 
@@ -259,6 +261,7 @@ export function makeAIAction(
 		bigBlind: C.BIG_BLIND,
 		isLimpOpportunity: _isLimpOpportunity(state, playerId, callAmount, phase),
 		chipsInvested: player.totalContributed,
+		boardTexture,
 	};
 
 	// preflop: range-gated decision, no equity engine

@@ -1,4 +1,5 @@
 export type { Line, ActiveLine } from "./strategy/lines";
+import type { BoardTexture } from "./ranges";
 
 export interface AIPersonality {
 	readonly id: string;
@@ -43,4 +44,5 @@ export interface AIDecisionContext {
 	readonly isLimpOpportunity: boolean;
 
 	readonly chipsInvested: number;
+	readonly boardTexture?: BoardTexture;
 }

@@ -8,9 +8,13 @@ function cc(r: number, s: number): number {
 }
 
 const CARD_TO_SUIT = new Map<number, number>();
+export const CARD_TO_RANK = new Map<number, number>();
+
 for (let r = 0; r <= 12; r++) {
 	for (let s = 0; s < 4; s++) {
-		CARD_TO_SUIT.set(cc(r, s), s);
+		const code = cc(r, s);
+		CARD_TO_SUIT.set(code, s);
+		CARD_TO_RANK.set(code, r);
 	}
 }
 
@@ -105,7 +109,7 @@ export function buildRangeByPercentile(
 	const sorted = Array.from(ALL_HAND_TYPES)
 		.map((ht) => ({
 			index: ht.index,
-			equity: PREFLOP_EQUITY[ht.index]![oppIdx]!,
+			equity: PREFLOP_EQUITY[ht.index]?.[oppIdx] ?? 0,
 			n: ht.combos.length,
 		}))
 		.sort((a, b) => b.equity - a.equity);
@@ -172,10 +176,13 @@ export function narrowPreflopRange(
 		// renormalise so weights stay in [0, 1]
 		let maxWeight = 0;
 		for (let i = 0; i < 169; i++) {
-			if (result[i]! > maxWeight) maxWeight = result[i]!;
+			const w = result[i] ?? 0;
+			if (w > maxWeight) maxWeight = w;
 		}
 		if (maxWeight > 0) {
-			for (let i = 0; i < 169; i++) result[i] = result[i]! / maxWeight;
+			for (let i = 0; i < 169; i++) {
+				result[i] = (result[i] ?? 0) / maxWeight;
+			}
 		}
 
 		return result;
@@ -203,15 +210,46 @@ function _boardScore(
 	return 7462;
 }
 
-// returns the fraction of board cards sharing the most common suit [0, 1]
-function boardFlushTexture(boardCodes: readonly number[]): number {
-	if (boardCodes.length === 0) return 0;
-	const counts = [0, 0, 0, 0];
-	for (const code of boardCodes) {
-		const suit = CARD_TO_SUIT.get(code) ?? 0;
-		counts[suit] = (counts[suit] ?? 0) + 1;
+export interface BoardTexture {
+	wetness: number;
+	paired: boolean;
+	monotone: boolean; // all board cards same suit (3+ cards)
+}
+
+export function computeBoardTexture(
+	boardCodes: readonly number[],
+): BoardTexture {
+	if (boardCodes.length === 0)
+		return { wetness: 0, paired: false, monotone: false };
+
+	const n = boardCodes.length;
+	const ranks = boardCodes.map((c) => CARD_TO_RANK.get(c) ?? 0);
+	const suits = boardCodes.map((c) => CARD_TO_SUIT.get(c) ?? 0);
+
+	// Suit concentration — defensive assignment against strict noUncheckedIndexedAccess
+	const suitCounts = [0, 0, 0, 0];
+	for (const s of suits) {
+		suitCounts[s] = (suitCounts[s] ?? 0) + 1;
 	}
-	return Math.max(...counts) / boardCodes.length;
+	const maxSuit = Math.max(...suitCounts);
+	const monotone = maxSuit === n && n >= 3;
+
+	// 0 when all suits distinct, 1 when monotone
+	const flushness = (maxSuit - 1) / Math.max(1, n - 1);
+
+	// Rank connectivity — fraction of sorted adjacent pairs within gap ≤ 2
+	const sortedRanks = [...ranks].sort((a, b) => a - b);
+	let connected = 0;
+	for (let i = 0; i < n - 1; i++) {
+		if ((sortedRanks[i + 1] ?? 0) - (sortedRanks[i] ?? 0) <= 2) connected++;
+	}
+	const connectivity = n > 1 ? connected / (n - 1) : 0;
+	const paired = new Set(ranks).size < n;
+
+	// Wetness: connectivity weighted slightly higher (straight draws more common than flush draws)
+	const wetness = Math.min(1, flushness * 0.5 + connectivity * 0.7);
+
+	return { wetness, paired, monotone };
 }
 
 // fraction of range to remove when opponent bets. scales with bet size
@@ -240,7 +278,9 @@ function _cull(
 
 	for (const { index } of order) {
 		if (removed >= target) break;
-		const ht = ALL_HAND_TYPES[index]!;
+		const ht = ALL_HAND_TYPES[index];
+		if (!ht) continue;
+
 		const combos = ht.combos.length * (result[index] ?? 0);
 		if (combos <= 0) continue;
 
@@ -249,7 +289,7 @@ function _cull(
 			result[index] = 0;
 			removed += combos;
 		} else {
-			result[index]! *= (combos - space) / combos;
+			result[index] = (result[index] ?? 0) * ((combos - space) / combos);
 			removed = target;
 		}
 	}
@@ -279,17 +319,18 @@ export function narrowPostflopRange(
 	scored.sort((a, b) => a.score - b.score);
 
 	if (action === "raise" || action === "all_in") {
-		// on flush-heavy boards, villain also barrels non-flush hands for protection and fold equity
-		const flushTexture = boardFlushTexture(boardCodes);
-		const adjustedBase = CULL_BASE * (1 - flushTexture * 0.35);
+		const { wetness } = computeBoardTexture(boardCodes);
+		// wet/connected boards retain draws in betting range, reduce cull aggression
+		const adjustedBase = CULL_BASE * (1 - wetness * 0.5);
 		const clamped = Math.max(0.2, Math.min(betFraction, 3));
 		const cullPct = Math.min(CULL_MAX, adjustedBase + clamped * CULL_SCALE);
 		_cull(result, scored, cullPct, true);
 	} else if (action === "check") {
 		_cull(result, scored, CHECK_CULL_PCT, false);
 	} else if (action === "call") {
-		const clamped = Math.max(0.2, Math.min(betFraction, 1.5));
-		_cull(result, scored, 0.06 + clamped * 0.04, false);
+		// vs larger bets strong hands raise, not call
+		const clamped = Math.max(0.2, Math.min(betFraction, 2.0));
+		_cull(result, scored, 0.1 + clamped * 0.08, false);
 	}
 
 	return result;
@@ -311,7 +352,7 @@ export function buildWeightedCombos(
 	let totalWeight = 0;
 
 	for (const ht of ALL_HAND_TYPES) {
-		const w = range[ht.index]!;
+		const w = range[ht.index] ?? 0;
 		if (w <= 0) continue;
 		for (const [c0, c1] of ht.combos) {
 			if (blocked.has(c0) || blocked.has(c1)) continue;
@@ -352,17 +393,17 @@ export function buildComboAlias(
 	const large: number[] = [];
 
 	for (let i = 0; i < n; i++) {
-		scaled[i] = combos[i]!.weight * n;
-		(scaled[i]! < 1 ? small : large).push(i);
+		scaled[i] = (combos[i]?.weight ?? 0) * n;
+		((scaled[i] ?? 0) < 1 ? small : large).push(i);
 	}
 
 	while (small.length > 0 && large.length > 0) {
 		const s = small.pop()!;
 		const l = large.pop()!;
-		prob[s] = scaled[s]!;
+		prob[s] = scaled[s] ?? 0;
 		alias[s] = l;
-		scaled[l] = scaled[l]! + scaled[s]! - 1;
-		(scaled[l]! < 1 ? small : large).push(l);
+		scaled[l] = (scaled[l] ?? 0) + (scaled[s] ?? 0) - 1;
+		((scaled[l] ?? 0) < 1 ? small : large).push(l);
 	}
 	for (const i of small) prob[i] = 1;
 	for (const i of large) prob[i] = 1;
@@ -373,8 +414,11 @@ export function buildComboAlias(
 export function sampleComboAlias(ca: ComboAlias): [number, number] | null {
 	if (ca.combos.length === 0) return null;
 	const i = (Math.random() * ca.combos.length) | 0;
-	const j = Math.random() < ca.prob[i]! ? i : ca.alias[i]!;
-	const combo = ca.combos[j]!;
+	const targetIndex =
+		Math.random() < (ca.prob[i] ?? 0) ? i : (ca.alias[i] ?? 0);
+	const combo = ca.combos[targetIndex];
+	if (!combo) return null;
+
 	return [combo.c0, combo.c1];
 }
 
@@ -388,6 +432,8 @@ export function sampleWeightedCombo(
 		r -= weight;
 		if (r <= 0) return [c0, c1];
 	}
-	const last = combos[combos.length - 1]!;
+	const last = combos[combos.length - 1];
+	if (!last) return null;
+
 	return [last.c0, last.c1];
 }
