@@ -9,6 +9,13 @@ import {
 	STREET_SIZING_MULTIPLIER,
 } from "../ev";
 import { humanizeBet } from "../personality";
+import { lineValidActions, type ActiveLine } from "./lines";
+import {
+	classifyHand,
+	classifyBetSize,
+	type HandBucket,
+	type BetSizeBucket,
+} from "./handBucket";
 
 function sprAfterBet(
 	fraction: number,
@@ -20,12 +27,9 @@ function sprAfterBet(
 	const raiseIncr =
 		fractionToBetAmount(fraction, effectivePot, betLevel) - betLevel;
 	const stackAfter = stack - raiseIncr - callAmount;
-	const potAfter = effectivePot + raiseIncr;
-	return stackAfter <= 0 ? 0 : stackAfter / potAfter;
+	return stackAfter <= 0 ? 0 : stackAfter / (effectivePot + raiseIncr);
 }
 
-// buildPot: strong hand, wants to commit chips and reduce SPR
-// avoidCommitment: medium hand, wants to preserve fold equity and stack depth
 function sprAdjustedFraction(
 	sampledFraction: number,
 	ctx: AIDecisionContext,
@@ -38,10 +42,9 @@ function sprAdjustedFraction(
 
 	const buildPot = equity > 0.65;
 	const avoidCommitment = equity >= 0.35 && equity <= 0.65;
-
 	if (!buildPot && !avoidCommitment) return sampledFraction;
 
-	const candidates = [0.33, 0.67, 1.0, 1.5] as const;
+	const candidates = [0.33, 0.67, 1.0, 1.5, 2.0] as const;
 	let bestFraction = sampledFraction;
 	let bestScore = -Infinity;
 
@@ -55,12 +58,10 @@ function sprAdjustedFraction(
 	}
 
 	const gap = Math.abs(bestFraction - sampledFraction);
-	const minJump = 0.33;
 	const maxJump = 0.33 + personality.aggression * 0.67;
-	return gap >= minJump && gap <= maxJump ? bestFraction : sampledFraction;
+	return gap >= 0.33 && gap <= maxJump ? bestFraction : sampledFraction;
 }
 
-// computes a concrete raise-to chip amount
 function computeRaiseTo(
 	ctx: AIDecisionContext,
 	personality: AIPersonality,
@@ -75,49 +76,47 @@ function computeRaiseTo(
 		spr,
 		streetIndex,
 		equity,
+		boardTexture,
 	} = ctx;
 
 	const sizingWeights: readonly [number, number, number, number] =
 		equity < 0.35
-			? ([
+			? [
 					personality.sizingWeights[0],
 					personality.sizingWeights[1],
 					Math.round((personality.sizingWeights[2] + 3) / 2),
 					Math.round((personality.sizingWeights[3] + 4) / 2),
-				] as const)
+				]
 			: personality.sizingWeights;
 
 	const streetMultiplier = STREET_SIZING_MULTIPLIER[streetIndex] ?? 1.0;
-	let baseFraction = sampleBetFraction(
-		sizingWeights,
-		spr,
-		streetIndex,
-		ctx.boardTexture,
+	const baseFraction = sprAdjustedFraction(
+		sampleBetFraction(sizingWeights, spr, streetIndex, boardTexture),
+		ctx,
+		personality,
 	);
-	baseFraction = sprAdjustedFraction(baseFraction, ctx, personality);
 
-	const scaledFraction = baseFraction * streetMultiplier;
-	const raw = fractionToBetAmount(scaledFraction, effectivePot, betLevel);
+	const raw = fractionToBetAmount(
+		baseFraction * streetMultiplier,
+		effectivePot,
+		betLevel,
+	);
 	const clamped = humanizeBet(raw, personality, minRaiseTo, maxRaiseTo - 1);
-
-	if (clamped >= stack * 0.85 + callAmount) return maxRaiseTo;
-	return clamped;
+	return clamped >= stack * 0.85 + callAmount ? maxRaiseTo : clamped;
 }
 
 type ActionKey = "fold" | "check" | "call" | "raise" | "all_in";
 type ActionScores = Record<ActionKey, number>;
 
-// assigns a raw desirability score to each legal action
 export function scoreActions(
 	ctx: AIDecisionContext,
 	personality: AIPersonality,
 	nudges?: Partial<Record<ActionKey, number>>,
+	bluffFired = false,
 ): ActionScores {
 	const {
 		equity,
 		potOdds,
-		pot,
-		effectivePot,
 		activeOpponents,
 		numOpponents,
 		canCheck,
@@ -132,6 +131,7 @@ export function scoreActions(
 		isLimpOpportunity,
 		streetIndex,
 		chipsInvested,
+		boardTexture,
 	} = ctx;
 
 	const evEdge = equity - potOdds;
@@ -142,39 +142,43 @@ export function scoreActions(
 		activeOpponents,
 		personality.aggression,
 	);
-	const bluffCost = callAmount > 0 ? callAmount : effectivePot * 0.5;
-	const rawBluffEV = bluffEV(foldEquity, pot, bluffCost);
-	const bluffFired =
-		rawBluffEV > 0 &&
-		streetIndex < 3 &&
-		Math.random() < personality.bluffFrequency * (1 - equity * 0.5);
+	const pairedMultiplier = boardTexture?.paired ? 0.55 : 1.0;
+
 	const bluffBonus = bluffFired
-		? foldEquity * (0.28 + (inPosition ? 0.1 : 0)) * personality.aggression
+		? foldEquity *
+			(0.28 + (inPosition ? 0.1 : 0)) *
+			personality.aggression *
+			pairedMultiplier
 		: 0;
 
-	// pot commitment and positional bonuses
 	const totalHandInvestment = chipsInvested + stack;
 	const commitmentRatio =
 		totalHandInvestment > 0 ? chipsInvested / totalHandInvestment : 0;
 	const potCommitBonus = Math.max(0, (commitmentRatio - 0.6) * 3.0);
+	const potCommitted = spr < 0.8;
 	const positionRaiseBonus = positionFactor * 0.08 * personality.aggression;
 	const evScaledEdge = evEdge * evScale;
 
+	const turnBarrelPenalty =
+		streetIndex === 2 && evEdge < 0.12 && !potCommitted
+			? 0.25 * (1 - equity)
+			: 0;
 	const raiseScore =
 		canRaise && maxRaiseTo > minRaiseTo && activeOpponents > 0
-			? evScaledEdge * personality.aggression + positionRaiseBonus + bluffBonus
+			? evScaledEdge * personality.aggression +
+				positionRaiseBonus +
+				bluffBonus -
+				turnBarrelPenalty
 			: -Infinity;
 
-	// SPR gating for all-in: pot-committed, or strong edge in medium-SPR spot
-	const potCommitted = spr < 0.8;
 	const committableEdge =
-		spr < 2.0 && evEdge > 0.1 && equity > Math.max(0.52, personality.tightness);
+		spr < 2.0 && evEdge > 0.1 && equity > Math.max(0.57, personality.tightness);
+
 	const allInScore =
 		stack > 0 && numOpponents > 0 && (potCommitted || committableEdge)
 			? evScaledEdge * personality.aggression * 1.08 + positionRaiseBonus
 			: -Infinity;
 
-	// suppress calls that would be a preflop limp when raising is available
 	const limpBlocked = isLimpOpportunity && canRaise;
 	const callScore =
 		canCall && callAmount > 0 && !limpBlocked
@@ -185,9 +189,7 @@ export function scoreActions(
 				potCommitBonus
 			: -Infinity;
 
-	// prevents passive archetypes from checking the near-nuts
 	const equityDamper = Math.max(0.1, 1 - Math.max(0, equity - 0.7) * 3);
-
 	const checkScore = canCheck
 		? Math.max(
 				0.05,
@@ -197,10 +199,11 @@ export function scoreActions(
 			)
 		: -Infinity;
 
-	// fold only fires when behind, not pot-committed, and facing real cost
+	const foldThreshold = potOdds + personality.tightness * 0.30;
+	const shortfall = foldThreshold - equity;
 	const foldScore =
-		callAmount > 0 && evEdge < -0.01 && commitmentRatio < 0.7
-			? Math.abs(evEdge) * personality.tightness * evScale
+		callAmount > 0 && !potCommitted && commitmentRatio < 0.7 && shortfall > 0
+			? shortfall * personality.tightness * (evScale + spr * 0.1)
 			: -Infinity;
 
 	const scores: ActionScores = {
@@ -212,28 +215,132 @@ export function scoreActions(
 	};
 
 	if (nudges) {
-		for (const key of Object.keys(nudges) as ActionKey[]) {
-			const nudge = nudges[key];
-			if (nudge !== undefined && scores[key] !== -Infinity) {
-				scores[key] += nudge;
-			}
+		for (const [key, nudge] of Object.entries(nudges) as [
+			ActionKey,
+			number,
+		][]) {
+			if (scores[key] !== -Infinity) scores[key] += nudge;
 		}
 	}
 
 	return scores;
 }
 
+function applyBucketAdjustments(
+	scores: ActionScores,
+	bucket: HandBucket,
+	betBucket: BetSizeBucket | null,
+): void {
+	if (betBucket === null) {
+		if (bucket === "nuts" || bucket === "strong") {
+			if (scores.raise !== -Infinity) scores.raise += 0.15;
+		}
+		if (bucket === "air") {
+			if (scores.raise !== -Infinity) scores.raise -= 0.2;
+		}
+		return;
+	}
+
+	if (betBucket === "overbet") {
+		switch (bucket) {
+			case "nuts":
+			case "strong":
+				if (scores.raise !== -Infinity) scores.raise += 0.25;
+				if (scores.call !== -Infinity) scores.call += 0.1;
+				break;
+			case "medium":
+			case "draw":
+				if (scores.call !== -Infinity) scores.call -= 0.35;
+				if (scores.fold !== -Infinity) scores.fold += 0.3;
+				break;
+			case "weak":
+			case "air":
+				scores.call = -Infinity;
+				if (scores.fold !== -Infinity) scores.fold += 0.5;
+				break;
+		}
+		return;
+	}
+
+	if (betBucket === "large") {
+		if (bucket === "air") {
+			scores.call = -Infinity;
+			if (scores.fold !== -Infinity) scores.fold += 0.35;
+		} else if (bucket === "weak") {
+			if (scores.call !== -Infinity) scores.call -= 0.2;
+			if (scores.fold !== -Infinity) scores.fold += 0.15;
+		}
+		return;
+	}
+
+	if (betBucket === "medium") {
+		switch (bucket) {
+			case "nuts":
+			case "strong":
+				if (scores.raise !== -Infinity) scores.raise += 0.18;
+				break;
+			case "medium":
+			case "draw":
+				// fine to call or raise
+				break;
+			case "weak":
+				if (scores.call !== -Infinity) scores.call -= 0.15;
+				if (scores.fold !== -Infinity) scores.fold += 0.12;
+				break;
+			case "air":
+				scores.call = -Infinity;
+				if (scores.fold !== -Infinity) scores.fold += 0.25;
+				break;
+		}
+		return;
+	}
+
+	if (betBucket === "small") {
+		switch (bucket) {
+			case "nuts":
+			case "strong":
+				if (scores.raise !== -Infinity) scores.raise += 0.12;
+				break;
+			case "medium":
+			case "draw":
+				// pot odds justify a call
+				if (scores.call !== -Infinity) scores.call += 0.06;
+				break;
+			case "weak":
+				// marginal
+				break;
+			case "air":
+				if (scores.call !== -Infinity) scores.call -= 0.1;
+				if (scores.fold !== -Infinity) scores.fold += 0.08;
+				break;
+		}
+		return;
+	}
+
+	// min-bet: incentivize strong hands to punish; draws/medium can float
+	if (betBucket === "min") {
+		if (bucket === "nuts" || bucket === "strong") {
+			if (scores.raise !== -Infinity) scores.raise += 0.25;
+			if (scores.call !== -Infinity) scores.call -= 0.1;
+		} else if (bucket === "medium" || bucket === "draw") {
+			if (scores.raise !== -Infinity) scores.raise += 0.1;
+		}
+		return;
+	}
+}
+
 function topTwoMargin(scores: ActionScores): number {
-	const finite = Object.values(scores).filter((s) => s !== -Infinity);
-	if (finite.length < 2) return Infinity;
-	finite.sort((a, b) => b - a);
-	return finite[0]! - finite[1]!;
+	const sorted = (Object.values(scores) as number[])
+		.filter((s) => s !== -Infinity)
+		.sort((a, b) => b - a);
+	return sorted.length < 2 ? Infinity : sorted[0]! - sorted[1]!;
 }
 
 export function selectAction(
 	ctx: AIDecisionContext,
 	personality: AIPersonality,
 	nudges?: Partial<Record<ActionKey, number>>,
+	activeLine?: ActiveLine | null,
 ): PokerServerAction {
 	const ACTION_KEYS: readonly ActionKey[] = [
 		"raise",
@@ -243,14 +350,62 @@ export function selectAction(
 		"fold",
 	];
 
-	const base = scoreActions(ctx, personality, nudges);
-	const margin = topTwoMargin(base);
+	// classify the current situation before anything else
+	const bucket = classifyHand(
+		ctx.equity,
+		ctx.boardTexture,
+		ctx.streetIndex,
+		ctx.spr,
+	);
+	const betBucket =
+		ctx.callAmount > 0 ? classifyBetSize(ctx.callAmount, ctx.pot) : null;
+
+	// bluff intent: line-driven bluffs are enforced by the restriction layer
+	const foldEquity = estimateFoldEquity(
+		ctx.activeOpponents,
+		personality.aggression,
+	);
+	const bluffCost =
+		ctx.callAmount > 0 ? ctx.callAmount : ctx.effectivePot * 0.5;
+	const rawBluffEV = bluffEV(foldEquity, ctx.pot, bluffCost);
+
+	const isBluffLine =
+		activeLine?.active === true &&
+		(activeLine.line === "bluff_2barrel" || activeLine.line === "bet_fold");
+
+	// opportunistic bluff: only when no plan is governing the hand
+	const bluffFired =
+		!isBluffLine &&
+		rawBluffEV > 0 &&
+		ctx.streetIndex < 3 &&
+		Math.random() < personality.bluffFrequency * (1 - ctx.equity * 0.5);
+
+	// layer 1: score
+	const scores = scoreActions(ctx, personality, nudges, bluffFired);
+
+	// layer 2: restrict
+	if (activeLine?.active) {
+		const valid = lineValidActions(
+			activeLine.line,
+			ctx.callAmount > 0,
+			ctx.canCheck,
+			ctx.canRaise,
+		);
+		for (const key of ACTION_KEYS) {
+			if (!valid.has(key)) scores[key] = -Infinity;
+		}
+	}
+
+	// layer 3: adjust
+	applyBucketAdjustments(scores, bucket, betBucket);
+
+	const margin = topTwoMargin(scores);
 	const effectiveNoise = personality.noise / (1 + margin * 2);
 
 	let bestRawScore = -Infinity;
 	for (const key of ACTION_KEYS) {
-		const s = base[key];
-		if (s !== -Infinity && s > bestRawScore) bestRawScore = s;
+		if (scores[key] !== -Infinity && scores[key] > bestRawScore)
+			bestRawScore = scores[key];
 	}
 	const blunderThreshold = effectiveNoise * 3.0;
 
@@ -258,9 +413,8 @@ export function selectAction(
 	let bestScore = -Infinity;
 
 	for (const key of ACTION_KEYS) {
-		const s = base[key];
-		if (s === -Infinity) continue;
-		if (bestRawScore - s > blunderThreshold) continue;
+		const s = scores[key];
+		if (s === -Infinity || bestRawScore - s > blunderThreshold) continue;
 		const noisy = s + gaussianSample(effectiveNoise);
 		if (noisy > bestScore) {
 			bestScore = noisy;
@@ -276,8 +430,9 @@ export function selectAction(
 
 	if (bestKey === "raise") {
 		const raiseTo = computeRaiseTo(ctx, personality);
-		if (raiseTo >= ctx.maxRaiseTo) return { type: "all_in" };
-		return { type: "raise", amount: raiseTo };
+		return raiseTo >= ctx.maxRaiseTo
+			? { type: "all_in" }
+			: { type: "raise", amount: raiseTo };
 	}
 
 	return { type: bestKey };

@@ -140,6 +140,26 @@ export interface RangeProfile {
 	coldCallPct: number;
 }
 
+function _intersectAndNormalize(
+	a: RangeWeights,
+	b: RangeWeights,
+): RangeWeights {
+	const result = new Float32Array(169);
+	let maxWeight = 0;
+
+	for (let i = 0; i < 169; i++) {
+		const w = (a[i] ?? 0) * (b[i] ?? 0);
+		result[i] = w;
+		if (w > maxWeight) maxWeight = w;
+	}
+
+	if (maxWeight > 0) {
+		for (let i = 0; i < 169; i++) result[i] = (result[i] ?? 0) / maxWeight;
+	}
+
+	return result;
+}
+
 // narrows opponent's preflop range based on observed action
 export function narrowPreflopRange(
 	current: RangeWeights,
@@ -168,29 +188,14 @@ export function narrowPreflopRange(
 			numOpp,
 		);
 
-		const result = new Float32Array(169);
-		for (let i = 0; i < 169; i++) {
-			result[i] = (current[i] ?? 0) * (actionRange[i] ?? 0);
-		}
-
-		// renormalise so weights stay in [0, 1]
-		let maxWeight = 0;
-		for (let i = 0; i < 169; i++) {
-			const w = result[i] ?? 0;
-			if (w > maxWeight) maxWeight = w;
-		}
-		if (maxWeight > 0) {
-			for (let i = 0; i < 169; i++) {
-				result[i] = (result[i] ?? 0) / maxWeight;
-			}
-		}
-
-		return result;
+		return _intersectAndNormalize(current, actionRange);
 	}
 
 	if (action === "call") {
 		const effectivePct = Math.max(8, profile.coldCallPct * posMult);
-		return buildRangeByPercentile(effectivePct, numOpp);
+		const callRange = buildRangeByPercentile(effectivePct, numOpp);
+
+		return _intersectAndNormalize(current, callRange);
 	}
 
 	return current;

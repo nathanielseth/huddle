@@ -178,7 +178,8 @@ function handleOpen(
 	if (
 		ctx.canCall &&
 		ctx.positionFactor > 0.6 &&
-		Math.random() < (1 - personality.aggression) * 0.07
+		personality.aggression < 0.45 &&
+		Math.random() < (1 - personality.aggression) * 0.08
 	) {
 		return { type: "call" };
 	}
@@ -207,6 +208,22 @@ function handleVsOpen(
 		const raiseTo = computePreflopRaiseTo(ctx, personality, true);
 		if (raiseTo >= ctx.maxRaiseTo) return { type: "all_in" };
 		if (raiseTo >= ctx.minRaiseTo) return { type: "raise", amount: raiseTo };
+	}
+
+	if (canRaise && !in3BetRange) {
+		const bluffBandPct = personality.bluffFrequency * 15;
+		const bluff3BetRange = buildRangeByPercentile(
+			posAdjusted(personality.threeBetRangePct + bluffBandPct, positionFactor),
+			numOpp,
+		);
+		if (
+			isHandInRange(holeCardCodes, bluff3BetRange) &&
+			Math.random() < personality.bluffFrequency * 0.7
+		) {
+			const raiseTo = computePreflopRaiseTo(ctx, personality, true);
+			if (raiseTo >= ctx.maxRaiseTo) return { type: "all_in" };
+			if (raiseTo >= ctx.minRaiseTo) return { type: "raise", amount: raiseTo };
+		}
 	}
 
 	if (canCall) {
@@ -239,10 +256,10 @@ function handleVs3Bet(
 
 	const valueFourBetPct = Math.max(3, personality.threeBetRangePct * 0.65);
 	const stackDepthBB = ctx.stack / ctx.bigBlind;
-	const bluff4BetBonus =
-		stackDepthBB > 50
-			? 0
-			: Math.min(2, personality.aggression * personality.bluffFrequency * 10);
+	const bluff4BetBonus = Math.min(
+		2,
+		personality.aggression * personality.bluffFrequency * 10,
+	);
 	const fourBetPct = posAdjusted(
 		valueFourBetPct + bluff4BetBonus,
 		positionFactor,
@@ -256,7 +273,7 @@ function handleVs3Bet(
 		if (raiseTo >= ctx.minRaiseTo) return { type: "raise", amount: raiseTo };
 	}
 
-	const isInPosition = positionFactor > 0.35;
+	const isInPosition = positionFactor > 0.5;
 	if (canCall && isInPosition) {
 		const callPct =
 			fourBetPct + posAdjusted(personality.coldCallPct * 0.3, positionFactor);
