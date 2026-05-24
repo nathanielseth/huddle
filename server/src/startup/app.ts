@@ -1,8 +1,8 @@
 import express, { type Application } from "express";
 import cors from "cors";
-import { env } from "../env.js";
-import type { RoomRegistry } from "../room/registry.js";
-import type { GameRunner } from "../engine/GameRunner.js";
+import { env } from "../env";
+import type { RoomRegistry } from "../room/registry";
+import type { GameRunner } from "../engine/GameRunner";
 
 export function createApp(
 	registry: RoomRegistry,

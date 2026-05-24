@@ -2,8 +2,8 @@
 	"compilerOptions": {
 		"rootDir": "..",
 		"outDir": "./dist",
-		"module": "nodenext",
-		"moduleResolution": "nodenext",
+		"module": "esnext",
+		"moduleResolution": "bundler",
 		"target": "es2020",
 		"types": ["node"],
 		"lib": ["es2020"],

@@ -1,11 +1,11 @@
 import { Server } from "socket.io";
 import type { Server as HttpServer } from "http";
-import { env } from "../env.js";
-import { logger } from "../lib/logger.js";
-import { registerHandlers } from "../room/handlers.js";
-import type { RoomRegistry } from "../room/registry.js";
-import type { GameRunner } from "../engine/GameRunner.js";
-import type { IO } from "../types.js";
+import { env } from "../env";
+import { logger } from "../lib/logger";
+import { registerHandlers } from "../room/handlers";
+import type { RoomRegistry } from "../room/registry";
+import type { GameRunner } from "../engine/GameRunner";
+import type { IO } from "../types";
 
 export function createSocketServer(
 	httpServer: HttpServer,

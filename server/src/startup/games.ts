@@ -1,13 +1,13 @@
-import type { GameRunner } from "../engine/GameRunner.js";
-import { sabongEngine } from "../games/sabong/index.js";
-import { sussyEngine } from "../games/sussy/index.js";
-import { believableLiesEngine } from "../games/believable-lies/index.js";
-import { witzoneEngine } from "../games/witzone/index.js";
-import { pokerEngine } from "../games/poker/index.js";
-import { cybsecsEngine } from "../games/cybersecs/index.js";
-import { squadoodleEngine } from "../games/squadoodle/index.js";
-import { logger } from "../lib/logger.js";
-import type { GameEngine } from "../engine/GameEngine.js";
+import type { GameRunner } from "../engine/GameRunner";
+import { sabongEngine } from "../games/sabong/index";
+import { sussyEngine } from "../games/sussy/index";
+import { believableLiesEngine } from "../games/believable-lies/index";
+import { witzoneEngine } from "../games/witzone/index";
+import { pokerEngine } from "../games/poker/index";
+import { cybsecsEngine } from "../games/cybersecs/index";
+import { squadoodleEngine } from "../games/squadoodle/index";
+import { logger } from "../lib/logger";
+import type { GameEngine } from "../engine/GameEngine";
 
 const ENGINES: readonly GameEngine[] = [
 	sabongEngine,

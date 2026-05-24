@@ -1,15 +1,15 @@
 import { createServer } from "http";
-import { createApp } from "./startup/app.js";
-import { createSocketServer } from "./startup/socket.js";
-import { registerGames } from "./startup/games.js";
+import { createApp } from "./startup/app";
+import { createSocketServer } from "./startup/socket";
+import { registerGames } from "./startup/games";
 import {
 	startRoomCleanup,
 	registerShutdownHandlers,
-} from "./startup/lifecycle.js";
-import { RoomRegistry } from "./room/registry.js";
-import { GameRunner } from "./engine/GameRunner.js";
-import { env } from "./env.js";
-import { logger } from "./lib/logger.js";
+} from "./startup/lifecycle";
+import { RoomRegistry } from "./room/registry";
+import { GameRunner } from "./engine/GameRunner";
+import { env } from "./env";
+import { logger } from "./lib/logger";
 
 const registry = new RoomRegistry();
 const runner = new GameRunner();

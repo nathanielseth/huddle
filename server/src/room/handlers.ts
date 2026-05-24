@@ -9,14 +9,14 @@ import {
 	touchRoom,
 	type Room,
 	type RoomRegistry,
-} from "./registry.js";
+} from "./registry";
 import {
 	CreateRoomSchema,
 	JoinRoomSchema,
 	RejoinRoomSchema,
-} from "./schemas.js";
-import type { GameRunner } from "../engine/GameRunner.js";
-import type { IO, ClientSocket } from "../types.js";
+} from "./schemas";
+import type { GameRunner } from "../engine/GameRunner";
+import type { IO, ClientSocket } from "../types";
 
 const HOST_GRACE_MS = 45_000;
 const ACTION_RATE_LIMIT_MS = 100;

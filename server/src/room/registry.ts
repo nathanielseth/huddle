@@ -3,7 +3,7 @@ import type {
 	Player,
 	RoomPhase,
 	GameTimer,
-} from "../../../shared/types.js";
+} from "../../../shared/types";
 
 export interface RoomPlayer {
 	playerId: string;

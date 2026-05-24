@@ -1,9 +1,9 @@
 import type { Server as HttpServer } from "http";
-import { isExpired } from "../room/registry.js";
-import type { RoomRegistry } from "../room/registry.js";
-import type { GameRunner } from "../engine/GameRunner.js";
-import type { IO } from "../types.js";
-import { logger } from "../lib/logger.js";
+import { isExpired } from "../room/registry";
+import type { RoomRegistry } from "../room/registry";
+import type { GameRunner } from "../engine/GameRunner";
+import type { IO } from "../types";
+import { logger } from "../lib/logger";
 
 const CLEANUP_INTERVAL_MS = 5 * 60 * 1_000;
 const SHUTDOWN_TIMEOUT_MS = 10_000;
