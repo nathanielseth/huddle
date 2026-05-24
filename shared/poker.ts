@@ -67,6 +67,7 @@ export interface PokerPlayerView {
 	readonly holeCards: readonly [Card | null, Card | null];
 	readonly isDealer: boolean;
 	readonly canRaise: boolean;
+	readonly displayName: string | null;
 }
 
 export interface PotView {

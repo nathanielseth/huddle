@@ -1,3 +1,4 @@
+// phase types
 export type WitzonePhase =
 	| "answering"
 	| "voting_prompt"
@@ -6,66 +7,115 @@ export type WitzonePhase =
 	| "final_voting"
 	| "finished";
 
-export type WitzoneRound = 1 | 2 | 3;
+export type WitzonePromptStage = "voting" | "revealing";
 
-// Anonymous answer slot shown during voting — no authorId exposed
-export interface WitzoneVotingAnswer {
-	answerId: string;
-	text: string | null; // null = didn't submit
+// public answer / prompt
+export interface WitzonePublicAnswer {
+	id: string;
+	text: string;
 }
 
-// Full attributed reveal — emitted after voting closes on a prompt
-export interface WitzonePromptReveal {
-	promptId: string;
+// present during voting sub-stage only. answers are anonymous (no author info in text)
+export interface WitzonePublicPrompt {
+	text: string;
+	// two answers, sorted by ID for stable order across rebuilds
+	answers: WitzonePublicAnswer[];
+	// IDs of the two authors — so the client can show "you wrote one of these"
+	authorIds: string[];
+	votedCount: number;
+	eligibleVoterCount: number;
+}
+
+// reveal types
+export interface WitzoneRevealAnswer {
+	id: string;
+	text: string | null; // null for DEFAULT (player didn't submit)
+	authorId: string;
+	voteCount: number;
+	scoreDelta: number;
+}
+
+export interface WitzoneReveal {
 	promptText: string;
-	answers: Array<{
-		answerId: string;
-		authorId: string;
-		text: string | null;
-	}>;
-	votes: Record<string, number>; // answerId → vote count / token count
-	scoreDeltas: Record<string, number>; // authorId → points earned this prompt
+	answers: WitzoneRevealAnswer[];
 	wasJinx: boolean;
-	wasDefault: boolean; // true if one player didn't submit
-	wittyWinnerId: string | null; // authorId who swept all votes (Witty!)
+	wasDefault: boolean;
+	wittyWinnerId: string | null;
 }
 
-export interface WitzonePlayerView {
-	playerId: string;
-	score: number;
-	hasSubmitted: boolean; // during answering / final_answering
-	hasVoted: boolean; // during voting phases
-	isAuthorOfCurrentPrompt: boolean; // watching, not voting
+export interface WitzoneFinalRevealAnswer {
+	id: string;
+	text: string;
+	authorId: string;
+	tokenCount: number;
+	scoreDelta: number;
 }
 
-// Current prompt exposed during voting stage — no author attribution
-export interface WitzoneCurrentPrompt {
-	promptId: string;
+export interface WitzoneFinalReveal {
 	promptText: string;
-	answers: WitzoneVotingAnswer[];
+	answers: WitzoneFinalRevealAnswer[]; // sorted by tokenCount desc
 }
 
+// player view
+export interface WitzonePlayerView {
+	id: string;
+	score: number;
+	// true when the player has submitted all required answers for the current phase
+	hasAnswered: boolean;
+	// true when the player has cast their vote(s) for the current voting phase
+	hasVoted: boolean;
+}
+
+// public game state (sent to all clients via game_state)
 export interface WitzoneState {
 	phase: WitzonePhase;
-	roundNumber: WitzoneRound;
+	round: 1 | 2 | 3;
+	players: Record<string, WitzonePlayerView>;
+
+	// answering / final_answering progress
+	answeredCount: number; // players who have submitted ALL their required answers
+	totalPlayers: number;
+
+	// voting (voting_prompt phase)
 	currentPromptIndex: number;
 	totalPromptsThisRound: number;
-	promptStage: "voting" | "revealing"; // sub-stage within voting_prompt
-	currentPrompt: WitzoneCurrentPrompt | null; // null during revealing
-	lastReveal: WitzonePromptReveal | null;
-	players: Record<string, WitzonePlayerView>;
-	lastRoundResults: WitzonePromptReveal[]; // all reveals from last completed round
-	allSubmitted: boolean;
-	allVoted: boolean;
+	promptStage: WitzonePromptStage;
+	// non-null only during voting sub-stage
+	currentPrompt: WitzonePublicPrompt | null;
+	// non-null during revealing sub-stage (and persists until next prompt)
+	lastReveal: WitzoneReveal | null;
+
+	// final answering
+	finalPromptText: string | null;
+
+	// final voting
+	// anonymous answers shown during final_voting. sorted by ID for stability
+	finalAnswers: WitzonePublicAnswer[] | null;
+	finalVotedCount: number;
+
+	// finished
+	finalReveal: WitzoneFinalReveal | null;
 }
 
-// Sent privately to each player — their assigned prompts + submitted answers
+// player secret (sent privately via player_secret)
+export interface WitzoneAssignedPrompt {
+	promptIndex: number;
+	text: string;
+	submitted: boolean;
+	answer: string | null;
+}
+
 export interface WitzonePlayerSecret {
-	prompts: Array<{ promptId: string; text: string }>;
-	answers: Record<string, string>; // promptId → submitted answer text
+	// R1 / R2: the player's 2 assigned prompts. empty during final round
+	assignedPrompts: WitzoneAssignedPrompt[];
+	// final round: the shared prompt text
+	finalPrompt: string | null;
+	// final voting: which answerId is the player's own (to disable self-vote)
+	finalAnswerId: string | null;
 }
 
+// actions
 export type WitzoneAction =
-	| { type: "submit_answer"; promptId: string; text: string }
-	| { type: "cast_vote"; answerId: string } // R1 / R2
-	| { type: "cast_final_votes"; votes: Record<string, number> }; // R3 — token split
+	| { type: "submit_answer"; promptIndex: number; text: string }
+	| { type: "cast_vote"; answerId: string }
+	| { type: "cast_final_votes"; votes: Record<string, number> };

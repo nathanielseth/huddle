@@ -20,7 +20,7 @@ export type CybsecsRole =
 	| "spoofer" // exposure 7+: hacker posing as sysadmin candidate
 	| "ethical_hacker" // override: agent who can hack to neutralize
 	| "black_hat" // override 6+: hacker who knows the EH's identity
-	| "trojan" // override 7+: agent who appears as hacker to hackers
+	| "honeypot" // override 7+: agent who appears as hacker to hackers
 	| "obfuscator"; // override 7+: hacker with one-time mission obfuscation
 
 export type CybsecsAlignment = "agent" | "hacker";
@@ -88,8 +88,8 @@ export interface CybsecsState {
 }
 
 // visibility matrix:
-// agent/analyst/trojan/intern/ethical_hacker - empty knownHackerIds
-// hacker/doxxer/spoofer/obfuscator - see hacker ring (hacker/doxxer/spoofer/black_hat/trojan/obfuscator)
+// agent/analyst/honeypot/intern/ethical_hacker - empty knownHackerIds
+// hacker/doxxer/spoofer/obfuscator - see hacker ring (hacker/doxxer/spoofer/black_hat/honeypot/obfuscator)
 // black_hat - same ring + knownEthicalHackerId
 // sysadmin - all hacker-aligned (including intern)
 export interface CybsecsSecret {
