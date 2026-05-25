@@ -19,7 +19,6 @@ import {
 	computeBoardTexture,
 	type RangeWeights,
 	type RangeProfile,
-	type BoardTexture,
 } from "./ranges";
 import {
 	selectLine,
@@ -37,6 +36,7 @@ export {
 	NameDispenser,
 } from "./personality.js";
 export type { AIPlayerConfig, PersonalityId } from "./personality";
+import { classifyHand } from "./strategy/handBucket";
 
 const STREET_INDEX: Record<BettingPhase, number> = {
 	pre_flop: 0,
@@ -45,7 +45,7 @@ const STREET_INDEX: Record<BettingPhase, number> = {
 	river: 3,
 } as const;
 
-// pre-flop handled by range gates (makePreflopDecision), MC never run there
+// pre-flop handled by range gates (makePreflopDecision)
 function simulationSamples(phase: BettingPhase): number {
 	if (phase === "flop") return 5_000;
 	if (phase === "turn") return 7_000;
@@ -80,7 +80,7 @@ export function updateOpponentRange(
 	if (!currentRange) return;
 
 	const numOpp = Math.max(1, countInHandPlayers(state) - 1);
-	const posFactor = _positionFactor(playerId, state);
+	const posFactor = computePositionFactor(playerId, state);
 
 	const player = state.players.get(playerId)!;
 	const profile: RangeProfile = player.aiPersonality
@@ -126,7 +126,13 @@ export function updateOpponentRange(
 	state.opponentRangeModels.set(playerId, newRange);
 }
 
-function _positionFactor(playerId: string, state: PokerServerState): number {
+// private helpers
+
+// returns a [0, 1] position factor: 0 = first to act, 1 = last to act
+function computePositionFactor(
+	playerId: string,
+	state: PokerServerState,
+): number {
 	const { seatOrder, dealerIndex, players } = state;
 	const count = seatOrder.length;
 	const inHand: string[] = [];
@@ -142,10 +148,7 @@ function _positionFactor(playerId: string, state: PokerServerState): number {
 	return myIdx / (inHand.length - 1);
 }
 
-function _countActiveOpponents(
-	state: PokerServerState,
-	heroId: string,
-): number {
+function countActiveOpponents(state: PokerServerState, heroId: string): number {
 	let n = 0;
 	for (const [id, p] of state.players) {
 		if (id !== heroId && p.status === "active") n++;
@@ -153,7 +156,7 @@ function _countActiveOpponents(
 	return n;
 }
 
-function _isLimpOpportunity(
+function computeIsLimpOpportunity(
 	state: PokerServerState,
 	heroId: string,
 	callAmount: number,
@@ -168,7 +171,7 @@ function _isLimpOpportunity(
 	);
 }
 
-function _getOpponentRanges(
+function getOpponentRanges(
 	state: PokerServerState,
 	heroId: string,
 ): RangeWeights[] {
@@ -181,6 +184,8 @@ function _getOpponentRanges(
 	}
 	return ranges;
 }
+
+// public api
 
 export function aiThinkTimer(
 	personality: AIPersonality,
@@ -223,7 +228,7 @@ export function makeAIAction(
 	const boardCodes = toCardCodes(state.communityCards);
 	const boardTexture = computeBoardTexture(boardCodes);
 	const numOpponents = Math.max(1, countInHandPlayers(state) - 1);
-	const activeOpponents = _countActiveOpponents(state, playerId);
+	const activeOpponents = countActiveOpponents(state, playerId);
 
 	const pot = [...state.players.values()].reduce(
 		(s, p) => s + p.totalContributed,
@@ -238,7 +243,7 @@ export function makeAIAction(
 	const potOdds = computePotOdds(callAmount, pot);
 	const minRaiseTo = betLevel + state.betting.lastRaiseIncrement;
 	const maxRaiseTo = player.stack + player.currentBet;
-	const positionFactor = _positionFactor(playerId, state);
+	const posFactor = computePositionFactor(playerId, state);
 
 	const ctx: AIDecisionContext = {
 		equity: 0,
@@ -257,9 +262,14 @@ export function makeAIAction(
 		spr: stackToPotRatio(player.stack, effectivePot),
 		numOpponents,
 		activeOpponents,
-		positionFactor,
+		positionFactor: posFactor,
 		bigBlind: C.BIG_BLIND,
-		isLimpOpportunity: _isLimpOpportunity(state, playerId, callAmount, phase),
+		isLimpOpportunity: computeIsLimpOpportunity(
+			state,
+			playerId,
+			callAmount,
+			phase,
+		),
 		chipsInvested: player.totalContributed,
 		boardTexture,
 	};
@@ -274,7 +284,7 @@ export function makeAIAction(
 				personalityId: personality.id,
 				action,
 				potOdds: +potOdds.toFixed(3),
-				positionFactor: +positionFactor.toFixed(2),
+				positionFactor: +posFactor.toFixed(2),
 				spr: +ctx.spr.toFixed(2),
 				activeOpponents,
 				numOpponents,
@@ -299,7 +309,7 @@ export function makeAIAction(
 	}
 
 	// postflop: equity engine + narrative
-	const opponentRanges = _getOpponentRanges(state, playerId);
+	const opponentRanges = getOpponentRanges(state, playerId);
 
 	const { equity, samples, exact } =
 		opponentRanges.length > 0
@@ -318,18 +328,19 @@ export function makeAIAction(
 
 	ctx.equity = equity;
 
-	// line planner
 	if (!state.activeLines) {
 		throw new Error(
-			"activeLines not initialized — initializeRangeModels must be called before makeAIAction",
+			"activeLines not initialized — call initializeRangeModels before makeAIAction",
 		);
 	}
+
 	const isPFAggressor = state.pfAggressorId === playerId;
 	const currentLine = state.activeLines.get(playerId) ?? null;
+	const bucket = classifyHand(equity, boardTexture, streetIndex, ctx.spr);
 	const activeLine = selectLine(
-		equity,
+		bucket,
 		ctx.spr,
-		positionFactor,
+		posFactor,
 		streetIndex,
 		currentLine,
 		personality.bluffFrequency,
@@ -338,10 +349,22 @@ export function makeAIAction(
 
 	state.activeLines.set(playerId, activeLine);
 
-	const bias = lineBias(activeLine);
+	const bias = { ...lineBias(activeLine) };
 
-	const action = selectAction(ctx, personality, bias);
+	// donk-bet penalty: suppress leading out OOP before anyone has acted
+	if (
+		!isPFAggressor &&
+		posFactor < 0.5 &&
+		streetIndex > 0 &&
+		ctx.canCheck &&
+		ctx.callAmount === 0
+	) {
+		const donkPenalty = -0.2 * (1 - posFactor);
+		bias.raise = (bias.raise ?? 0) + donkPenalty;
+		bias.all_in = (bias.all_in ?? 0) + donkPenalty;
+	}
 
+	const action = selectAction(ctx, personality, bias, activeLine);
 	const expiredLine = expireLine(activeLine, action.type, equity, streetIndex);
 	state.activeLines.set(playerId, expiredLine);
 
@@ -353,7 +376,7 @@ export function makeAIAction(
 			equity: +equity.toFixed(3),
 			potOdds: +potOdds.toFixed(3),
 			evEdge: +(equity - potOdds).toFixed(3),
-			positionFactor: +positionFactor.toFixed(2),
+			positionFactor: +posFactor.toFixed(2),
 			spr: +ctx.spr.toFixed(2),
 			activeOpponents,
 			numOpponents,
