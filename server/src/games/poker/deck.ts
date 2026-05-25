@@ -1,44 +1,16 @@
-import type { Card, Rank, Suit } from "../../../../shared/poker.js";
-
-const RANKS: readonly Rank[] = [
-	"2",
-	"3",
-	"4",
-	"5",
-	"6",
-	"7",
-	"8",
-	"9",
-	"T",
-	"J",
-	"Q",
-	"K",
-	"A",
-];
-
-const SUITS: readonly Suit[] = ["h", "d", "c", "s"];
+import type { Card, Rank, Suit } from "../../../../shared/poker";
+import { shuffle } from "../lib/random";
+import { RANK_CHARS, SUIT_CHARS } from "./lib/cards";
 
 // builds an unshuffled 52-card deck. new array every call, rank-major order
 export function buildDeck(): Card[] {
 	const deck: Card[] = [];
-	for (const rank of RANKS) {
-		for (const suit of SUITS) {
+	for (const rank of RANK_CHARS) {
+		for (const suit of SUIT_CHARS) {
 			deck.push(`${rank}${suit}` as Card);
 		}
 	}
 	return deck;
-}
-
-// fisher-yates shuffle
-export function shuffle<T>(array: readonly T[]): T[] {
-	const a = [...array];
-	for (let i = a.length - 1; i > 0; i--) {
-		const j = Math.floor(Math.random() * (i + 1));
-		const tmp = a[i]!;
-		a[i] = a[j]!;
-		a[j] = tmp;
-	}
-	return a;
 }
 
 // fresh shuffled 52-card deck

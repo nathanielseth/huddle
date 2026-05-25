@@ -4,13 +4,13 @@ import {
 	rank,
 	rankDescription,
 } from "@pokertools/evaluator";
-import type { HandResult } from "../../../../shared/poker.js";
+import type { HandResult } from "../../../../shared/poker";
 import type {
 	PokerServerState,
 	PokerServerPlayer,
 	SidePot,
 	PotResolution,
-} from "./types.js";
+} from "./types";
 
 export interface ShowdownResult {
 	resolutions: PotResolution[];
@@ -138,14 +138,42 @@ export function resolveShowdown(state: PokerServerState): ShowdownResult {
 		),
 	);
 
+	// per-player showdown summary: cards + best hand + chips won
+	const playerInfo: Record<
+		string,
+		{
+			cards: string[];
+			hand: string | null;
+			won: number;
+		}
+	> = {};
+
+	for (const p of state.players.values()) {
+		if ((p.status !== "active" && p.status !== "allin") || !p.holeCards)
+			continue;
+		let hand: string | null = null;
+		if (communityCardCodes.length >= 3) {
+			try {
+				const codes = [
+					getCardCode(p.holeCards[0]),
+					getCardCode(p.holeCards[1]),
+					...communityCardCodes,
+				];
+				hand = rankDescription(rank(codes));
+			} catch {
+				// pre-flop all-in: no board to evaluate
+			}
+		}
+		playerInfo[p.playerId] = {
+			cards: [...p.holeCards],
+			hand,
+			won: awards.get(p.playerId) ?? 0,
+		};
+	}
+
 	state.logger.log("showdown_resolved", state.handNumber, {
 		communityCards: state.communityCards,
-		pots: resolutions.map((r) => ({
-			potIndex: r.potIndex,
-			amount: r.amount,
-			winnerIds: r.winnerIds,
-			handDescription: r.handDescription,
-		})),
+		playerInfo,
 		awards: Object.fromEntries(awards),
 		stacks: Object.fromEntries(
 			[...state.players.values()].map((p) => [p.playerId, p.stack]),

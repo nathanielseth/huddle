@@ -5,9 +5,12 @@ import type {
 	LastAction,
 	HandResult,
 } from "../../../../shared/poker.js";
+import type { AIPersonality } from "./ai/types.js";
 import type { PokerLogger } from "./logger.js";
+import type { ActiveLine } from "./ai/strategy/lines.js";
+import type { NameDispenser } from "./ai/personality.js";
 
-// scoped to the current betting street, reset at start of each new street
+// scoped to current street, reset each new street
 export interface BettingRoundState {
 	betToCall: number;
 	lastRaiseIncrement: number;
@@ -19,20 +22,31 @@ export interface SidePot {
 	eligiblePlayerIds: string[];
 }
 
+// server-authoritative action union. used by betting, index, and ai
+export type PokerServerAction =
+	| { type: "fold" }
+	| { type: "check" }
+	| { type: "call" }
+	| { type: "raise"; amount: number }
+	| { type: "all_in" };
+
 export interface PokerServerPlayer {
 	playerId: string;
 	seatIndex: number;
 	stack: number;
-	// two hole cards. set on deal, null between hands
+	// set on deal, null between hands
 	holeCards: [Card, Card] | null;
 	status: PlayerStatus;
-	// chips committed in current street only
+	// chips committed this street only
 	currentBet: number;
-	// running total of chips committed this entire hand across all streets
+	// total chips committed this hand across all streets
 	totalContributed: number;
 	hasActedThisRound: boolean;
 	canRaise: boolean;
 	isDealer: boolean;
+	displayName: string | null;
+	isAI: boolean;
+	aiPersonality: AIPersonality | null;
 }
 
 export interface PokerServerState {
@@ -49,16 +63,15 @@ export interface PokerServerState {
 	lastAction: LastAction | null;
 	logger: PokerLogger;
 	handResult: HandResult | null;
+	pfAggressorId: string | null;
+	// ai's estimated range per player. 169 Float32Array weights. initialised
+	// uniform, narrowed per action, reset each hand. server-only
+	opponentRangeModels: Map<string, Float32Array>;
+	nameDispenser: NameDispenser;
+	activeLines: Map<string, ActiveLine | null>;
 }
 
-export type PokerServerAction =
-	| { type: "fold" }
-	| { type: "check" }
-	| { type: "call" }
-	| { type: "raise"; amount: number }
-	| { type: "all_in" };
-
-// resolution for one pot at showdown
+// one pot's resolution at showdown
 export interface PotResolution {
 	potIndex: number;
 	winnerIds: string[];
@@ -66,13 +79,12 @@ export interface PotResolution {
 	handDescription: string | null;
 }
 
-// constants type alias for typed parameters in pure functions
+// constants shape for typed parameters
 export type PokerConstants = {
 	readonly STARTING_STACK: number;
 	readonly SMALL_BLIND: number;
 	readonly BIG_BLIND: number;
 	readonly WAITING_DURATION_MS: number;
-	readonly BETTING_DURATION_MS: number;
 	readonly SHOWDOWN_DURATION_MS: number;
 	readonly HAND_END_DURATION_MS: number;
 	readonly TURN_DURATION_MS: number;

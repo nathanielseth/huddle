@@ -4,21 +4,27 @@ export const POKER_CONSTANTS = {
 	SMALL_BLIND: 10,
 	BIG_BLIND: 20,
 
-	// per-player action window
+	// timers
+	// these drive engineresult timer, calls ontimerexpired at zero
+	// per-player action window, fires auto-fold or auto-check
 	TURN_DURATION_MS: 30_000,
 
-	// between hands: show last result, rotate button, prep next deal
+	// time between revealing flop/turn/river for cinematic all-in runout
+	RUNOUT_STREET_DURATION_MS: 2_500,
+
+	// between hands, show result, rotate button, prep next deal
 	WAITING_DURATION_MS: 8_000,
 
-	// showdown display: reveal cards, hand names, pot distribution animation
+	// showdown display, reveal cards, show hand names, animate pot - long enough for client animations
 	SHOWDOWN_DURATION_MS: 6_000,
 
-	// hand-end splash before next waiting phase
+	// hand-end splash before waiting phase, brief because showdown already seen
 	HAND_END_DURATION_MS: 4_000,
 
 	// table constraints
 	MIN_PLAYERS: 2,
-	MAX_PLAYERS: 8,
+	MAX_PLAYERS: 10,
+	AI_SEAT_COUNT: 7,
 } as const;
 
 export type PokerConstantsShape = typeof POKER_CONSTANTS;
