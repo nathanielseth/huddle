@@ -1,164 +1,250 @@
-import type { WitzonePromptReveal } from "../../../../shared/witzone.js";
-import type { WitzoneServerPrompt } from "./types.js";
+import type { WitzoneServerPrompt, WitzoneFinalPrompt } from "./types";
+import type {
+	WitzoneReveal,
+	WitzoneFinalReveal,
+} from "../../../../shared/witzone";
 import {
-	MAX_FINAL_POINTS,
-	POINTS_PER_VOTE,
+	PTS_PER_VOTE,
 	WINNER_BONUS,
 	WITTY_BONUS,
-} from "./constants.js";
+	DEFAULT_BONUS,
+	FINAL_SCORE_BASE,
+} from "./constants";
 
-// ─── Text normalization ───────────────────────────────────────────────────────
+// helpers
 
-export function normalize(s: string): string {
+function normalize(s: string): string {
 	return s
 		.toLowerCase()
-		.replace(/[^a-z0-9\s]/g, "")
-		.replace(/\s+/g, " ")
+		.replace(/[^a-z0-9]/g, "")
 		.trim();
 }
 
-export function isJinx(a: string, b: string): boolean {
-	return normalize(a) === normalize(b);
+// r1 / r2 prompt scoring
+
+export interface PromptScoreResult {
+	reveal: WitzoneReveal;
+	scoreDeltas: Record<string, number>;
 }
 
-// ─── R1 / R2 prompt scoring ───────────────────────────────────────────────────
-
+// score one r1/r2 prompt
+// @param prompt        the server prompt including votes already cast
+// @param eligiblecount number of players eligible to vote (n − 2)
+// @param round         1 or 2, round 2 doubles all point values
 export function scorePromptR1R2(
 	prompt: WitzoneServerPrompt,
+	eligibleCount: number,
 	round: 1 | 2,
-): Omit<WitzonePromptReveal, "promptId" | "promptText"> {
-	const slots = prompt.answerSlots!;
-	const [slot1, slot2] = [slots[0]!, slots[1]!];
-
-	const wasDefault = slot1.text === null || slot2.text === null;
-	const wasJinx = !wasDefault && isJinx(slot1.text!, slot2.text!);
-
-	// Tally votes per answerId
-	const votesByAnswerId: Record<string, number> = {};
-	for (const slot of slots) votesByAnswerId[slot.answerId] = 0;
-	for (const [, targetAnswerId] of prompt.votes) {
-		votesByAnswerId[targetAnswerId] =
-			(votesByAnswerId[targetAnswerId] ?? 0) + 1;
-	}
-
+): PromptScoreResult {
+	const mult = round === 1 ? 1 : 2;
+	const [slot0, slot1] = prompt.slots;
 	const scoreDeltas: Record<string, number> = {};
-	for (const slot of slots) scoreDeltas[slot.authorId] = 0;
 
-	const answers = slots.map((s) => ({
-		answerId: s.answerId,
-		authorId: s.authorId,
-		text: s.text,
-	}));
+	// jinx: both authors submitted the same normalized answer
+	const isJinx =
+		slot0.text !== null &&
+		slot1.text !== null &&
+		normalize(slot0.text) === normalize(slot1.text);
 
-	// JINX — both get zero regardless of votes
-	if (wasJinx) {
+	if (isJinx) {
 		return {
-			answers,
-			votes: votesByAnswerId,
+			reveal: {
+				promptText: prompt.text,
+				answers: [
+					{
+						id: slot0.answerId,
+						text: slot0.text,
+						authorId: slot0.authorId,
+						voteCount: 0,
+						scoreDelta: 0,
+					},
+					{
+						id: slot1.answerId,
+						text: slot1.text,
+						authorId: slot1.authorId,
+						voteCount: 0,
+						scoreDelta: 0,
+					},
+				],
+				wasJinx: true,
+				wasDefault: false,
+				wittyWinnerId: null,
+			},
 			scoreDeltas,
-			wasJinx: true,
-			wasDefault: false,
-			wittyWinnerId: null,
 		};
 	}
 
-	// DEFAULT — submitter gets winner bonus, non-submitter gets zero; votes ignored
-	if (wasDefault) {
-		const winnerId = slot1.text !== null ? slot1.authorId : slot2.authorId;
-		scoreDeltas[winnerId] = WINNER_BONUS[round]!;
+	// default: one or both authors didn't submit
+	const isDefault = slot0.text === null || slot1.text === null;
+
+	if (isDefault) {
+		// both null → no bonus for either
+		if (slot0.text === null && slot1.text === null) {
+			return {
+				reveal: {
+					promptText: prompt.text,
+					answers: [
+						{
+							id: slot0.answerId,
+							text: null,
+							authorId: slot0.authorId,
+							voteCount: 0,
+							scoreDelta: 0,
+						},
+						{
+							id: slot1.answerId,
+							text: null,
+							authorId: slot1.authorId,
+							voteCount: 0,
+							scoreDelta: 0,
+						},
+					],
+					wasJinx: false,
+					wasDefault: true,
+					wittyWinnerId: null,
+				},
+				scoreDeltas,
+			};
+		}
+
+		const bonus = DEFAULT_BONUS * mult;
+		const submitted = slot0.text !== null ? slot0 : slot1;
+		const missing = slot0.text !== null ? slot1 : slot0;
+		scoreDeltas[submitted.authorId] = bonus;
+
 		return {
-			answers,
-			votes: votesByAnswerId,
+			reveal: {
+				promptText: prompt.text,
+				answers: [
+					{
+						id: submitted.answerId,
+						text: submitted.text,
+						authorId: submitted.authorId,
+						voteCount: 0,
+						scoreDelta: bonus,
+					},
+					{
+						id: missing.answerId,
+						text: null,
+						authorId: missing.authorId,
+						voteCount: 0,
+						scoreDelta: 0,
+					},
+				],
+				wasJinx: false,
+				wasDefault: true,
+				wittyWinnerId: null,
+			},
 			scoreDeltas,
-			wasJinx: false,
-			wasDefault: true,
-			wittyWinnerId: null,
 		};
 	}
 
-	// Normal — votes count
-	const ppv = POINTS_PER_VOTE[round]!;
-	const winBonus = WINNER_BONUS[round]!;
-	const witBonus = WITTY_BONUS[round]!;
+	// normal voting
+	const allVotes = [...prompt.votes.values()];
+	const votes0 = allVotes.filter((id) => id === slot0.answerId).length;
+	const votes1 = allVotes.filter((id) => id === slot1.answerId).length;
+	const totalCast = votes0 + votes1;
 
-	const v1 = votesByAnswerId[slot1.answerId] ?? 0;
-	const v2 = votesByAnswerId[slot2.answerId] ?? 0;
-	const totalVotes = v1 + v2;
+	// witty = every eligible voter cast for the same answer
+	const isWitty0 =
+		eligibleCount > 0 &&
+		totalCast === eligibleCount &&
+		votes0 === eligibleCount;
+	const isWitty1 =
+		eligibleCount > 0 &&
+		totalCast === eligibleCount &&
+		votes1 === eligibleCount;
 
-	let delta1 = v1 * ppv;
-	let delta2 = v2 * ppv;
+	let delta0 = votes0 * PTS_PER_VOTE * mult;
+	let delta1 = votes1 * PTS_PER_VOTE * mult;
 	let wittyWinnerId: string | null = null;
 
-	if (totalVotes > 0) {
-		if (v1 === totalVotes) {
-			delta1 += witBonus;
-			wittyWinnerId = slot1.authorId;
-		} else if (v2 === totalVotes) {
-			delta2 += witBonus;
-			wittyWinnerId = slot2.authorId;
-		} else if (v1 > v2) {
-			delta1 += winBonus;
-		} else if (v2 > v1) {
-			delta2 += winBonus;
-		}
-		// tie → no bonus
+	if (isWitty0) {
+		delta0 += WITTY_BONUS * mult;
+		wittyWinnerId = slot0.authorId;
+	} else if (isWitty1) {
+		delta1 += WITTY_BONUS * mult;
+		wittyWinnerId = slot1.authorId;
+	} else if (votes0 > votes1) {
+		delta0 += WINNER_BONUS * mult;
+	} else if (votes1 > votes0) {
+		delta1 += WINNER_BONUS * mult;
 	}
+	// tie → no winner bonus
 
-	scoreDeltas[slot1.authorId] = delta1;
-	scoreDeltas[slot2.authorId] = delta2;
+	if (delta0 > 0) scoreDeltas[slot0.authorId] = delta0;
+	if (delta1 > 0) scoreDeltas[slot1.authorId] = delta1;
 
 	return {
-		answers,
-		votes: votesByAnswerId,
+		reveal: {
+			promptText: prompt.text,
+			answers: [
+				{
+					id: slot0.answerId,
+					text: slot0.text!,
+					authorId: slot0.authorId,
+					voteCount: votes0,
+					scoreDelta: delta0,
+				},
+				{
+					id: slot1.answerId,
+					text: slot1.text!,
+					authorId: slot1.authorId,
+					voteCount: votes1,
+					scoreDelta: delta1,
+				},
+			],
+			wasJinx: false,
+			wasDefault: false,
+			wittyWinnerId,
+		},
 		scoreDeltas,
-		wasJinx: false,
-		wasDefault: false,
-		wittyWinnerId,
 	};
 }
 
-// ─── R3 final prompt scoring ──────────────────────────────────────────────────
+// final round scoring
 
-export function scorePromptFinal(
-	prompt: WitzoneServerPrompt,
-): Omit<WitzonePromptReveal, "promptId" | "promptText"> {
-	const slots = prompt.answerSlots!;
+export interface FinalScoreResult {
+	reveal: WitzoneFinalReveal;
+	scoreDeltas: Record<string, number>;
+}
 
-	const tokensByAnswerId: Record<string, number> = {};
-	for (const slot of slots) tokensByAnswerId[slot.answerId] = 0;
+export function scorePromptFinal(fp: WitzoneFinalPrompt): FinalScoreResult {
+	const scoreDeltas: Record<string, number> = {};
+	const tokenMap = new Map<string, number>();
+	let totalTokens = 0;
 
-	for (const [, votes] of prompt.finalVotes) {
-		for (const [answerId, tokens] of Object.entries(votes)) {
-			tokensByAnswerId[answerId] = (tokensByAnswerId[answerId] ?? 0) + tokens;
+	for (const playerVotes of fp.votes.values()) {
+		for (const [answerId, tokens] of playerVotes) {
+			tokenMap.set(answerId, (tokenMap.get(answerId) ?? 0) + tokens);
+			totalTokens += tokens;
 		}
 	}
 
-	const totalTokens = Object.values(tokensByAnswerId).reduce(
-		(a, b) => a + b,
-		0,
-	);
+	const answers: WitzoneFinalReveal["answers"] = [];
 
-	const scoreDeltas: Record<string, number> = {};
-	for (const slot of slots) {
-		const tokens = tokensByAnswerId[slot.answerId] ?? 0;
-		scoreDeltas[slot.authorId] =
+	for (const [playerId, entry] of fp.answers) {
+		if (entry.text === null) continue;
+		const tokens = tokenMap.get(entry.answerId) ?? 0;
+		const delta =
 			totalTokens > 0
-				? Math.round((tokens / totalTokens) * MAX_FINAL_POINTS)
+				? Math.round((tokens / totalTokens) * FINAL_SCORE_BASE)
 				: 0;
+		if (delta > 0) scoreDeltas[playerId] = delta;
+		answers.push({
+			id: entry.answerId,
+			text: entry.text,
+			authorId: playerId,
+			tokenCount: tokens,
+			scoreDelta: delta,
+		});
 	}
 
-	const answers = slots.map((s) => ({
-		answerId: s.answerId,
-		authorId: s.authorId,
-		text: s.text,
-	}));
+	// sort by token count descending for a natural reveal order
+	answers.sort((a, b) => b.tokenCount - a.tokenCount);
 
 	return {
-		answers,
-		votes: tokensByAnswerId,
+		reveal: { promptText: fp.text, answers },
 		scoreDeltas,
-		wasJinx: false,
-		wasDefault: false,
-		wittyWinnerId: null,
 	};
 }
