@@ -5,7 +5,7 @@ import type {
 	SussyResponse,
 	SussyRoundResult,
 	SussyTaskVoteResult,
-} from "../../../../shared/sussy.js";
+} from "../../../../shared/sussy";
 
 export interface SussyServerPlayer {
 	playerId: string;
@@ -20,7 +20,7 @@ export interface SussyServerState {
 	taskNumber: 1 | 2 | 3;
 	taskType: TaskType;
 	chooserPlayerId: string | null;
-	impostorId: string;
+	impostorId: string | null;
 	crewPrompt: string | [string, string, string];
 	impostorPrompt: string | [string, string, string] | null;
 	responses: Map<string, SussyResponse>;
@@ -30,8 +30,3 @@ export interface SussyServerState {
 	roundResults: SussyRoundResult[];
 	players: Map<string, SussyServerPlayer>;
 }
-
-export type SussyParsedAction =
-	| { type: "select_category"; category: TaskType }
-	| { type: "submit_response"; response: SussyResponse }
-	| { type: "cast_vote"; targetId: string };

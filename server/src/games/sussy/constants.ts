@@ -1,8 +1,6 @@
 import type { TaskType } from "../../../../shared/sussy.js";
 
-// ─── Task config ──────────────────────────────────────────────────────────────
-
-export const SELECTABLE_TASKS: TaskType[] = [
+export const SELECTABLE_TASKS: readonly TaskType[] = [
 	"show_of_hands",
 	"finger_pointing",
 	"finger_blast",
@@ -19,35 +17,35 @@ export const TASK_DURATIONS_MS: Record<TaskType, number> = {
 	glitch_in_the_chat: 60_000,
 };
 
-export const HANGOUT_NO_SUBMIT_TASKS: readonly TaskType[] = [
-	"show_of_hands",
-	"finger_pointing",
-	"finger_blast",
-	"thumb_shot",
-	"face_turn",
-];
+// in hangout mode every selectable task is display-only — players react
+// physically, no phone input required. glitch_in_the_chat always requires
+// written answers regardless of mode. derived from SELECTABLE_TASKS so they
+// can never diverge
+export const HANGOUT_NO_SUBMIT_TASKS: ReadonlySet<TaskType> = new Set(
+	SELECTABLE_TASKS,
+);
 
-// ─── Scoring ──────────────────────────────────────────────────────────────────
-
-/**
- * SLEUTH BONUS  (correct vote, no majority required):
- *   1st correct vote this round → 100, 2nd → 125, 3rd → 150
- *
- * CAUGHT BONUS  (majority catches faker — replaces sleuth bonus that task):
- *   Task 1 catch → 375 for all correct voters
- *   Task 2 catch → 250 (first-timers) | 275 (also correct on t1)
- *   Task 3 catch → 105 / 130 / 155
- *
- * FAKER BONUS   (impostor survives a majority vote):
- *   Task 1 → 100, Task 2 → 125, Task 3 → 150
- *
- * THUMB_SHOT    (one vote only, flat bonuses):
- *   Faker escapes → 150, Correct voters → 100, Majority catch → 150
- */
+// SLEUTH — indexed by prior correct votes this round (0, 1, 2+)
+// CAUGHT — keyed by task number, then by prior correct vote tier
+// FAKER_SURVIVED — keyed by task number
+//
+// structured so natural keys (taskNumber, priorCorrect) map directly without
+// padding or off-by-one arithmetic at every call site
 export const SUSSY_SCORING = {
-	SLEUTH: [0, 100, 125, 150] as const,
-	CAUGHT: [[], [375, 375, 375], [250, 275, 275], [105, 130, 155]] as const,
-	FAKER_SURVIVED: [0, 100, 125, 150] as const,
+	// [priorCorrect capped at 2]: 0 prior → 100 | 1 prior → 125 | 2+ prior → 150
+	SLEUTH: [100, 125, 150] as const,
+
+	// [taskNumber][priorCorrect capped at 2]
+	CAUGHT: {
+		1: [375, 375, 375], // first catch always max reward
+		2: [250, 275, 275],
+		3: [105, 130, 155],
+	} as const,
+
+	// [taskNumber]
+	FAKER_SURVIVED: { 1: 100, 2: 125, 3: 150 } as const,
+
+	// thumb_shot single-vote round, flat bonuses, no tier progression
 	THUMB_FAKER_ESCAPE: 150,
 	THUMB_CORRECT_VOTER: 100,
 	THUMB_MAJORITY_CATCH: 150,

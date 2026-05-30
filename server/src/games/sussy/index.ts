@@ -1,14 +1,9 @@
-import { z } from "zod";
 import type {
 	GameEngineWithSecrets,
 	GameContext,
 	EngineResult,
-} from "../../engine/engine.js";
-import type {
-	SussyServerState,
-	SussyServerPlayer,
-	SussyParsedAction,
-} from "./types.js";
+} from "../../engine/GameEngine";
+import type { SussyServerState, SussyServerPlayer } from "./types";
 import type {
 	SussyState,
 	SussyPlayerView,
@@ -16,17 +11,19 @@ import type {
 	SussyRoundResult,
 	SussyTaskVoteResult,
 	TaskType,
-} from "../../../../shared/sussy.js";
+} from "../../../../shared/sussy";
 import {
 	SELECTABLE_TASKS,
 	TASK_DURATIONS_MS,
 	HANGOUT_NO_SUBMIT_TASKS,
-} from "./constants.js";
-import type { Room } from "../../room/rooms.js";
-import { scoreTaskVote, scoreThumbVote } from "./scoring.js";
-import { PROMPT_BANK } from "./prompts.js";
-
-// ─── Timing ───────────────────────────────────────────────────────────────────
+} from "./constants";
+import type { Room } from "../../room/registry";
+import { getMajorityTarget, scoreTaskVote, scoreThumbVote } from "./scoring";
+import type { VoteOutcome } from "./scoring";
+import { PROMPT_BANK } from "./prompts";
+import { parseSussyAction } from "./schemas";
+import { pickRandom } from "../lib/random";
+import { invariant } from "../lib/assert";
 
 const CATEGORY_SELECT_MS = 20_000;
 const ROLE_REVEAL_MS = 5_000;
@@ -34,10 +31,32 @@ const HANGOUT_DISPLAY_MS = 8_000;
 const VOTING_MS = 20_000;
 const ROUND_RESULT_MS = 8_000;
 
-// ─── Helpers ──────────────────────────────────────────────────────────────────
+interface TaskConfig {
+	readonly durationMs: number;
+	readonly requiresSubmission: boolean;
+}
 
-function pickRandom<T>(arr: readonly T[]): T {
-	return arr[Math.floor(Math.random() * arr.length)] as T;
+// single source of truth for "does this task need phone input?"
+// remote mode always requires submission. hangout mode: selectable tasks are
+// display-only, only glitch_in_the_chat requires written answers
+function getTaskConfig(
+	taskType: TaskType,
+	mode: SussyServerState["mode"],
+): TaskConfig {
+	if (mode === "remote") {
+		return {
+			durationMs: TASK_DURATIONS_MS[taskType],
+			requiresSubmission: true,
+		};
+	}
+
+	const requiresSubmission = !HANGOUT_NO_SUBMIT_TASKS.has(taskType);
+	return {
+		durationMs: requiresSubmission
+			? TASK_DURATIONS_MS[taskType]
+			: HANGOUT_DISPLAY_MS,
+		requiresSubmission,
+	};
 }
 
 function pickRandomPlayerId(players: Map<string, SussyServerPlayer>): string {
@@ -45,15 +64,9 @@ function pickRandomPlayerId(players: Map<string, SussyServerPlayer>): string {
 	return ids[Math.floor(Math.random() * ids.length)] as string;
 }
 
-function isNoSubmit(state: SussyServerState): boolean {
-	return (
-		state.mode === "hangout" &&
-		(HANGOUT_NO_SUBMIT_TASKS as readonly string[]).includes(state.taskType)
-	);
-}
-
 function allResponded(state: SussyServerState): boolean {
-	if (isNoSubmit(state)) return true;
+	if (!getTaskConfig(state.taskType, state.mode).requiresSubmission)
+		return true;
 	for (const id of state.players.keys()) {
 		if (!state.responses.has(id)) return false;
 	}
@@ -67,7 +80,34 @@ function allVoted(state: SussyServerState): boolean {
 	return true;
 }
 
-// ─── Prompts ──────────────────────────────────────────────────────────────────
+// exactly the fields that reset at the start of every round. adding a new
+// per-round field? add it here — not in advanceRound
+type RoundSlice = Pick<
+	SussyServerState,
+	| "taskNumber"
+	| "taskResults"
+	| "correctVoteCount"
+	| "responses"
+	| "votes"
+	| "chooserPlayerId"
+	| "impostorId"
+	| "crewPrompt"
+	| "impostorPrompt"
+>;
+
+function freshRoundSlice(): RoundSlice {
+	return {
+		taskNumber: 1,
+		taskResults: [],
+		correctVoteCount: new Map(),
+		responses: new Map(),
+		votes: new Map(),
+		chooserPlayerId: null,
+		impostorId: null,
+		crewPrompt: "",
+		impostorPrompt: null,
+	};
+}
 
 function pickPrompts(taskType: TaskType): {
 	crewPrompt: string | [string, string, string];
@@ -84,46 +124,43 @@ function pickPrompts(taskType: TaskType): {
 	return { crewPrompt: entry.crew, impostorPrompt: null };
 }
 
-// ─── Secrets ──────────────────────────────────────────────────────────────────
+// single implementation shared by buildSecrets (bulk) and getPlayerSecret (reconnect)
+function computePlayerSecret(
+	state: SussyServerState,
+	playerId: string,
+): SussyPlayerSecret | null {
+	if (!state.players.has(playerId)) return null;
+	if (!state.impostorId) return null;
+
+	const isImpostor = playerId === state.impostorId;
+	const isGlitch = state.roundNumber === 4;
+
+	if (isGlitch) {
+		// glitch round: everyone appears crew, impostor just gets different prompts
+		return {
+			role: "crew",
+			prompt: isImpostor ? state.impostorPrompt : state.crewPrompt,
+			isGlitchRound: true,
+			taskNumber: state.taskNumber,
+		};
+	}
+
+	return {
+		role: isImpostor ? "impostor" : "crew",
+		prompt: isImpostor ? null : state.crewPrompt,
+		isGlitchRound: false,
+		taskNumber: state.taskNumber,
+	};
+}
 
 function buildSecrets(state: SussyServerState): Map<string, unknown> {
 	const map = new Map<string, unknown>();
-	const isGlitch = state.roundNumber === 4;
-
 	for (const playerId of state.players.keys()) {
-		const isImpostor = playerId === state.impostorId;
-		let secret: SussyPlayerSecret;
-
-		if (isGlitch) {
-			secret = {
-				role: "crew",
-				prompt: isImpostor ? state.impostorPrompt : state.crewPrompt,
-				isGlitchRound: true,
-				taskNumber: state.taskNumber,
-			};
-		} else if (isImpostor) {
-			secret = {
-				role: "impostor",
-				prompt: null,
-				isGlitchRound: false,
-				taskNumber: state.taskNumber,
-			};
-		} else {
-			secret = {
-				role: "crew",
-				prompt: state.crewPrompt,
-				isGlitchRound: false,
-				taskNumber: state.taskNumber,
-			};
-		}
-
-		map.set(playerId, secret);
+		const secret = computePlayerSecret(state, playerId);
+		if (secret) map.set(playerId, secret);
 	}
-
 	return map;
 }
-
-// ─── Public State ─────────────────────────────────────────────────────────────
 
 function buildPublicState(state: SussyServerState, room: Room): SussyState {
 	const showResponses =
@@ -137,22 +174,12 @@ function buildPublicState(state: SussyServerState, room: Room): SussyState {
 	const caughtNow =
 		state.phase === "round_result" && (lastTask?.wasCaught ?? false);
 
-	// Compute live majority during voting so client can show real-time feedback
-	let majorityTargetId: string | null = null;
-	if (state.phase === "voting" && state.votes.size > 0) {
-		const tally = new Map<string, number>();
-		for (const targetId of state.votes.values()) {
-			if (!targetId) continue;
-			tally.set(targetId, (tally.get(targetId) ?? 0) + 1);
-		}
-		const threshold = Math.floor(state.players.size / 2) + 1;
-		for (const [targetId, count] of tally) {
-			if (count >= threshold) {
-				majorityTargetId = targetId;
-				break;
-			}
-		}
-	}
+	const majorityTargetId =
+		state.phase === "voting" && state.votes.size > 0
+			? getMajorityTarget(state.votes, state.players.size)
+			: null;
+
+	const { requiresSubmission } = getTaskConfig(state.taskType, state.mode);
 
 	const players: Record<string, SussyPlayerView> = {};
 	for (const [id, p] of state.players) {
@@ -161,7 +188,7 @@ function buildPublicState(state: SussyServerState, room: Room): SussyState {
 			score: room.players.get(id)?.score ?? 0,
 			sleuthedCount: p.totalSleuthed,
 			survivedCount: p.totalSurvived,
-			hasResponded: isNoSubmit(state) ? true : state.responses.has(id),
+			hasResponded: requiresSubmission ? state.responses.has(id) : true,
 			hasVoted: state.votes.has(id),
 			response: showResponses ? (state.responses.get(id) ?? null) : null,
 			voteTargetId: revealVotes ? (state.votes.get(id) ?? null) : null,
@@ -184,9 +211,11 @@ function buildPublicState(state: SussyServerState, room: Room): SussyState {
 	};
 }
 
-// ─── Phase Helpers ────────────────────────────────────────────────────────────
-
 function enterCategorySelect(state: SussyServerState): void {
+	invariant(
+		state.players.size >= 2,
+		`enterCategorySelect requires ≥ 2 players, got ${state.players.size}`,
+	);
 	state.phase = "category_select";
 	state.chooserPlayerId = pickRandomPlayerId(state.players);
 }
@@ -196,17 +225,13 @@ function enterRoleReveal(state: SussyServerState): void {
 	const { crewPrompt, impostorPrompt } = pickPrompts(state.taskType);
 	state.crewPrompt = crewPrompt;
 	state.impostorPrompt = impostorPrompt;
-	state.responses = new Map();
-	state.votes = new Map();
 	state.phase = "role_reveal";
 }
 
 function enterTaskPerform(state: SussyServerState): number {
 	state.responses = new Map();
 	state.phase = "task_perform";
-	return isNoSubmit(state)
-		? HANGOUT_DISPLAY_MS
-		: TASK_DURATIONS_MS[state.taskType];
+	return getTaskConfig(state.taskType, state.mode).durationMs;
 }
 
 function enterVoting(state: SussyServerState): void {
@@ -216,31 +241,34 @@ function enterVoting(state: SussyServerState): void {
 
 function advanceRound(state: SussyServerState): void {
 	state.roundNumber++;
-	state.taskNumber = 1;
-	state.taskResults = [];
-	state.correctVoteCount = new Map();
-	state.responses = new Map();
-	state.votes = new Map();
-	state.chooserPlayerId = null;
-	state.impostorId = "";
-	state.crewPrompt = "";
-	state.impostorPrompt = null;
+	// freshRoundSlice is the single authoritative list of fields that reset
+	Object.assign(state, freshRoundSlice());
 }
 
-// ─── Vote Processing ──────────────────────────────────────────────────────────
+interface VoteComputation {
+	readonly wasCaught: boolean;
+	readonly scoreDeltas: Record<string, number>;
+	readonly newCorrectVoters: ReadonlySet<string>;
+}
 
-function processVotes(state: SussyServerState): {
-	wasCaught: boolean;
-	scoreDeltas: Record<string, number>;
-} {
-	const allowCaught =
-		state.taskType !== "glitch_in_the_chat" || state.taskNumber === 3;
+// pure query — scores current vote state, no mutations
+function computeVoteResult(state: SussyServerState): VoteComputation {
+	invariant(
+		state.impostorId !== null,
+		"computeVoteResult called without a set impostor",
+	);
 
-	const outcome = {
+	const outcome: VoteOutcome = {
 		impostorId: state.impostorId,
 		votes: state.votes,
 		playerCount: state.players.size,
 	};
+
+	// glitch round always runs all three tasks regardless of vote outcome.
+	// catching becomes "official" on task 3. tasks 1 & 2 still award SLEUTH
+	// points for correct votes — only CAUGHT bonus and early termination are held
+	const allowCaught =
+		state.taskType !== "glitch_in_the_chat" || state.taskNumber === 3;
 
 	const result =
 		state.taskType === "thumb_shot"
@@ -252,15 +280,31 @@ function processVotes(state: SussyServerState): {
 					allowCaught,
 				);
 
-	for (const [playerId] of state.players) {
-		if (playerId === state.impostorId) continue;
-		if (state.votes.get(playerId) === state.impostorId) {
-			state.players.get(playerId)!.totalSleuthed++;
-		}
+	return {
+		wasCaught: result.wasCaught,
+		scoreDeltas: result.deltas,
+		newCorrectVoters: result.newCorrectVoters,
+	};
+}
+
+// command — applies computed vote result to mutable state. call computeVoteResult first
+function commitVoteResult(
+	state: SussyServerState,
+	computed: VoteComputation,
+): void {
+	const { wasCaught, scoreDeltas, newCorrectVoters } = computed;
+
+	for (const voterId of newCorrectVoters) {
+		state.correctVoteCount.set(
+			voterId,
+			(state.correctVoteCount.get(voterId) ?? 0) + 1,
+		);
+		state.players.get(voterId)!.totalSleuthed++;
 	}
-	if (!result.wasCaught) {
-		const imp = state.players.get(state.impostorId);
-		if (imp) imp.totalSurvived++;
+
+	if (!wasCaught) {
+		const survivor = state.players.get(state.impostorId!);
+		if (survivor) survivor.totalSurvived++;
 	}
 
 	const voteBreakdown: Record<string, string | null> = {};
@@ -270,19 +314,19 @@ function processVotes(state: SussyServerState): {
 
 	state.taskResults.push({
 		taskNumber: state.taskNumber,
-		wasCaught: result.wasCaught,
+		wasCaught,
 		voteBreakdown,
-		scoreDeltas: result.deltas,
+		scoreDeltas,
 	} satisfies SussyTaskVoteResult);
-
-	return { wasCaught: result.wasCaught, scoreDeltas: result.deltas };
 }
 
 function finalizeRound(state: SussyServerState): void {
+	const { impostorId } = state;
+	invariant(impostorId !== null, "finalizeRound called without a set impostor");
 	state.roundResults.push({
 		roundNumber: state.roundNumber,
 		taskType: state.taskType,
-		impostorId: state.impostorId,
+		impostorId,
 		taskResults: [...state.taskResults],
 		crewPrompt: state.crewPrompt,
 		impostorPrompt: state.impostorPrompt,
@@ -290,7 +334,10 @@ function finalizeRound(state: SussyServerState): void {
 }
 
 function resolveVoting(state: SussyServerState, room: Room): EngineResult {
-	const { wasCaught, scoreDeltas } = processVotes(state);
+	const computed = computeVoteResult(state);
+	commitVoteResult(state, computed);
+
+	const { wasCaught, scoreDeltas } = computed;
 	const isThumb = state.taskType === "thumb_shot";
 	const isLastTask = state.taskNumber === 3;
 
@@ -305,6 +352,7 @@ function resolveVoting(state: SussyServerState, room: Room): EngineResult {
 		};
 	}
 
+	invariant(state.taskNumber !== 3, "Attempted to advance past task 3");
 	state.taskNumber = (state.taskNumber + 1) as 2 | 3;
 	const duration = enterTaskPerform(state);
 	return {
@@ -350,63 +398,19 @@ function handleRoundResultExpired(
 	};
 }
 
-// ─── Action Parser ────────────────────────────────────────────────────────────
-
-const ResponseSchema = z.discriminatedUnion("type", [
-	z.object({ type: z.literal("show_of_hands"), raised: z.boolean() }),
-	z.object({
-		type: z.literal("finger_pointing"),
-		targetId: z.string().nullable(),
-	}),
-	z.object({
-		type: z.literal("finger_blast"),
-		count: z.number().int().min(0).max(5),
-	}),
-	z.object({
-		type: z.literal("thumb_shot"),
-		choices: z.array(z.boolean()).length(3),
-	}),
-	z.object({ type: z.literal("face_turn"), emoji: z.string().nullable() }),
-	z.object({
-		type: z.literal("glitch_in_the_chat"),
-		answers: z.array(z.string()).max(3),
-	}),
-]);
-
-const ActionSchema = z.discriminatedUnion("type", [
-	z.object({
-		type: z.literal("select_category"),
-		category: z.enum([
-			"show_of_hands",
-			"finger_pointing",
-			"finger_blast",
-			"thumb_shot",
-			"face_turn",
-		]),
-	}),
-	z.object({ type: z.literal("submit_response"), response: ResponseSchema }),
-	z.object({ type: z.literal("cast_vote"), targetId: z.string() }),
-]);
-
-function parseAction(raw: unknown): SussyParsedAction | null {
-	const result = ActionSchema.safeParse(raw);
-	return result.success ? (result.data as SussyParsedAction) : null;
-}
-
-// ─── Engine ───────────────────────────────────────────────────────────────────
-
 export const sussyEngine: GameEngineWithSecrets = {
 	gameId: "sussy-impostors",
 
 	getInitialState(): SussyServerState {
 		return {
 			phase: "category_select",
+			// TODO: surface mode selection in lobby when remote is ready. for now, always hangout
 			mode: "hangout",
 			roundNumber: 0,
 			taskNumber: 1,
 			taskType: "show_of_hands",
 			chooserPlayerId: null,
-			impostorId: "",
+			impostorId: null,
 			crewPrompt: "",
 			impostorPrompt: null,
 			responses: new Map(),
@@ -417,7 +421,6 @@ export const sussyEngine: GameEngineWithSecrets = {
 			players: new Map(),
 		};
 	},
-
 	onStart(ctx: GameContext): EngineResult {
 		const state = ctx.room.gamePayload as SussyServerState;
 
@@ -430,6 +433,11 @@ export const sussyEngine: GameEngineWithSecrets = {
 					totalSurvived: 0,
 				} satisfies SussyServerPlayer,
 			]),
+		);
+
+		invariant(
+			state.players.size >= 2,
+			`Cannot start a game with fewer than 2 players (got ${state.players.size})`,
 		);
 
 		advanceRound(state);
@@ -445,7 +453,6 @@ export const sussyEngine: GameEngineWithSecrets = {
 	onAction(ctx: GameContext, playerId: string, raw: unknown): EngineResult {
 		const { room } = ctx;
 		const state = room.gamePayload as SussyServerState;
-		const action = parseAction(raw);
 
 		const noOp = (): EngineResult => ({
 			serverPayload: state,
@@ -453,6 +460,7 @@ export const sussyEngine: GameEngineWithSecrets = {
 			timer: room.timer,
 		});
 
+		const action = parseSussyAction(raw);
 		if (!action) return noOp();
 		if (!state.players.has(playerId)) return noOp();
 
@@ -471,7 +479,8 @@ export const sussyEngine: GameEngineWithSecrets = {
 
 		if (action.type === "submit_response") {
 			if (state.phase !== "task_perform") return noOp();
-			if (isNoSubmit(state)) return noOp();
+			if (!getTaskConfig(state.taskType, state.mode).requiresSubmission)
+				return noOp();
 			if (state.responses.has(playerId)) return noOp();
 			if (action.response.type !== state.taskType) return noOp();
 			state.responses.set(playerId, action.response);
@@ -539,6 +548,7 @@ export const sussyEngine: GameEngineWithSecrets = {
 		}
 
 		if (state.phase === "voting") {
+			// fill absent votes with null so scorer sees complete picture
 			for (const id of state.players.keys()) {
 				if (!state.votes.has(id)) state.votes.set(id, null);
 			}
@@ -556,27 +566,9 @@ export const sussyEngine: GameEngineWithSecrets = {
 		ctx: GameContext,
 		playerId: string,
 	): SussyPlayerSecret | null {
-		const state = ctx.room.gamePayload as SussyServerState;
-		if (!state.players.has(playerId)) return null;
-		if (!state.impostorId) return null;
-
-		const isImpostor = playerId === state.impostorId;
-		const isGlitch = state.roundNumber === 4;
-
-		if (isGlitch) {
-			return {
-				role: "crew",
-				prompt: isImpostor ? state.impostorPrompt : state.crewPrompt,
-				isGlitchRound: true,
-				taskNumber: state.taskNumber,
-			};
-		}
-
-		return {
-			role: isImpostor ? "impostor" : "crew",
-			prompt: isImpostor ? null : state.crewPrompt,
-			isGlitchRound: false,
-			taskNumber: state.taskNumber,
-		};
+		return computePlayerSecret(
+			ctx.room.gamePayload as SussyServerState,
+			playerId,
+		);
 	},
 };
