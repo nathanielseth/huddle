@@ -1,27 +1,16 @@
-import type { FighterStats } from "./battle.js";
+import type { FighterStats } from "./battle";
+import { extractFeatures, FEATURE_NAMES } from "./features";
 
 export interface OddsResult {
 	probability: { fighter1: number; fighter2: number };
 	moneyline: { fighter1: number; fighter2: number };
 }
-import { SABONG_CONSTANTS } from "./types.js";
 
-// stat normalization
+export type HeuristicWeights = Record<(typeof FEATURE_NAMES)[number], number>;
 
-const R = SABONG_CONSTANTS.STAT_RANGES;
-
-// precomputed spreads, must match calibrate.ts exactly.
-const SPREADS = {
-	health: R.health[1] - R.health[0], // 60
-	attack: R.attack[1] - R.attack[0], // 60
-	defense: R.defense[1] - R.defense[0], // 60
-	speed: R.speed[1] - R.speed[0], // 50
-	critRate: R.critRate[1] - R.critRate[0], // 80
-	determination: R.determination[1] - R.determination[0], // 5
-} as const;
-
-// from calibrate script
-export const WEIGHTS = {
+// logistic-regression weights produced by calibrate.ts. to retrain: run
+// `tsx calibrate.ts`, review weights.json, update this const and commit together
+export const WEIGHTS: HeuristicWeights = {
 	health: 0.6294,
 	attack: 1.5171,
 	defense: 0.8763,
@@ -37,52 +26,28 @@ export const WEIGHTS = {
 	health_sq: -0.0037,
 } as const;
 
-export type HeuristicWeights = typeof WEIGHTS;
+// pre-computed weight vector matching extractFeatures order, avoids allocation
+const DEFAULT_WEIGHT_VECTOR: number[] = FEATURE_NAMES.map((n) => WEIGHTS[n]);
 
-// steepness controls how sharply probability diverges from 0.5
-const SIGMOID_STEEPNESS = 3.2;
-
-// core mafs
+// controls how sharply win probability diverges from 0.5 as stat differences
+// grow. calibrate.ts imports this to guarantee training and inference stay aligned
+export const SIGMOID_STEEPNESS = 3.2;
 
 function sigmoid(x: number): number {
 	return 1.0 / (1.0 + Math.exp(-x));
 }
 
-function norm(delta: number, spread: number): number {
-	return delta / spread;
+function dotProduct(a: number[], b: number[]): number {
+	let sum = 0;
+	for (let i = 0; i < a.length; i++) sum += a[i]! * b[i]!;
+	return sum;
 }
 
-// public api
-
-// predicts fighter1's win probability
-export function predictWinProbability(
-	f1: FighterStats,
-	f2: FighterStats,
-	weights: HeuristicWeights = WEIGHTS,
-): number {
-	const h = norm(f1.health - f2.health, SPREADS.health);
-	const a = norm(f1.attack - f2.attack, SPREADS.attack);
-	const d = norm(f1.defense - f2.defense, SPREADS.defense);
-	const s = norm(f1.speed - f2.speed, SPREADS.speed);
-	const c = norm(f1.critRate - f2.critRate, SPREADS.critRate);
-	const det = norm(f1.determination - f2.determination, SPREADS.determination);
-
-	const score =
-		h * weights.health +
-		a * weights.attack +
-		d * weights.defense +
-		s * weights.speed +
-		c * weights.critRate +
-		det * weights.determination +
-		h * a * weights.health_attack +
-		a * c * weights.attack_crit +
-		d * h * weights.defense_health +
-		s * a * weights.speed_attack +
-		a * a * weights.attack_sq +
-		d * d * weights.defense_sq +
-		h * h * weights.health_sq;
-
-	return Math.min(Math.max(sigmoid(score * SIGMOID_STEEPNESS), 0.02), 0.98);
+// converts american moneyline to decimal payout multiplier
+export function moneylineToDecimal(ml: number): number {
+	if (ml > 0) return 1 + ml / 100;
+	if (ml < 0) return 1 + 100 / Math.abs(ml);
+	return 2.0;
 }
 
 function probabilityToMoneyline(p: number): number {
@@ -90,6 +55,23 @@ function probabilityToMoneyline(p: number): number {
 	return Math.round(100 * ((1 - p) / p));
 }
 
+// predicts fighter1's win probability using calibrated logistic model.
+// clamped to [0.02, 0.98] so moneyline conversion never divides by zero
+export function predictWinProbability(
+	f1: FighterStats,
+	f2: FighterStats,
+	weights: HeuristicWeights = WEIGHTS,
+): number {
+	const wv =
+		weights === WEIGHTS
+			? DEFAULT_WEIGHT_VECTOR
+			: FEATURE_NAMES.map((n) => weights[n]);
+	const score = dotProduct(extractFeatures(f1, f2), wv);
+	return Math.min(Math.max(sigmoid(score * SIGMOID_STEEPNESS), 0.02), 0.98);
+}
+
+// returns raw probability and american moneyline odds for a matchup.
+// probability is authoritative; moneyline carries integer-rounding loss
 export function getMatchupOdds(
 	fighter1: FighterStats,
 	fighter2: FighterStats,

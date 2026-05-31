@@ -1,9 +1,7 @@
-import type { BattleEvent } from "../../../../shared/sabong.js";
-import { SABONG_CONSTANTS } from "./types.js";
+import type { BattleEvent } from "../../../../shared/sabong";
+import { SABONG_CONSTANTS } from "./types";
 
 const { CRIT_MULTIPLIER, MAX_TURNS, MAX_ATTACK_BOOST } = SABONG_CONSTANTS;
-
-// types
 
 export interface FighterStats {
 	id: string;
@@ -21,32 +19,24 @@ export interface BattleResult {
 	log: BattleEvent[];
 }
 
-// constants
-
 const MOVE_ACCURACY = 0.9;
 const BUFF_INCREMENT = 20;
-const POWER_SCALE = Math.pow(20 / 150, 0.7);
 
-// derived stats
+// normalises damage so fighters at midpoint stat ranges deal intended damage
+const DAMAGE_REF_ATTACK = 20;
+const DAMAGE_REF_DEFENSE = 150;
+const POWER_SCALE = Math.pow(DAMAGE_REF_ATTACK / DAMAGE_REF_DEFENSE, 0.7);
 
-interface DerivedStats {
-	varRange: number;
+// higher speed → tighter variance → more consistent damage output
+function varRange(speed: number): number {
+	return 0.25 / (1.0 + speed * 0.01);
 }
 
-function deriveFighterStats(f: FighterStats): DerivedStats {
-	return {
-		varRange: 0.25 / (1.0 + f.speed * 0.01),
-	};
+// attacker's determination shreds a fraction of defender's defense.
+// max determination (5) reduces effective defense by 10%
+function effectiveDefense(defense: number, determination: number): number {
+	return Math.max(defense * (1.0 - determination * 0.02), 1.0);
 }
-
-function calcEffDef(
-	defenderDefense: number,
-	attackerDetermination: number,
-): number {
-	return Math.max(defenderDefense * (1.0 - attackerDetermination * 0.02), 1.0);
-}
-
-// move selection
 
 type Move = "buff" | "strike" | "double_strike";
 
@@ -57,197 +47,192 @@ function selectMove(atBoostCap: boolean): Move {
 	return "double_strike";
 }
 
-// damage calculation
-
 function calcDamage(
 	atk: number,
 	critRate: number,
-	varRange: number,
+	vr: number,
 	defenderDefense: number,
 	attackerDetermination: number,
 ): [damage: number, isCrit: boolean] {
 	const isCrit = Math.random() * 100 <= critRate;
 	const critMult = isCrit ? CRIT_MULTIPLIER : 1.0;
-	const effDef = calcEffDef(defenderDefense, attackerDetermination);
+	const effDef = effectiveDefense(defenderDefense, attackerDetermination);
 	const base = (2.5 * atk * atk) / (3.5 * effDef + atk);
-	const variance = 1.0 - varRange * Math.random();
+	const variance = 1.0 - vr * Math.random();
 	return [
 		Math.max(Math.round(base * POWER_SCALE * variance * critMult), 1),
 		isCrit,
 	];
 }
 
+interface TurnResult {
+	outcome: "ko" | "continue";
+	attackerBoost: number;
+	defenderHp: number;
+}
+
+// pure function — all state passed in and returned, no mutations
+function execMove(
+	turn: number,
+	attacker: FighterStats,
+	attackerVr: number,
+	attackerBoost: number,
+	defender: FighterStats,
+	defenderHp: number,
+	log: BattleEvent[],
+): TurnResult {
+	const atBoostCap = attackerBoost >= MAX_ATTACK_BOOST;
+	const move = selectMove(atBoostCap);
+
+	if (move === "buff") {
+		const newBoost = Math.min(attackerBoost + BUFF_INCREMENT, MAX_ATTACK_BOOST);
+		log.push({
+			type: "buff",
+			turn,
+			attackerId: attacker.id,
+			newAttackBoost: newBoost,
+		});
+		return { outcome: "continue", attackerBoost: newBoost, defenderHp };
+	}
+
+	const effectiveAtk = attacker.attack + attackerBoost;
+	let currentDefHp = defenderHp;
+
+	// first hit
+	if (Math.random() <= MOVE_ACCURACY) {
+		const [dmg, isCrit] = calcDamage(
+			effectiveAtk,
+			attacker.critRate,
+			attackerVr,
+			defender.defense,
+			attacker.determination,
+		);
+		currentDefHp = Math.max(currentDefHp - dmg, 0);
+		log.push({
+			type: "move",
+			turn,
+			attackerId: attacker.id,
+			move,
+			damage: dmg,
+			crit: isCrit,
+			defenderHp: currentDefHp,
+		});
+		if (currentDefHp <= 0)
+			return { outcome: "ko", attackerBoost, defenderHp: 0 };
+	} else {
+		log.push({ type: "miss", turn, attackerId: attacker.id, move });
+	}
+
+	// second hit — double_strike only, each accuracy roll independent
+	if (move === "double_strike" && Math.random() <= MOVE_ACCURACY) {
+		const [dmg, isCrit] = calcDamage(
+			effectiveAtk,
+			attacker.critRate,
+			attackerVr,
+			defender.defense,
+			attacker.determination,
+		);
+		currentDefHp = Math.max(currentDefHp - dmg, 0);
+		log.push({
+			type: "move",
+			turn,
+			attackerId: attacker.id,
+			move: "double_strike",
+			damage: dmg,
+			crit: isCrit,
+			defenderHp: currentDefHp,
+		});
+		if (currentDefHp <= 0)
+			return { outcome: "ko", attackerBoost, defenderHp: 0 };
+	}
+
+	return { outcome: "continue", attackerBoost, defenderHp: currentDefHp };
+}
+
 export function simulateBattle(
 	fighter1: FighterStats,
 	fighter2: FighterStats,
 ): BattleResult {
-	const d1 = deriveFighterStats(fighter1);
-	const d2 = deriveFighterStats(fighter2);
-
 	const log: BattleEvent[] = [];
+
+	// faster fighter goes first, ties broken by coin flip
+	const f1First =
+		fighter1.speed !== fighter2.speed
+			? fighter1.speed > fighter2.speed
+			: Math.random() < 0.5;
+
+	const [first, second] = f1First ? [fighter1, fighter2] : [fighter2, fighter1];
+	const [firstVr, secondVr] = f1First
+		? [varRange(fighter1.speed), varRange(fighter2.speed)]
+		: [varRange(fighter2.speed), varRange(fighter1.speed)];
+
+	let hpOfFirst = first.health;
+	let hpOfSecond = second.health;
+	let boostFirst = 0;
+	let boostSecond = 0;
+
 	let winnerId: string | null = null;
 
-	// ref objects let execmove mutate hp/boost without returning them
-	const hp1Ref = { v: fighter1.health };
-	const hp2Ref = { v: fighter2.health };
-	const boost1Ref = { v: 0 };
-	const boost2Ref = { v: 0 };
-
-	const execMove = (
-		turn: number,
-		attacker: FighterStats,
-		attackerBoost: { v: number },
-		attackerDerived: DerivedStats,
-		defender: FighterStats,
-		defenderHp: { v: number },
-		defenderDerived: DerivedStats,
-	): "ko" | "continue" => {
-		const atBoostCap = attackerBoost.v >= MAX_ATTACK_BOOST;
-		const move = selectMove(atBoostCap);
-
-		if (move === "buff") {
-			attackerBoost.v = Math.min(
-				attackerBoost.v + BUFF_INCREMENT,
-				MAX_ATTACK_BOOST,
-			);
-			log.push({
-				type: "buff",
-				turn,
-				attackerId: attacker.id,
-				newAttackBoost: attackerBoost.v,
-			});
-			return "continue";
-		}
-
-		const effectiveAtk = attacker.attack + attackerBoost.v;
-
-		// first hit
-		if (Math.random() <= MOVE_ACCURACY) {
-			const [dmg, isCrit] = calcDamage(
-				effectiveAtk,
-				attacker.critRate,
-				attackerDerived.varRange,
-				defender.defense,
-				attacker.determination,
-			);
-			defenderHp.v = Math.max(defenderHp.v - dmg, 0);
-			log.push({
-				type: "move",
-				turn,
-				attackerId: attacker.id,
-				move,
-				damage: dmg,
-				crit: isCrit,
-				defenderHp: defenderHp.v,
-			});
-			if (defenderHp.v <= 0) return "ko";
-		} else {
-			log.push({ type: "miss", turn, attackerId: attacker.id, move });
-		}
-
-		// second hit (double_strike only, both rolls are independent)
-		if (move === "double_strike" && Math.random() <= MOVE_ACCURACY) {
-			const [dmg, isCrit] = calcDamage(
-				effectiveAtk,
-				attacker.critRate,
-				attackerDerived.varRange,
-				defender.defense,
-				attacker.determination,
-			);
-			defenderHp.v = Math.max(defenderHp.v - dmg, 0);
-			log.push({
-				type: "move",
-				turn,
-				attackerId: attacker.id,
-				move: "double_strike",
-				damage: dmg,
-				crit: isCrit,
-				defenderHp: defenderHp.v,
-			});
-			if (defenderHp.v <= 0) return "ko";
-		}
-
-		return "continue";
-	};
-
-	// speed tie 50/50
-	const fighter1GoesFirst =
-		fighter1.speed > fighter2.speed
-			? true
-			: fighter2.speed > fighter1.speed
-				? false
-				: Math.random() < 0.5;
-
-	const first = fighter1GoesFirst ? fighter1 : fighter2;
-	const second = fighter1GoesFirst ? fighter2 : fighter1;
-	const firstBoost = fighter1GoesFirst ? boost1Ref : boost2Ref;
-	const secondBoost = fighter1GoesFirst ? boost2Ref : boost1Ref;
-	const firstDerived = fighter1GoesFirst ? d1 : d2;
-	const secondDerived = fighter1GoesFirst ? d2 : d1;
-	const firstDefHp = fighter1GoesFirst ? hp2Ref : hp1Ref;
-	const secondDefHp = fighter1GoesFirst ? hp1Ref : hp2Ref;
-
-	outer: for (let turn = 1; turn <= MAX_TURNS; turn++) {
-		if (
-			execMove(
-				turn,
-				first,
-				firstBoost,
-				firstDerived,
-				second,
-				firstDefHp,
-				secondDerived,
-			) === "ko"
-		) {
+	for (let turn = 1; turn <= MAX_TURNS; turn++) {
+		// first fighter attacks second
+		const r1 = execMove(
+			turn,
+			first,
+			firstVr,
+			boostFirst,
+			second,
+			hpOfSecond,
+			log,
+		);
+		boostFirst = r1.attackerBoost;
+		hpOfSecond = r1.defenderHp;
+		if (r1.outcome === "ko") {
 			winnerId = first.id;
-			break outer;
+			break;
 		}
-		if (
-			execMove(
-				turn,
-				second,
-				secondBoost,
-				secondDerived,
-				first,
-				secondDefHp,
-				firstDerived,
-			) === "ko"
-		) {
+
+		// second fighter attacks first
+		const r2 = execMove(
+			turn,
+			second,
+			secondVr,
+			boostSecond,
+			first,
+			hpOfFirst,
+			log,
+		);
+		boostSecond = r2.attackerBoost;
+		hpOfFirst = r2.defenderHp;
+		if (r2.outcome === "ko") {
 			winnerId = second.id;
-			break outer;
+			break;
 		}
 	}
 
-	// timeout resolution
+	// timeout: resolve by HP advantage or coin flip
 	if (winnerId === null) {
-		if (hp1Ref.v > hp2Ref.v) {
-			winnerId = fighter1.id;
-			log.push({
-				type: "timeout",
-				winnerId: fighter1.id,
-				reason: "hp_advantage",
-			});
-		} else if (hp2Ref.v > hp1Ref.v) {
-			winnerId = fighter2.id;
-			log.push({
-				type: "timeout",
-				winnerId: fighter2.id,
-				reason: "hp_advantage",
-			});
+		if (hpOfFirst !== hpOfSecond) {
+			winnerId = hpOfFirst > hpOfSecond ? first.id : second.id;
+			log.push({ type: "timeout", winnerId, reason: "hp_advantage" });
 		} else {
-			winnerId = Math.random() < 0.5 ? fighter1.id : fighter2.id;
+			winnerId = Math.random() < 0.5 ? first.id : second.id;
 			log.push({ type: "timeout", winnerId, reason: "coinflip" });
 		}
 	} else {
 		log.push({
 			type: "ko",
-			loserId: winnerId === fighter1.id ? fighter2.id : fighter1.id,
+			loserId: winnerId === first.id ? second.id : first.id,
 		});
 	}
 
 	return {
-		winnerId,
+		winnerId: winnerId!,
 		loserId: winnerId === fighter1.id ? fighter2.id : fighter1.id,
 		log,
 	};
+}
+
+// convenience wrapper for monte carlo simulations. uses canonical simulateBattle
+export function fightOnce(a: FighterStats, b: FighterStats): boolean {
+	return simulateBattle(a, b).winnerId === a.id;
 }
