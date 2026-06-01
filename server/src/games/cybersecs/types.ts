@@ -10,7 +10,7 @@ import type {
 	WinReason,
 	EhIntel,
 	CybsecsAction,
-} from "../../../../shared/cybersecs.js";
+} from "../../../../shared/cybersecs";
 
 // engine mutates state in place. readonly on identity fields prevents reassignment
 // phase-scoped fields reset to null on each phase entry
@@ -19,7 +19,7 @@ export interface CybsecsServerPlayer {
 	readonly role: CybsecsRole;
 	readonly alignment: CybsecsAlignment;
 
-	// role knowledge, written once by assignRoles, never mutated after
+	// role knowledge — written once by assignRoles, never mutated after
 	knownHackerIds: readonly string[];
 	knownEthicalHackerId: string | null;
 	// analyst only: two IDs in randomized order (one sysadmin, one spoofer), null otherwise
@@ -36,36 +36,41 @@ export interface CybsecsServerPlayer {
 	ehIntelMissionIndex: number | null; // mission when intel was generated, for UI gating
 
 	// obfuscator state
-	obfuscatorUsesLeft: number; // 1 for obfuscator, 0 otherwise, decremented on use
-	// armed via toggle_obfuscate, persists across rejections, consumed on mission resolve
-	obfuscateArmed: boolean;
-	// true result delivered privately on obfuscated resolve, persists for reconnect
-	obfuscatorIntel: ObfuscatorIntel | null;
+	obfuscatorUsesLeft: number; // 1 for obfuscator, 0 otherwise
+	obfuscateArmed: boolean; // persists across rejections, consumed on mission resolve
+	obfuscatorIntel: ObfuscatorIntel | null; // true result delivered privately on resolve
 	obfuscatorIntelMissionIndex: number | null; // mission when intel was set, for UI gating
 }
 
-// pure output of resolveMission when EH uses an ability. applied by applyMissionResult
-// intel: null = block (no new info), EhIntel = backfire (presence detected)
-// applyMissionResult only writes ehIntel when intel !== null
-export interface EhEffect {
-	readonly playerId: string;
-	readonly usesLeft: number;
-	readonly intel: EhIntel | null;
-}
+// Discriminated union — kind is the authoritative signal at the type level.
+// block:    usesLeft decremented; ehIntel NOT written (mission was neutralized, no new info).
+// backfire: usesLeft decremented; intel written to EH's secret.
+export type EhOutcome =
+	| {
+			readonly kind: "block";
+			readonly playerId: string;
+			readonly usesLeft: number;
+	  }
+	| {
+			readonly kind: "backfire";
+			readonly playerId: string;
+			readonly usesLeft: number;
+			readonly intel: EhIntel;
+	  };
 
 // pure output of resolveMission when obfuscation is active
 export interface ObfuscatorEffect {
 	readonly recipientId: string; // player who receives the true result privately
-	readonly trueResult: Extract<MissionResult, { obfuscated: false }>; // never masked
+	readonly trueResult: Extract<MissionResult, { obfuscated: false }>;
 }
 
 export interface MissionResolution {
-	// pushed to state.missionResults, obfuscated variant when ability active
+	// pushed to state.missionResults — obfuscated variant when ability active
 	readonly publicResult: MissionResult;
-	// drives secureds/hacked and win detection, always non-obfuscated
+	// drives win detection, always non-obfuscated
 	readonly trueResult: Extract<MissionResult, { obfuscated: false }>;
-	readonly ehEffect?: EhEffect; // present when EH used ability
-	readonly obfuscatorEffect?: ObfuscatorEffect; // present when obfuscator armed and consumed
+	readonly ehOutcome?: EhOutcome;
+	readonly obfuscatorEffect?: ObfuscatorEffect;
 }
 
 export interface CybsecsServerState {
@@ -77,16 +82,11 @@ export interface CybsecsServerState {
 	rejectionCount: number;
 	nominatedTeam: string[];
 	teamSize: number;
-	// accumulates across rejections within a mission, resets on new mission index
 	passedPlayerIds: string[];
 	players: Map<string, CybsecsServerPlayer>;
 	roleIndex: Map<CybsecsRole, string>;
-	// public mission results, contains obfuscated entries when ability was active
 	missionResults: MissionResult[];
-	// true secured count, drives win detection, not published directly
-	secureds: number;
-	// true hacked count, drives win detection
-	hacked: number;
+	trueMissionResults: Extract<MissionResult, { obfuscated: false }>[];
 	winner: CybsecsAlignment | null;
 	winReason: WinReason | null;
 }

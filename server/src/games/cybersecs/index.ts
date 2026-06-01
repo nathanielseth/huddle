@@ -3,35 +3,25 @@ import type {
 	GameEngineWithSecrets,
 	GameContext,
 	EngineResult,
-} from "../../engine/GameEngine.js";
-import type { GameTimer } from "../../../../shared/types.js";
+} from "../../engine/GameEngine";
+import type { GameTimer } from "../../../../shared/types";
 import type {
 	CybsecsState,
 	CybsecsPlayerView,
 	CybsecsSecret,
-	MissionResult,
-	EhIntel,
-} from "../../../../shared/cybersecs.js";
-import type {
-	CybsecsServerState,
-	CybsecsServerAction,
-	MissionResolution,
-} from "./types.js";
-import { C, requiredHacksFor } from "./constants.js";
-import { pickMode, assignRoles, buildRoleIndex, shuffle } from "./roles.js";
-import { CybsecsActionSchema } from "./schemas.js";
-
-function assertInvariant(
-	condition: boolean,
-	message: string,
-): asserts condition {
-	if (!condition) throw new Error(`Invariant violation: ${message}`);
-}
-
-const makeTimer = (durationMs: number): GameTimer => ({
-	startsAt: Date.now(),
-	duration: durationMs,
-});
+} from "../../../../shared/cybersecs";
+import type { CybsecsServerState, CybsecsServerAction } from "./types";
+import { C } from "./constants";
+import { pickMode, assignRoles, buildRoleIndex } from "./roles";
+import {
+	resolveMission,
+	commitMissionResult,
+	getWinCounts,
+} from "./mission";
+import { CybsecsActionSchema } from "./schemas";
+import { shuffle } from "../lib/random";
+import { makeTimer } from "../lib/timer";
+import { invariant } from "../lib/assert";
 
 function playerSecret(
 	state: CybsecsServerState,
@@ -90,7 +80,7 @@ function buildPublicState(state: CybsecsServerState): CybsecsState {
 		.filter(([, p]) => p.skipVote === true)
 		.map(([id]) => id);
 
-	// apparent counts exclude obfuscated missions
+	// apparent counts exclude obfuscated missions. true counts via getWinCounts
 	let apparentSecureds = 0;
 	let apparentHacked = 0;
 	for (const r of state.missionResults) {
@@ -162,7 +152,7 @@ function enterMission(state: CybsecsServerState): GameTimer {
 	return makeTimer(C.MISSION_MS);
 }
 
-// fills the team from the leader's position clockwise on timer expiry
+// fills team from leader's position clockwise on timer expiry
 function autoNominate(state: CybsecsServerState): void {
 	const { playerOrder, leaderIndex, teamSize } = state;
 	const candidates = [
@@ -172,7 +162,7 @@ function autoNominate(state: CybsecsServerState): void {
 	state.nominatedTeam = candidates.slice(0, teamSize);
 }
 
-// returns EngineResult when handled, null when caller should fall through to noOp
+// returns null to signal caller should fall through to noOp
 function handleToggleObfuscate(
 	state: CybsecsServerState,
 	playerId: string,
@@ -195,162 +185,25 @@ function handleToggleObfuscate(
 	return makeResult(state, currentTimer, payloads);
 }
 
-// step 1: true hack count with EH logic (override only)
-// step 2: obfuscation check. EH backfire intel always delivered regardless
-// ehEffect.intel: null = block (no new intel), EhIntel = backfire (presence detected)
-// applyMissionResult only writes ehIntel when intel !== null
-function resolveMission(state: CybsecsServerState): MissionResolution {
-	const { missionIndex, nominatedTeam, players, mode } = state;
-	const playerCount = state.playerOrder.length;
-	const reqHacks = requiredHacksFor(playerCount, missionIndex);
-	const teamPlayers = nominatedTeam.map((id) => players.get(id)!);
-
-	let trueHackCount: number;
-	let ehEffect: MissionResolution["ehEffect"];
-
-	if (mode !== "override") {
-		trueHackCount = teamPlayers.filter(
-			(p) => p.missionAction === "hack",
-		).length;
-	} else {
-		const realHackCount = teamPlayers.filter(
-			(p) => p.alignment === "hacker" && p.missionAction === "hack",
-		).length;
-
-		const ehPlayer = teamPlayers.find((p) => p.role === "ethical_hacker");
-
-		if (
-			ehPlayer !== undefined &&
-			ehPlayer.missionAction === "hack" &&
-			ehPlayer.ehUsesLeft > 0
-		) {
-			const usesLeft = ehPlayer.ehUsesLeft - 1;
-
-			if (realHackCount >= 1) {
-				// block: neutralize all real hacks, intel null = no new information
-				trueHackCount = 0;
-				ehEffect = { playerId: ehPlayer.playerId, usesLeft, intel: null };
-			} else {
-				// backfire: EH hacked with no real hackers, black hat is undetectable
-				const anyDetectable = teamPlayers.some(
-					(p) => p.alignment === "hacker" && p.role !== "black_hat",
-				);
-				const intel: EhIntel = anyDetectable
-					? "hacker_detected"
-					: "no_hacker_detected";
-				trueHackCount = reqHacks;
-				ehEffect = { playerId: ehPlayer.playerId, usesLeft, intel };
-			}
-		} else {
-			trueHackCount = realHackCount;
-		}
-	}
-
-	const trueResult: Extract<MissionResult, { obfuscated: false }> = {
-		obfuscated: false,
-		missionIndex,
-		hackCount: trueHackCount,
-		requiredHacks: reqHacks,
-		secured: trueHackCount < reqHacks,
-	};
-
-	// obfuscation check
-	const obfuscatorId = state.roleIndex.get("obfuscator");
-	const obfuscatorPlayer = obfuscatorId
-		? state.players.get(obfuscatorId)
-		: undefined;
-
-	if (
-		!obfuscatorPlayer ||
-		!obfuscatorPlayer.obfuscateArmed ||
-		obfuscatorPlayer.obfuscatorUsesLeft <= 0
-	) {
-		return {
-			publicResult: trueResult,
-			trueResult,
-			...(ehEffect !== undefined && { ehEffect }),
-		};
-	}
-
-	// intel to obfuscator if on team, else random mission participant
-	const recipientId = nominatedTeam.includes(obfuscatorPlayer.playerId)
-		? obfuscatorPlayer.playerId
-		: nominatedTeam[Math.floor(Math.random() * nominatedTeam.length)]!;
-
-	const obfuscatorEffect: MissionResolution["obfuscatorEffect"] = {
-		recipientId,
-		trueResult,
-	};
-
-	const publicResult: Extract<MissionResult, { obfuscated: true }> = {
-		obfuscated: true,
-		missionIndex,
-		requiredHacks: reqHacks,
-	};
-
-	return {
-		publicResult,
-		trueResult,
-		...(ehEffect !== undefined && { ehEffect }),
-		obfuscatorEffect,
-	};
-}
-
-// commits a MissionResolution to state. counter updates always use trueResult
-// emits private payloads for EH, obfuscator, and intel recipient
-function applyMissionResult(
+// builds private payloads for player IDs returned by commitMissionResult
+function collectSecretPayloads(
 	state: CybsecsServerState,
-	{ publicResult, trueResult, ehEffect, obfuscatorEffect }: MissionResolution,
+	updatedIds: Set<string>,
 ): Map<string, CybsecsSecret> | undefined {
-	state.missionResults.push(publicResult);
-	if (trueResult.secured) state.secureds++;
-	else state.hacked++;
-	state.phase = "mission_result";
-
+	if (updatedIds.size === 0) return undefined;
 	const payloads = new Map<string, CybsecsSecret>();
-
-	if (ehEffect) {
-		const ehPlayer = state.players.get(ehEffect.playerId);
-		if (ehPlayer) {
-			ehPlayer.ehUsesLeft = ehEffect.usesLeft;
-			// only write intel on backfire, block must not overwrite stored intel
-			if (ehEffect.intel !== null) {
-				ehPlayer.ehIntel = ehEffect.intel;
-				ehPlayer.ehIntelMissionIndex = state.missionIndex;
-			}
-			const secret = playerSecret(state, ehEffect.playerId);
-			if (secret) payloads.set(ehEffect.playerId, secret);
-		}
+	for (const id of updatedIds) {
+		const secret = playerSecret(state, id);
+		if (secret) payloads.set(id, secret);
 	}
-
-	if (obfuscatorEffect) {
-		const obfuscatorId = state.roleIndex.get("obfuscator");
-		const obfPlayer = obfuscatorId
-			? state.players.get(obfuscatorId)
-			: undefined;
-		if (obfPlayer) {
-			obfPlayer.obfuscatorUsesLeft--;
-			obfPlayer.obfuscateArmed = false;
-			const secret = playerSecret(state, obfPlayer.playerId);
-			if (secret) payloads.set(obfPlayer.playerId, secret);
-		}
-
-		const recipient = state.players.get(obfuscatorEffect.recipientId);
-		if (recipient) {
-			recipient.obfuscatorIntel = obfuscatorEffect.trueResult;
-			recipient.obfuscatorIntelMissionIndex = state.missionIndex;
-			const secret = playerSecret(state, obfuscatorEffect.recipientId);
-			if (secret) payloads.set(obfuscatorEffect.recipientId, secret);
-		}
-	}
-
 	return payloads.size > 0 ? payloads : undefined;
 }
 
 function executeMission(state: CybsecsServerState): EngineResult {
 	const resolution = resolveMission(state);
-	const updatedSecrets = applyMissionResult(state, resolution);
-	return makeResult(state, makeTimer(C.MISSION_RESULT_MS), updatedSecrets);
+	const updatedIds = commitMissionResult(state, resolution);
+	const payloads = collectSecretPayloads(state, updatedIds);
+	return makeResult(state, makeTimer(C.MISSION_RESULT_MS), payloads);
 }
 
 function resolveVoting(state: CybsecsServerState): EngineResult {
@@ -375,9 +228,11 @@ function resolveVoting(state: CybsecsServerState): EngineResult {
 	return makeResult(state, enterNominating(state));
 }
 
-// win detection reads true counters, never apparent public values
+// win detection reads true counters via getWinCounts, never apparent public values
 function afterMissionResult(state: CybsecsServerState): EngineResult {
-	if (state.secureds >= 3) {
+	const { secureds, hacked } = getWinCounts(state);
+
+	if (secureds >= 3) {
 		if (state.mode === "exposure") {
 			state.phase = "doxxing";
 			return makeResult(state, makeTimer(C.DOXXING_MS));
@@ -388,7 +243,7 @@ function afterMissionResult(state: CybsecsServerState): EngineResult {
 		return makeResult(state, null, undefined, "ended");
 	}
 
-	if (state.hacked >= 3) {
+	if (hacked >= 3) {
 		state.winner = "hacker";
 		state.winReason = "hackers_hacked_three";
 		state.phase = "game_over";
@@ -408,12 +263,12 @@ function resolveDoxx(
 	state: CybsecsServerState,
 	targetId: string,
 ): EngineResult {
-	const target = state.players.get(targetId);
-	assertInvariant(
-		target !== undefined,
+	invariant(
+		state.players.has(targetId),
 		`resolveDoxx: unknown targetId ${targetId}`,
 	);
 
+	const target = state.players.get(targetId)!;
 	state.winner = target.role === "sysadmin" ? "hacker" : "agent";
 	state.winReason =
 		target.role === "sysadmin" ? "doxx_sysadmin" : "doxx_failed";
@@ -440,8 +295,7 @@ export const cybsecsEngine: GameEngine & GameEngineWithSecrets = {
 			players: new Map(),
 			roleIndex: new Map(),
 			missionResults: [],
-			secureds: 0,
-			hacked: 0,
+			trueMissionResults: [],
 			winner: null,
 			winReason: null,
 		};
@@ -632,7 +486,7 @@ export const cybsecsEngine: GameEngine & GameEngineWithSecrets = {
 				const target =
 					agentPlayers[Math.floor(Math.random() * agentPlayers.length)];
 
-				assertInvariant(
+				invariant(
 					target !== undefined,
 					"Doxxing phase has no agent-aligned players — invalid game state",
 				);

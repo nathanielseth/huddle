@@ -2,12 +2,12 @@ import type {
 	GameMode,
 	CybsecsRole,
 	CybsecsAlignment,
-} from "../../../../shared/cybersecs.js";
+} from "../../../../shared/cybersecs";
 
 export const C = {
 	ROLE_REVEAL_MS: 15_000,
 	TALKING_MS: 90_000,
-	NOMINATING_MS: 45_000,
+	NOMINATING_MS: 60_000,
 	VOTING_MS: 30_000,
 	MISSION_MS: 30_000,
 	MISSION_RESULT_MS: 8_000,
@@ -44,7 +44,7 @@ export const SINGLETON_ROLES = new Set<CybsecsRole>([
 	"analyst",
 	"ethical_hacker",
 	"black_hat",
-	"trojan",
+	"honeypot",
 	"obfuscator",
 	"spoofer",
 	"intern",
@@ -70,7 +70,7 @@ export const ROLE_ALIGNMENT: Record<CybsecsRole, CybsecsAlignment> = {
 	sysadmin: "agent",
 	analyst: "agent",
 	ethical_hacker: "agent",
-	trojan: "agent",
+	honeypot: "agent",
 	hacker: "hacker",
 	doxxer: "hacker",
 	intern: "hacker",

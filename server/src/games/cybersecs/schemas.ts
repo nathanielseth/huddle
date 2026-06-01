@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { MAX_TEAM_SIZE } from "./constants.js";
+import { MAX_TEAM_SIZE } from "./constants";
 
 const playerId = z.string().trim().min(1);
 

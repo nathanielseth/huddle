@@ -1,13 +1,8 @@
-import type { GameMode, CybsecsRole } from "../../../../shared/cybersecs.js";
-import type { CybsecsServerPlayer } from "./types.js";
-import { ROLE_ALIGNMENT, MODE_WEIGHTS, SINGLETON_ROLES } from "./constants.js";
-
-function assertInvariant(
-	condition: boolean,
-	message: string,
-): asserts condition {
-	if (!condition) throw new Error(`Invariant violation: ${message}`);
-}
+import type { GameMode, CybsecsRole } from "../../../../shared/cybersecs";
+import type { CybsecsServerPlayer } from "./types";
+import { ROLE_ALIGNMENT, MODE_WEIGHTS, SINGLETON_ROLES } from "./constants";
+import { shuffle } from "../lib/random";
+import { invariant } from "../lib/assert";
 
 function assertNever(x: never): never {
 	throw new Error(`Unhandled role: ${String(x)}`);
@@ -96,7 +91,7 @@ export function getRoleList(
 			6: ["ethical_hacker", "agent", "agent", "agent", "black_hat", "hacker"],
 			7: [
 				"ethical_hacker",
-				"trojan",
+				"honeypot",
 				"agent",
 				"agent",
 				"black_hat",
@@ -105,7 +100,7 @@ export function getRoleList(
 			],
 			8: [
 				"ethical_hacker",
-				"trojan",
+				"honeypot",
 				"agent",
 				"agent",
 				"agent",
@@ -115,7 +110,7 @@ export function getRoleList(
 			],
 			9: [
 				"ethical_hacker",
-				"trojan",
+				"honeypot",
 				"agent",
 				"agent",
 				"agent",
@@ -126,7 +121,7 @@ export function getRoleList(
 			],
 			10: [
 				"ethical_hacker",
-				"trojan",
+				"honeypot",
 				"agent",
 				"agent",
 				"agent",
@@ -140,7 +135,7 @@ export function getRoleList(
 		roles = [...table[playerCount]!];
 	}
 
-	assertInvariant(
+	invariant(
 		roles.length === playerCount,
 		`getRoleList produced ${roles.length} roles for ${playerCount} players in ${mode} mode`,
 	);
@@ -148,18 +143,8 @@ export function getRoleList(
 	return roles;
 }
 
-// fisher-yates shuffle, always returns a new array
-export function shuffle<T>(arr: readonly T[]): T[] {
-	const out = [...arr];
-	for (let i = out.length - 1; i > 0; i--) {
-		const j = Math.floor(Math.random() * (i + 1));
-		[out[i], out[j]] = [out[j]!, out[i]!];
-	}
-	return out;
-}
-
-// hacker ring includes trojan (agent-aligned, visible to hackers in override)
-// and obfuscator (hacker-aligned). spoofer and trojan are mode-exclusive
+// hacker ring includes honeypot (agent-aligned, visible to hackers in override)
+// and obfuscator (hacker-aligned). spoofer and honeypot are mode-exclusive
 type KnowledgeResult = {
 	knownHackerIds: string[];
 	knownEthicalHackerId: string | null;
@@ -175,7 +160,7 @@ const HACKER_RING_ROLES = new Set<CybsecsRole>([
 	"doxxer",
 	"spoofer",
 	"black_hat",
-	"trojan",
+	"honeypot",
 	"obfuscator",
 ]);
 
@@ -189,7 +174,7 @@ export function buildKnowledge(
 	switch (role) {
 		case "agent":
 		case "analyst":
-		case "trojan":
+		case "honeypot":
 		case "intern":
 		case "ethical_hacker":
 			return EMPTY_KNOWLEDGE;
@@ -214,7 +199,7 @@ export function buildKnowledge(
 		}
 
 		case "sysadmin":
-			// sees all hacker-aligned players, trojan excluded (agent-aligned)
+			// sees all hacker-aligned players, honeypot excluded (agent-aligned)
 			return {
 				knownHackerIds: others
 					.filter(([, p]) => p.alignment === "hacker")
@@ -234,8 +219,8 @@ function buildCandidatePair(
 	const sysadmin = [...allPlayers.values()].find((p) => p.role === "sysadmin");
 	const spoofer = [...allPlayers.values()].find((p) => p.role === "spoofer");
 
-	assertInvariant(sysadmin !== undefined, "Exposure mode requires a sysadmin");
-	assertInvariant(spoofer !== undefined, "Exposure mode requires a spoofer");
+	invariant(sysadmin !== undefined, "Exposure mode requires a sysadmin");
+	invariant(spoofer !== undefined, "Exposure mode requires a spoofer");
 
 	return Math.random() < 0.5
 		? [sysadmin.playerId, spoofer.playerId]
