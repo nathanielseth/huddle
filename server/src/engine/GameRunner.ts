@@ -2,12 +2,12 @@ import type {
 	GameEngine,
 	GameEngineWithSecrets,
 	EngineResult,
-} from "./GameEngine.js";
-import { getPublicState, touchRoom, type Room } from "../room/registry.js";
-import type { RoomRegistry } from "../room/registry.js";
-import type { GameTimer } from "../../../shared/types.js";
-import type { IO } from "../types.js";
-import { parseEngineResult, parsePlayerAction } from "./schemas.js";
+} from "./GameEngine";
+import { getPublicState, touchRoom, type Room } from "../room/registry";
+import type { RoomRegistry } from "../room/registry";
+import type { GameTimer } from "../../../shared/types";
+import type { IO } from "../types";
+import { parseEngineResult, parsePlayerAction } from "./schemas";
 
 export class GameRunner {
 	private readonly engines = new Map<string, GameEngine>();
