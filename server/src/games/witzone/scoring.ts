@@ -28,25 +28,21 @@ export interface PromptScoreResult {
 }
 
 // score one r1/r2 prompt
-// @param prompt        the server prompt including votes already cast
-// @param eligiblecount number of players eligible to vote (n − 2)
-// @param round         1 or 2, round 2 doubles all point values
 export function scorePromptR1R2(
 	prompt: WitzoneServerPrompt,
-	eligibleCount: number,
 	round: 1 | 2,
 ): PromptScoreResult {
 	const mult = round === 1 ? 1 : 2;
+	const eligibleCount = prompt.eligibleVoterIds.size;
 	const [slot0, slot1] = prompt.slots;
 	const scoreDeltas: Record<string, number> = {};
 
 	// jinx: both authors submitted the same normalized answer
-	const isJinx =
+	if (
 		slot0.text !== null &&
 		slot1.text !== null &&
-		normalize(slot0.text) === normalize(slot1.text);
-
-	if (isJinx) {
+		normalize(slot0.text) === normalize(slot1.text)
+	) {
 		return {
 			reveal: {
 				promptText: prompt.text,
@@ -75,10 +71,7 @@ export function scorePromptR1R2(
 	}
 
 	// default: one or both authors didn't submit
-	const isDefault = slot0.text === null || slot1.text === null;
-
-	if (isDefault) {
-		// both null → no bonus for either
+	if (slot0.text === null || slot1.text === null) {
 		if (slot0.text === null && slot1.text === null) {
 			return {
 				reveal: {
@@ -145,7 +138,6 @@ export function scorePromptR1R2(
 	const votes1 = allVotes.filter((id) => id === slot1.answerId).length;
 	const totalCast = votes0 + votes1;
 
-	// witty = every eligible voter cast for the same answer
 	const isWitty0 =
 		eligibleCount > 0 &&
 		totalCast === eligibleCount &&
@@ -181,14 +173,14 @@ export function scorePromptR1R2(
 			answers: [
 				{
 					id: slot0.answerId,
-					text: slot0.text!,
+					text: slot0.text,
 					authorId: slot0.authorId,
 					voteCount: votes0,
 					scoreDelta: delta0,
 				},
 				{
 					id: slot1.answerId,
-					text: slot1.text!,
+					text: slot1.text,
 					authorId: slot1.authorId,
 					voteCount: votes1,
 					scoreDelta: delta1,
@@ -243,8 +235,5 @@ export function scorePromptFinal(fp: WitzoneFinalPrompt): FinalScoreResult {
 	// sort by token count descending for a natural reveal order
 	answers.sort((a, b) => b.tokenCount - a.tokenCount);
 
-	return {
-		reveal: { promptText: fp.text, answers },
-		scoreDeltas,
-	};
+	return { reveal: { promptText: fp.text, answers }, scoreDeltas };
 }

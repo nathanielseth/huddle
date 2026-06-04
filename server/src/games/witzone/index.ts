@@ -1,4 +1,3 @@
-import { randomBytes } from "crypto";
 import type {
 	GameEngineWithSecrets,
 	GameContext,
@@ -39,20 +38,30 @@ function normalize(s: string): string {
 		.trim();
 }
 
+// draw n questions from the pool with an exhaustion guard
+// if the pool runs dry (shouldn't happen given onstart sizing, but defensive), we refill from a fresh shuffle rather than returning undefined
+function drawQuestions(state: WitzoneServerState, n: number): string[] {
+	while (state.questionPool.length < n) {
+		state.questionPool.push(...shuffle([...QUESTION_BANK]));
+	}
+	return state.questionPool.splice(0, n);
+}
+
 // public-state cache
 
 function markDirty(state: WitzoneServerState): void {
 	state._publicStateDirty = true;
 }
 
+// returns the cached public state if clean, otherwise rebuilds and caches
+// callers must call markdirty() before this — never after — so the cache accurately reflects the current state
 function getPublicState(state: WitzoneServerState, room: Room): WitzoneState {
 	if (!state._publicStateDirty && state._cachedPublicState) {
 		return state._cachedPublicState;
 	}
-	const built = buildPublicState(state, room);
-	state._cachedPublicState = built;
+	state._cachedPublicState = buildPublicState(state, room);
 	state._publicStateDirty = false;
-	return built;
+	return state._cachedPublicState;
 }
 
 // public state builder
@@ -60,16 +69,14 @@ function getPublicState(state: WitzoneServerState, room: Room): WitzoneState {
 function buildPublicState(state: WitzoneServerState, room: Room): WitzoneState {
 	const players: Record<string, WitzonePlayerView> = {};
 
-	for (const [id] of state.players) {
+	for (const id of state.playerIds) {
 		const score = room.players.get(id)?.score ?? 0;
 
 		const hasAnswered: boolean = (() => {
-			if (state.phase === "answering") {
+			if (state.phase === "answering")
 				return (state.playerAnswerCount.get(id) ?? 0) >= 2;
-			}
-			if (state.phase === "final_answering") {
+			if (state.phase === "final_answering")
 				return (state.finalPrompt?.answers.get(id)?.text ?? null) !== null;
-			}
 			return false;
 		})();
 
@@ -77,36 +84,29 @@ function buildPublicState(state: WitzoneServerState, room: Room): WitzoneState {
 			if (state.phase === "voting_prompt" && state.promptStage === "voting") {
 				return state.prompts[state.currentPromptIndex]?.votes.has(id) ?? false;
 			}
-			if (state.phase === "final_voting") {
+			if (state.phase === "final_voting")
 				return state.finalPrompt?.votes.has(id) ?? false;
-			}
 			return false;
 		})();
 
 		players[id] = { id, score, hasAnswered, hasVoted };
 	}
 
-	// current prompt — only during voting sub-stage
+	// current prompt — only during the voting sub-stage
 	let currentPrompt: WitzonePublicPrompt | null = null;
 	if (state.phase === "voting_prompt" && state.promptStage === "voting") {
 		const prompt = state.prompts[state.currentPromptIndex];
 		if (prompt) {
-			const allIds = [...state.players.keys()];
-			const eligibleCount = allIds.filter(
-				(id) => !prompt.slots.some((s) => s.authorId === id),
-			).length;
-
 			// sort by answerid for stable presentation that doesn't change on rebuild
 			const sorted = [...prompt.slots].sort((a, b) =>
 				a.answerId.localeCompare(b.answerId),
 			);
-
 			currentPrompt = {
 				text: prompt.text,
 				answers: sorted.map((s) => ({ id: s.answerId, text: s.text ?? "" })),
 				authorIds: prompt.slots.map((s) => s.authorId),
 				votedCount: prompt.votes.size,
-				eligibleVoterCount: eligibleCount,
+				eligibleVoterCount: prompt.eligibleVoterIds.size,
 			};
 		}
 	}
@@ -123,19 +123,22 @@ function buildPublicState(state: WitzoneServerState, room: Room): WitzoneState {
 	// answered count
 	let answeredCount = 0;
 	if (state.phase === "answering") {
-		for (const [id] of state.players) {
+		for (const id of state.playerIds) {
 			if ((state.playerAnswerCount.get(id) ?? 0) >= 2) answeredCount++;
 		}
 	} else if (state.phase === "final_answering") {
 		answeredCount = state.finalSubmittedCount;
 	}
 
+	// finalvotedcount derived from source-of-truth rather than a shadow counter
+	const finalVotedCount = state.finalPrompt?.votes.size ?? 0;
+
 	return {
 		phase: state.phase,
 		round: state.round,
 		players,
 		answeredCount,
-		totalPlayers: state.players.size,
+		totalPlayers: state.playerIds.size,
 		currentPromptIndex: state.currentPromptIndex,
 		totalPromptsThisRound: state.prompts.length,
 		promptStage: state.promptStage,
@@ -143,7 +146,7 @@ function buildPublicState(state: WitzoneServerState, room: Room): WitzoneState {
 		lastReveal: state.lastReveal,
 		finalPromptText: state.finalPrompt?.text ?? null,
 		finalAnswers,
-		finalVotedCount: state.finalVotedCount,
+		finalVotedCount,
 		finalReveal: state.finalReveal,
 	};
 }
@@ -184,11 +187,9 @@ function buildPlayerSecret(
 	return { assignedPrompts, finalPrompt: null, finalAnswerId: null };
 }
 
-function buildAllSecrets(
-	state: WitzoneServerState,
-): Map<string, WitzonePlayerSecret> {
-	const secrets = new Map<string, WitzonePlayerSecret>();
-	for (const [id] of state.players) {
+function buildAllSecrets(state: WitzoneServerState): Map<string, unknown> {
+	const secrets = new Map<string, unknown>();
+	for (const id of state.playerIds) {
 		secrets.set(id, buildPlayerSecret(state, id));
 	}
 	return secrets;
@@ -197,21 +198,30 @@ function buildAllSecrets(
 // round setup
 
 function setupRound(state: WitzoneServerState): void {
-	const playerIds = shuffle([...state.players.keys()]);
+	const playerIds = shuffle([...state.playerIds]);
 	const N = playerIds.length;
-	const questions = state.questionPool.splice(0, N);
+	const questions = drawQuestions(state, N);
 
-	state.prompts = questions.map(
-		(text, i): WitzoneServerPrompt => ({
+	state.prompts = questions.map((text, i): WitzoneServerPrompt => {
+		const authorA = playerIds[i % N]!;
+		const authorB = playerIds[(i + 1) % N]!;
+
+		// pre-compute eligible voters once; avoids repeated filter in scoring/voting
+		const eligibleVoterIds = new Set(
+			playerIds.filter((id) => id !== authorA && id !== authorB),
+		);
+
+		return {
 			index: i,
 			text,
 			slots: [
-				{ answerId: shortId(), authorId: playerIds[i % N]!, text: null },
-				{ answerId: shortId(), authorId: playerIds[(i + 1) % N]!, text: null },
+				{ answerId: shortId(), authorId: authorA, text: null },
+				{ answerId: shortId(), authorId: authorB, text: null },
 			] as [WitzoneAnswerSlot, WitzoneAnswerSlot],
 			votes: new Map(),
-		}),
-	);
+			eligibleVoterIds,
+		};
+	});
 
 	state.submittedSlots = 0;
 	state.playerAnswerCount = new Map();
@@ -221,18 +231,15 @@ function setupRound(state: WitzoneServerState): void {
 }
 
 function setupFinalRound(state: WitzoneServerState): void {
-	const text =
-		state.questionPool.splice(0, 1)[0] ??
-		"If you could add one law to the world, it would be: ___";
+	const [text = "If you could add one law to the world, it would be: ___"] =
+		drawQuestions(state, 1);
 
-	const answers = new Map<string, { answerId: string; text: string | null }>();
-	for (const [id] of state.players) {
-		answers.set(id, { answerId: shortId(), text: null });
-	}
+	const answers = new Map(
+		[...state.playerIds].map((id) => [id, { answerId: shortId(), text: null }]),
+	);
 
 	state.finalPrompt = { text, answers, votes: new Map() };
 	state.finalSubmittedCount = 0;
-	state.finalVotedCount = 0;
 	state.finalReveal = null;
 }
 
@@ -243,12 +250,8 @@ function enterVotingForCurrentPrompt(
 	room: Room,
 ): EngineResult {
 	const prompt = state.prompts[state.currentPromptIndex]!;
-	const allIds = [...state.players.keys()];
-	const eligibleIds = allIds.filter(
-		(id) => !prompt.slots.some((s) => s.authorId === id),
-	);
-	const eligibleCount = eligibleIds.length;
 	const [slot0, slot1] = prompt.slots;
+	const eligibleCount = prompt.eligibleVoterIds.size;
 
 	const isJinx =
 		slot0.text !== null &&
@@ -260,7 +263,6 @@ function enterVotingForCurrentPrompt(
 	if (isJinx || isDefault) {
 		const { reveal, scoreDeltas } = scorePromptR1R2(
 			prompt,
-			eligibleCount,
 			state.round as 1 | 2,
 		);
 		state.lastReveal = reveal;
@@ -286,16 +288,7 @@ function enterVotingForCurrentPrompt(
 
 function scoreAndReveal(state: WitzoneServerState, room: Room): EngineResult {
 	const prompt = state.prompts[state.currentPromptIndex]!;
-	const allIds = [...state.players.keys()];
-	const eligibleCount = allIds.filter(
-		(id) => !prompt.slots.some((s) => s.authorId === id),
-	).length;
-
-	const { reveal, scoreDeltas } = scorePromptR1R2(
-		prompt,
-		eligibleCount,
-		state.round as 1 | 2,
-	);
+	const { reveal, scoreDeltas } = scorePromptR1R2(prompt, state.round as 1 | 2);
 	state.lastReveal = reveal;
 	state.promptStage = "revealing";
 	markDirty(state);
@@ -339,12 +332,11 @@ function startRound2(state: WitzoneServerState, room: Room): EngineResult {
 	state.phase = "answering";
 	setupRound(state);
 	markDirty(state);
-	const privatePayloads = buildAllSecrets(state) as Map<string, unknown>;
 	return {
 		serverPayload: state,
 		publicPayload: getPublicState(state, room),
 		timer: { startsAt: Date.now(), duration: ANSWERING_MS },
-		privatePayloads,
+		privatePayloads: buildAllSecrets(state),
 	};
 }
 
@@ -353,24 +345,22 @@ function startFinalRound(state: WitzoneServerState, room: Room): EngineResult {
 	state.phase = "final_answering";
 	setupFinalRound(state);
 	markDirty(state);
-	const privatePayloads = buildAllSecrets(state) as Map<string, unknown>;
 	return {
 		serverPayload: state,
 		publicPayload: getPublicState(state, room),
 		timer: { startsAt: Date.now(), duration: FINAL_ANSWERING_MS },
-		privatePayloads,
+		privatePayloads: buildAllSecrets(state),
 	};
 }
 
 function enterFinalVoting(state: WitzoneServerState, room: Room): EngineResult {
 	state.phase = "final_voting";
 	markDirty(state);
-	const privatePayloads = buildAllSecrets(state) as Map<string, unknown>;
 	return {
 		serverPayload: state,
 		publicPayload: getPublicState(state, room),
 		timer: { startsAt: Date.now(), duration: FINAL_VOTING_MS },
-		privatePayloads,
+		privatePayloads: buildAllSecrets(state),
 	};
 }
 
@@ -408,7 +398,7 @@ export const witzoneEngine: GameEngineWithSecrets = {
 		return {
 			phase: "answering",
 			round: 1,
-			players: new Map(),
+			playerIds: new Set(),
 			questionPool: [],
 			prompts: [],
 			submittedSlots: 0,
@@ -418,7 +408,6 @@ export const witzoneEngine: GameEngineWithSecrets = {
 			lastReveal: null,
 			finalPrompt: null,
 			finalSubmittedCount: 0,
-			finalVotedCount: 0,
 			finalReveal: null,
 			_publicStateDirty: true,
 			_cachedPublicState: null,
@@ -429,14 +418,10 @@ export const witzoneEngine: GameEngineWithSecrets = {
 		const { room } = ctx;
 		const state = room.gamePayload as WitzoneServerState;
 
-		state.players = new Map(
-			Array.from(room.players.values()).map((p) => [
-				p.playerId,
-				{ id: p.playerId },
-			]),
-		);
+		state.playerIds = new Set(room.players.keys());
 
-		const needed = state.players.size * 2 + 1;
+		// size the pool to cover all three rounds with comfortable headroom
+		const needed = state.playerIds.size * 2 + 1;
 		const pool = shuffle([...QUESTION_BANK]);
 		while (pool.length < needed) pool.push(...shuffle([...QUESTION_BANK]));
 		state.questionPool = pool;
@@ -446,12 +431,11 @@ export const witzoneEngine: GameEngineWithSecrets = {
 		setupRound(state);
 		markDirty(state);
 
-		const privatePayloads = buildAllSecrets(state) as Map<string, unknown>;
 		return {
 			serverPayload: state,
 			publicPayload: getPublicState(state, room),
 			timer: { startsAt: Date.now(), duration: ANSWERING_MS },
-			privatePayloads,
+			privatePayloads: buildAllSecrets(state),
 		};
 	},
 
@@ -467,7 +451,7 @@ export const witzoneEngine: GameEngineWithSecrets = {
 
 		const action = parseWitzoneAction(raw);
 		if (!action) return noOp();
-		if (!state.players.has(playerId)) return noOp();
+		if (!state.playerIds.has(playerId)) return noOp();
 
 		// submit_answer
 		if (action.type === "submit_answer") {
@@ -477,8 +461,7 @@ export const witzoneEngine: GameEngineWithSecrets = {
 				if (!prompt) return noOp();
 
 				const slot = prompt.slots.find((s) => s.authorId === playerId);
-				if (!slot) return noOp();
-				if (slot.text !== null) return noOp();
+				if (!slot || slot.text !== null) return noOp();
 
 				slot.text = action.text;
 				state.submittedSlots++;
@@ -492,10 +475,8 @@ export const witzoneEngine: GameEngineWithSecrets = {
 					[playerId, buildPlayerSecret(state, playerId)],
 				]);
 
-				const totalSlots = state.prompts.length * 2;
-				if (state.submittedSlots >= totalSlots) {
-					const result = enterVotingPhase(state, room);
-					return { ...result, privatePayloads };
+				if (state.submittedSlots >= state.prompts.length * 2) {
+					return { ...enterVotingPhase(state, room), privatePayloads };
 				}
 
 				return {
@@ -506,7 +487,7 @@ export const witzoneEngine: GameEngineWithSecrets = {
 				};
 			}
 
-			// final
+			// final answering
 			if (state.phase === "final_answering") {
 				if (!state.finalPrompt) return noOp();
 				const entry = state.finalPrompt.answers.get(playerId);
@@ -516,18 +497,17 @@ export const witzoneEngine: GameEngineWithSecrets = {
 				state.finalSubmittedCount++;
 				markDirty(state);
 
-				if (state.finalSubmittedCount >= state.players.size) {
+				if (state.finalSubmittedCount >= state.playerIds.size) {
 					return enterFinalVoting(state, room);
 				}
 
-				const privatePayloads: Map<string, unknown> = new Map([
-					[playerId, buildPlayerSecret(state, playerId)],
-				]);
 				return {
 					serverPayload: state,
 					publicPayload: getPublicState(state, room),
 					timer: room.timer,
-					privatePayloads,
+					privatePayloads: new Map([
+						[playerId, buildPlayerSecret(state, playerId)],
+					]),
 				};
 			}
 
@@ -541,8 +521,7 @@ export const witzoneEngine: GameEngineWithSecrets = {
 
 			const prompt = state.prompts[state.currentPromptIndex];
 			if (!prompt) return noOp();
-
-			if (prompt.slots.some((s) => s.authorId === playerId)) return noOp();
+			if (!prompt.eligibleVoterIds.has(playerId)) return noOp();
 			if (prompt.votes.has(playerId)) return noOp();
 			if (!prompt.slots.some((s) => s.answerId === action.answerId))
 				return noOp();
@@ -550,12 +529,7 @@ export const witzoneEngine: GameEngineWithSecrets = {
 			prompt.votes.set(playerId, action.answerId);
 			markDirty(state);
 
-			const allIds = [...state.players.keys()];
-			const eligibleCount = allIds.filter(
-				(id) => !prompt.slots.some((s) => s.authorId === id),
-			).length;
-
-			if (prompt.votes.size >= eligibleCount) {
+			if (prompt.votes.size >= prompt.eligibleVoterIds.size) {
 				return scoreAndReveal(state, room);
 			}
 
@@ -568,18 +542,18 @@ export const witzoneEngine: GameEngineWithSecrets = {
 			if (!state.finalPrompt) return noOp();
 			if (state.finalPrompt.votes.has(playerId)) return noOp();
 
-			const myEntry = state.finalPrompt.answers.get(playerId);
-			const myAnswerId = myEntry?.answerId;
+			const myAnswerId = state.finalPrompt.answers.get(playerId)?.answerId;
 
 			// validate: no self-vote, all ids exist, tokens sum to exactly final_vote_tokens
-			// the schema already enforces per-token bounds and key/value types; these are the remaining semantic checks
 			let totalTokens = 0;
 			for (const [answerId, tokens] of Object.entries(action.votes)) {
 				if (answerId === myAnswerId) return noOp();
-				const validId = [...state.finalPrompt.answers.values()].some(
-					(e) => e.answerId === answerId,
-				);
-				if (!validId) return noOp();
+				if (
+					![...state.finalPrompt.answers.values()].some(
+						(e) => e.answerId === answerId,
+					)
+				)
+					return noOp();
 				totalTokens += tokens;
 			}
 			if (totalTokens !== FINAL_VOTE_TOKENS) return noOp();
@@ -588,10 +562,10 @@ export const witzoneEngine: GameEngineWithSecrets = {
 				playerId,
 				new Map(Object.entries(action.votes).map(([k, v]) => [k, v as number])),
 			);
-			state.finalVotedCount++;
 			markDirty(state);
 
-			if (state.finalVotedCount >= state.players.size) {
+			// source-of-truth check: votes.size rather than a shadow counter
+			if (state.finalPrompt.votes.size >= state.playerIds.size) {
 				return enterFinished(state, room);
 			}
 
@@ -611,32 +585,19 @@ export const witzoneEngine: GameEngineWithSecrets = {
 			timer: null,
 		});
 
-		if (state.phase === "answering") {
-			return enterVotingPhase(state, room);
-		}
+		if (state.phase === "answering") return enterVotingPhase(state, room);
 
 		if (state.phase === "voting_prompt") {
-			if (state.promptStage === "voting") {
-				return scoreAndReveal(state, room);
-			}
-			if (state.promptStage === "revealing") {
-				return advanceVoting(state, room);
-			}
+			if (state.promptStage === "voting") return scoreAndReveal(state, room);
+			if (state.promptStage === "revealing") return advanceVoting(state, room);
 		}
 
-		if (state.phase === "round_end") {
+		if (state.phase === "round_end")
 			return state.round === 1
 				? startRound2(state, room)
 				: startFinalRound(state, room);
-		}
-
-		if (state.phase === "final_answering") {
-			return enterFinalVoting(state, room);
-		}
-
-		if (state.phase === "final_voting") {
-			return enterFinished(state, room);
-		}
+		if (state.phase === "final_answering") return enterFinalVoting(state, room);
+		if (state.phase === "final_voting") return enterFinished(state, room);
 
 		return noOp();
 	},
@@ -646,7 +607,7 @@ export const witzoneEngine: GameEngineWithSecrets = {
 		playerId: string,
 	): WitzonePlayerSecret | null {
 		const state = ctx.room.gamePayload as WitzoneServerState;
-		if (!state.players.has(playerId)) return null;
+		if (!state.playerIds.has(playerId)) return null;
 		return buildPlayerSecret(state, playerId);
 	},
 };
