@@ -364,29 +364,47 @@ function enterFinalVoting(state: WitzoneServerState, room: Room): EngineResult {
 	};
 }
 
-function enterFinished(state: WitzoneServerState, room: Room): EngineResult {
-	if (!state.finalPrompt) {
-		state.phase = "finished";
-		markDirty(state);
-		return {
-			serverPayload: state,
-			publicPayload: getPublicState(state, room),
-			timer: null,
-			roomPhase: "ended",
-		};
-	}
+// projects scoreDeltas into publicState.players scores
+function withProjectedScores(
+    publicState: WitzoneState,
+    deltas: Record<string, number>,
+): WitzoneState {
+    if (Object.keys(deltas).length === 0) return publicState;
+    return {
+        ...publicState,
+        players: Object.fromEntries(
+            Object.entries(publicState.players).map(([id, p]) => [
+                id,
+                { ...p, score: p.score + (deltas[id] ?? 0) },
+            ]),
+        ),
+    };
+}
 
-	const { reveal, scoreDeltas } = scorePromptFinal(state.finalPrompt);
-	state.finalReveal = reveal;
-	state.phase = "finished";
-	markDirty(state);
-	return {
-		serverPayload: state,
-		publicPayload: getPublicState(state, room),
-		timer: null,
-		roomPhase: "ended",
-		...(Object.keys(scoreDeltas).length > 0 ? { scoreDeltas } : {}),
-	};
+function enterFinished(state: WitzoneServerState, room: Room): EngineResult {
+    if (!state.finalPrompt) {
+        state.phase = "finished";
+        markDirty(state);
+        return {
+            serverPayload: state,
+            publicPayload: getPublicState(state, room),
+            timer: null,
+            roomPhase: "ended",
+        };
+    }
+
+    const { reveal, scoreDeltas } = scorePromptFinal(state.finalPrompt);
+    state.finalReveal = reveal;
+    state.phase = "finished";
+    markDirty(state);
+
+    return {
+        serverPayload: state,
+        publicPayload: withProjectedScores(getPublicState(state, room), scoreDeltas),
+        timer: null,
+        roomPhase: "ended",
+        ...(Object.keys(scoreDeltas).length > 0 ? { scoreDeltas } : {}),
+    };
 }
 
 // engine
