@@ -5,7 +5,7 @@ import type {
 } from "./GameEngine";
 import { getPublicState, touchRoom, type Room } from "../room/registry";
 import type { RoomRegistry } from "../room/registry";
-import type { GameTimer } from "../../../shared/types";
+import type { GameTimer, PauseReason } from "../../../shared/types";
 import type { IO } from "../types";
 import { parseEngineResult, parsePlayerAction } from "./schemas";
 
@@ -13,6 +13,9 @@ export class GameRunner {
 	private readonly engines = new Map<string, GameEngine>();
 	private readonly timers = new Map<string, NodeJS.Timeout>();
 	private readonly roomQueues = new Map<string, Promise<void>>();
+	private readonly hostReconnectTimers = new Map<string, NodeJS.Timeout>();
+
+	private static readonly HOST_RECONNECT_MS = 5 * 60 * 1_000;
 
 	register(engine: GameEngine): void {
 		this.engines.set(engine.gameId, engine);
@@ -116,6 +119,69 @@ export class GameRunner {
 		}
 	}
 
+	cancelHostReconnectTimer(roomCode: string): void {
+		const handle = this.hostReconnectTimers.get(roomCode);
+		if (handle) {
+			clearTimeout(handle);
+			this.hostReconnectTimers.delete(roomCode);
+		}
+	}
+
+	pauseGame(room: Room, reason: PauseReason, io: IO): void {
+		if (room.phase !== "in_game") return;
+		this.pauseRoom(room, reason);
+		touchRoom(room);
+		io.to(room.code).emit("game_state", getPublicState(room));
+	}
+
+	resumeGame(room: Room, io: IO, store: RoomRegistry): void {
+		if (room.phase !== "paused") return;
+		this.resumeRoom(room, io, store);
+		touchRoom(room);
+		io.to(room.code).emit("game_state", getPublicState(room));
+	}
+
+	onHostDisconnect(room: Room, io: IO, store: RoomRegistry): void {
+		if (room.phase === "in_game") {
+			this.pauseRoom(room, "host_disconnected");
+		} else if (room.phase === "paused") {
+			room.pauseReason = "host_disconnected";
+		} else {
+			return;
+		}
+
+		room.hostReconnectDeadline = Date.now() + GameRunner.HOST_RECONNECT_MS;
+		touchRoom(room);
+		io.to(room.code).emit("game_state", getPublicState(room));
+
+		const handle = setTimeout(() => {
+			this.hostReconnectTimers.delete(room.code);
+			if (!store.get(room.code)) return;
+			io.to(room.code).emit(
+				"room_abandoned",
+				"Host failed to reconnect. The game has been abandoned.",
+			);
+			store.delete(room.code);
+			console.log(`[room] ${room.code} abandoned — reconnect window expired`);
+		}, GameRunner.HOST_RECONNECT_MS);
+
+		this.hostReconnectTimers.set(room.code, handle);
+	}
+
+	// host socket rejoined after a disconnect-pause
+	onHostReconnect(room: Room, io: IO, store: RoomRegistry): void {
+		this.cancelHostReconnectTimer(room.code);
+
+		if (room.phase === "paused" && room.pauseReason === "host_disconnected") {
+			this.resumeRoom(room, io, store);
+		} else {
+			room.hostReconnectDeadline = null;
+		}
+
+		touchRoom(room);
+		io.to(room.code).emit("game_state", getPublicState(room));
+	}
+
 	async resendSecret(room: Room, playerId: string, io: IO): Promise<void> {
 		const engine = this.resolveEngine(room.gameId);
 		if (!engine || !("getPlayerSecret" in engine)) return;
@@ -141,6 +207,35 @@ export class GameRunner {
 		return this.engines.get(gameId) ?? null;
 	}
 
+	private pauseRoom(room: Room, reason: PauseReason): void {
+		if (room.timer) {
+			room.pausedTimerRemaining = Math.max(
+				room.timer.startsAt + room.timer.duration - Date.now(),
+				0,
+			);
+			this.cancelTimer(room.code);
+			room.timer = null;
+		}
+		room.pauseReason = reason;
+		room.phase = "paused";
+	}
+
+	private resumeRoom(room: Room, io: IO, store: RoomRegistry): void {
+		room.phase = "in_game";
+		room.pauseReason = null;
+		room.hostReconnectDeadline = null;
+
+		if (room.pausedTimerRemaining !== null) {
+			const timer: GameTimer = {
+				startsAt: Date.now(),
+				duration: Math.max(room.pausedTimerRemaining, 500),
+			};
+			room.timer = timer;
+			this.scheduleTimer(timer, room, io, store);
+			room.pausedTimerRemaining = null;
+		}
+	}
+
 	private applyResult(
 		result: EngineResult,
 		engineId: string,
@@ -159,13 +254,15 @@ export class GameRunner {
 
 		room.gamePayload = validated.serverPayload;
 		room.publicPayload = validated.publicPayload;
-		if (validated.roomPhase) room.phase = validated.roomPhase;
 
-		this.cancelTimer(room.code);
-		room.timer = validated.timer;
-
-		if (validated.timer) {
-			this.scheduleTimer(validated.timer, room, io, store);
+		// stale in-flight results must not disturb a paused room's phase or timers
+		if (room.phase !== "paused") {
+			if (validated.roomPhase) room.phase = validated.roomPhase;
+			this.cancelTimer(room.code);
+			room.timer = validated.timer;
+			if (validated.timer) {
+				this.scheduleTimer(validated.timer, room, io, store);
+			}
 		}
 
 		touchRoom(room);

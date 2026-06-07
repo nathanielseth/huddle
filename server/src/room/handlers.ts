@@ -10,17 +10,13 @@ import {
 	type Room,
 	type RoomRegistry,
 } from "./registry";
-import {
-	CreateRoomSchema,
-	JoinRoomSchema,
-	RejoinRoomSchema,
-} from "./schemas";
+import { CreateRoomSchema, JoinRoomSchema, RejoinRoomSchema } from "./schemas";
 import type { GameRunner } from "../engine/GameRunner";
 import type { IO, ClientSocket } from "../types";
 
 const HOST_GRACE_MS = 45_000;
 const ACTION_RATE_LIMIT_MS = 100;
-const MAX_ROOMS = 100; // hard cap — emit room_error if reached
+const MAX_ROOMS = 100;
 
 const hostGraceTimers = new Map<string, ReturnType<typeof setTimeout>>();
 
@@ -46,6 +42,7 @@ function closeRoom(
 ): void {
 	clearHostGrace(room.code);
 	runner.cancelTimer(room.code);
+	runner.cancelHostReconnectTimer(room.code);
 	runner.clearQueue(room.code);
 	io.to(room.code).emit("room_closed");
 	store.delete(room.code);
@@ -82,20 +79,26 @@ function handleDisconnect(
 	store.untrackSocket(socket.id);
 
 	if (isHostSocket(room, socket.id)) {
-		console.log(
-			`[room] host disconnected from ${room.code} (${reason}) — starting ${HOST_GRACE_MS / 1000}s grace period`,
-		);
-		io.to(room.code).emit(
-			"room_error",
-			"Host disconnected. Waiting for them to reconnect…",
-		);
-
-		const timer = setTimeout(() => {
-			hostGraceTimers.delete(room.code);
-			if (!store.get(room.code)) return;
-			closeRoom(io, store, room, `host never rejoined (${reason})`, runner);
-		}, HOST_GRACE_MS);
-		hostGraceTimers.set(room.code, timer);
+		if (room.phase === "in_game" || room.phase === "paused") {
+			console.log(
+				`[room] host disconnected from ${room.code} (${reason}) — pausing game, 5-min reconnect window`,
+			);
+			runner.onHostDisconnect(room, io, store);
+		} else {
+			console.log(
+				`[room] host disconnected from ${room.code} (${reason}) — starting ${HOST_GRACE_MS / 1_000}s grace period`,
+			);
+			io.to(room.code).emit(
+				"room_error",
+				"Host disconnected. Waiting for them to reconnect…",
+			);
+			const timer = setTimeout(() => {
+				hostGraceTimers.delete(room.code);
+				if (!store.get(room.code)) return;
+				closeRoom(io, store, room, `host never rejoined (${reason})`, runner);
+			}, HOST_GRACE_MS);
+			hostGraceTimers.set(room.code, timer);
+		}
 		return;
 	}
 
@@ -126,7 +129,6 @@ export function registerHandlers(
 			return;
 		}
 
-		// Hard cap — prevents runaway room accumulation
 		if (store.size >= MAX_ROOMS) {
 			socket.emit("room_error", "Server is full right now. Try again later.");
 			console.log(`[room] create_room rejected — at capacity (${MAX_ROOMS})`);
@@ -196,17 +198,29 @@ export function registerHandlers(
 				socket.emit("rejoin_failed");
 				return;
 			}
+
 			if (hostGraceTimers.has(room.code)) {
 				clearHostGrace(room.code);
-				console.log(`[room] host rejoined ${room.code} within grace period`);
+				console.log(
+					`[room] host rejoined ${room.code} within lobby grace period`,
+				);
 			}
+
 			store.untrackSocket(room.hostSocketId);
 			room.hostSocketId = socket.id;
 			store.trackSocket(socket.id, code);
 			socket.join(code);
 			touchRoom(room);
 			console.log(`[room] host rejoined ${code}`);
-			broadcast(io, room);
+
+			if (room.phase === "paused" && room.pauseReason === "host_disconnected") {
+				runner.onHostReconnect(room, io, store);
+				console.log(`[room] host reconnected — resuming ${code}`);
+			} else {
+				broadcast(io, room);
+			}
+
+			// Phase may have just changed to in_game via onHostReconnect — check after.
 			if (room.phase === "in_game") {
 				runner.resendSecret(room, playerId, io);
 			}
@@ -254,6 +268,25 @@ export function registerHandlers(
 		const found = store.findPlayerBySocket(socket.id);
 		if (!found) return;
 		runner.handleAction(found.room, found.playerId, payload, io, store);
+	});
+
+	socket.on("pause_game", () => {
+		const room = store.findBySocket(socket.id);
+		if (!room || !isHostSocket(room, socket.id) || room.phase !== "in_game")
+			return;
+		runner.pauseGame(room, "manual", io);
+	});
+
+	socket.on("resume_game", () => {
+		const room = store.findBySocket(socket.id);
+		if (
+			!room ||
+			!isHostSocket(room, socket.id) ||
+			room.phase !== "paused" ||
+			room.pauseReason !== "manual"
+		)
+			return;
+		runner.resumeGame(room, io, store);
 	});
 
 	socket.on("leave_room", () =>

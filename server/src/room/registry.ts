@@ -3,6 +3,7 @@ import type {
 	Player,
 	RoomPhase,
 	GameTimer,
+	PauseReason,
 } from "../../../shared/types";
 
 export interface RoomPlayer {
@@ -25,6 +26,9 @@ export interface Room {
 	gamePayload: unknown;
 	publicPayload: unknown;
 	timer: GameTimer | null;
+	pausedTimerRemaining: number | null;
+	pauseReason: PauseReason | null;
+	hostReconnectDeadline: number | null;
 }
 
 const CODE_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
@@ -32,7 +36,7 @@ const CODE_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
 export class RoomRegistry {
 	private rooms = new Map<string, Room>();
 	private socketToCode = new Map<string, string>();
-	private socketToPlayerId = new Map<string, string>(); // NEW: O(1) player lookup
+	private socketToPlayerId = new Map<string, string>();
 
 	get(code: string): Room | undefined {
 		return this.rooms.get(code);
@@ -42,15 +46,14 @@ export class RoomRegistry {
 		this.rooms.set(room.code, room);
 	}
 
-	// delete room and all socket mappings
 	delete(code: string): void {
 		const room = this.rooms.get(code);
 		if (room) {
 			this.socketToCode.delete(room.hostSocketId);
-			this.socketToPlayerId.delete(room.hostSocketId); // NEW
+			this.socketToPlayerId.delete(room.hostSocketId);
 			for (const p of room.players.values()) {
 				this.socketToCode.delete(p.socketId);
-				this.socketToPlayerId.delete(p.socketId); // NEW
+				this.socketToPlayerId.delete(p.socketId);
 			}
 		}
 		this.rooms.delete(code);
@@ -80,10 +83,9 @@ export class RoomRegistry {
 		return { room, playerId };
 	}
 
-	// pass playerId when the socket belongs to a player (omit for host-only sockets)
 	trackSocket(socketId: string, roomCode: string, playerId?: string): void {
 		this.socketToCode.set(socketId, roomCode);
-		if (playerId) this.socketToPlayerId.set(socketId, playerId); // NEW
+		if (playerId) this.socketToPlayerId.set(socketId, playerId);
 	}
 
 	untrackSocket(socketId: string): void {
@@ -91,7 +93,6 @@ export class RoomRegistry {
 		this.socketToPlayerId.delete(socketId);
 	}
 
-	// generate unique 4-char room code
 	generateCode(): string {
 		let code: string;
 		do {
@@ -104,7 +105,6 @@ export class RoomRegistry {
 	}
 }
 
-// create new room with host
 export function createRoom(
 	code: string,
 	hostPlayerId: string,
@@ -124,15 +124,16 @@ export function createRoom(
 		gamePayload: null,
 		publicPayload: null,
 		timer: null,
+		pausedTimerRemaining: null,
+		pauseReason: null,
+		hostReconnectDeadline: null,
 	};
 }
 
-// update last activity timestamp
 export function touchRoom(room: Room): void {
 	room.lastActiveAt = Date.now();
 }
 
-// add or reconnect player to room
 export function addPlayer(
 	room: Room,
 	playerId: string,
@@ -155,7 +156,6 @@ export function addPlayer(
 	return "joined";
 }
 
-// reconnect existing player (page refresh)
 export function rejoinPlayer(
 	room: Room,
 	playerId: string,
@@ -168,7 +168,6 @@ export function rejoinPlayer(
 	return true;
 }
 
-// remove player entirely (left room)
 export function removePlayer(room: Room, socketId: string): void {
 	for (const [playerId, player] of room.players) {
 		if (player.socketId === socketId) {
@@ -178,7 +177,6 @@ export function removePlayer(room: Room, socketId: string): void {
 	}
 }
 
-// mark disconnected but keep slot (network loss)
 export function markDisconnected(room: Room, socketId: string): void {
 	for (const player of room.players.values()) {
 		if (player.socketId === socketId) {
@@ -188,12 +186,10 @@ export function markDisconnected(room: Room, socketId: string): void {
 	}
 }
 
-// check if socket is the room host
 export function isHostSocket(room: Room, socketId: string): boolean {
 	return room.hostSocketId === socketId;
 }
 
-// get public-facing state (no internal socket ids)
 export function getPublicState(room: Room): GameState {
 	const players: Player[] = Array.from(room.players.values()).map((p) => ({
 		id: p.playerId,
@@ -208,10 +204,13 @@ export function getPublicState(room: Room): GameState {
 		players,
 		timer: room.timer,
 		gamePayload: room.publicPayload,
+		...(room.pauseReason !== null && { pauseReason: room.pauseReason }),
+		...(room.hostReconnectDeadline !== null && {
+			hostReconnectDeadline: room.hostReconnectDeadline,
+		}),
 	};
 }
 
-// consider room expired if no activity for 15+ minutes
 export function isExpired(room: Room): boolean {
 	return Date.now() - room.lastActiveAt > 1000 * 60 * 15;
 }

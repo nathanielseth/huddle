@@ -1,5 +1,6 @@
-export type RoomPhase = "lobby" | "in_game" | "ended";
+export type RoomPhase = "lobby" | "in_game" | "paused" | "ended";
 
+export type PauseReason = "manual" | "host_disconnected";
 
 // client-only
 export type ConnectionStatus =
@@ -9,7 +10,6 @@ export type ConnectionStatus =
 	| "disconnected"
 	| "error";
 
-// room-level player
 export interface Player {
 	id: string;
 	name: string;
@@ -18,11 +18,10 @@ export interface Player {
 }
 
 export interface GameTimer {
-	startsAt: number; // server timestamp when phase began
-	duration: number; // ms
+	startsAt: number;
+	duration: number;
 }
 
-// broadcast on every change
 export interface GameState {
 	roomCode: string;
 	gameId: string | null;
@@ -30,4 +29,6 @@ export interface GameState {
 	players: Player[];
 	timer: GameTimer | null;
 	gamePayload: unknown; // typed per-game, cast where used
+	pauseReason?: PauseReason;
+	hostReconnectDeadline?: number | null;
 }
