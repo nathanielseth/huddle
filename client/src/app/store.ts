@@ -11,6 +11,7 @@ import type {
 	GameState,
 	ConnectionStatus,
 	GameTimer,
+	PauseReason,
 } from "@shared/types";
 
 interface GameStore {
@@ -26,6 +27,8 @@ interface GameStore {
 	gamePayload: unknown;
 	timer: GameTimer | null;
 	secret: unknown;
+	pauseReason: PauseReason | null;
+	hostReconnectDeadline: number | null;
 	setPlayerName: (name: string) => void;
 	connect: () => void;
 	disconnect: () => void;
@@ -34,10 +37,13 @@ interface GameStore {
 	leaveRoom: () => void;
 	clearError: () => void;
 	startGame: () => void;
+	pauseGame: () => void;
+	resumeGame: () => void;
 	_syncState: (state: GameState) => void;
 	_setStatus: (status: ConnectionStatus) => void;
 	_setError: (message: string) => void;
 	_closeRoom: () => void;
+	_abandonRoom: (message: string) => void;
 	_attemptRejoin: (session: RoomSession) => void;
 	_setSecret: (payload: unknown) => void;
 }
@@ -60,6 +66,8 @@ const ROOM_RESET = {
 	timer: null,
 	secret: null,
 	error: null,
+	pauseReason: null,
+	hostReconnectDeadline: null,
 } as const satisfies Partial<GameStore>;
 
 let rejoinTimeoutId: ReturnType<typeof setTimeout> | null = null;
@@ -84,6 +92,8 @@ export const useGameStore = create<GameStore>((set, get) => ({
 	gamePayload: null,
 	secret: null,
 	timer: null,
+	pauseReason: null,
+	hostReconnectDeadline: null,
 
 	setPlayerName: (name) => set({ playerName: name }),
 
@@ -128,11 +138,20 @@ export const useGameStore = create<GameStore>((set, get) => ({
 		socket.emit("start_game");
 	},
 
+	pauseGame: () => {
+		if (get().status !== "connected") return;
+		socket.emit("pause_game");
+	},
+
+	resumeGame: () => {
+		if (get().status !== "connected") return;
+		socket.emit("resume_game");
+	},
+
 	_syncState: (state) => {
 		clearRejoinTimeout();
 
 		const { role, playerId, playerName } = get();
-
 		const resolvedName =
 			state.players.find((p) => p.id === playerId)?.name ?? playerName;
 
@@ -152,6 +171,8 @@ export const useGameStore = create<GameStore>((set, get) => ({
 			gamePayload: state.gamePayload,
 			timer: state.timer,
 			playerName: resolvedName,
+			pauseReason: state.pauseReason ?? null,
+			hostReconnectDeadline: state.hostReconnectDeadline ?? null,
 		});
 	},
 
@@ -167,6 +188,12 @@ export const useGameStore = create<GameStore>((set, get) => ({
 		clearRejoinTimeout();
 		clearRoomSession();
 		set(ROOM_RESET);
+	},
+
+	_abandonRoom: (message) => {
+		clearRejoinTimeout();
+		clearRoomSession();
+		set({ ...ROOM_RESET, error: message });
 	},
 
 	_attemptRejoin: (session) => {

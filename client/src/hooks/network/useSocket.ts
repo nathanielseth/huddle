@@ -86,7 +86,10 @@ export function useSocketInit(): void {
 		const onRoomClosed = () => getStore()._closeRoom();
 		const onRejoinFailed = () => getStore()._closeRoom();
 		const onPlayerSecret = (payload: unknown) => getStore()._setSecret(payload);
-
+		const onRoomAbandoned = (msg: string) => {
+			getStore()._abandonRoom(msg);
+			toast.error(msg, { duration: 6000 });
+		};
 		socket.on("connect", onConnect);
 		socket.on("disconnect", onDisconnect);
 		socket.on("connect_error", onConnectError);
@@ -95,6 +98,7 @@ export function useSocketInit(): void {
 		socket.on("room_closed", onRoomClosed);
 		socket.on("rejoin_failed", onRejoinFailed);
 		socket.on("player_secret", onPlayerSecret);
+		socket.on("room_abandoned", onRoomAbandoned);
 		socket.io.on("reconnect_attempt", onReconnectAttempt);
 		socket.io.on("reconnect_failed", onReconnectFailed);
 
@@ -111,6 +115,7 @@ export function useSocketInit(): void {
 			socket.off("room_closed", onRoomClosed);
 			socket.off("rejoin_failed", onRejoinFailed);
 			socket.off("player_secret", onPlayerSecret);
+			socket.off("room_abandoned", onRoomAbandoned);
 			socket.io.off("reconnect_attempt", onReconnectAttempt);
 			socket.io.off("reconnect_failed", onReconnectFailed);
 		};

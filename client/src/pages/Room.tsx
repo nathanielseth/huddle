@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useNavigate, Navigate } from "react-router";
 import { motion, AnimatePresence } from "motion/react";
 import { LogOut, Copy, Check } from "lucide-react";
@@ -8,6 +8,7 @@ import { FinishedHost, FinishedPlayer } from "../games/sabong/phases/Finished";
 import { QRCodeSVG } from "qrcode.react";
 import type { Player } from "@shared/types";
 import { GAME_REGISTRY } from "@/app/registry";
+import { PauseOverlay } from "../components/ui/PauseOverlay";
 
 export function Room() {
 	const navigate = useNavigate();
@@ -19,8 +20,21 @@ export function Room() {
 	const leaveRoom = useGameStore((s) => s.leaveRoom);
 	const phase = useGameStore((s) => s.phase);
 	const startGame = useGameStore((s) => s.startGame);
+	const pauseReason = useGameStore((s) => s.pauseReason);
+	const hostReconnectDeadline = useGameStore((s) => s.hostReconnectDeadline);
+	const resumeGame = useGameStore((s) => s.resumeGame);
 
 	const [copied, setCopied] = useState(false);
+
+	// escape to pause (host only)
+	useEffect(() => {
+		if (phase !== "in_game" || role !== "host") return;
+		const onKeyDown = (e: KeyboardEvent) => {
+			if (e.key === "Escape") useGameStore.getState().pauseGame();
+		};
+		window.addEventListener("keydown", onKeyDown);
+		return () => window.removeEventListener("keydown", onKeyDown);
+	}, [phase, role]);
 
 	if (!roomCode) return <Navigate to="/" replace />;
 
@@ -41,9 +55,27 @@ export function Room() {
 		setTimeout(() => setCopied(false), 2000);
 	}
 
-	if (phase === "in_game") {
+	// game component stays mounted during pause so the frozen state shows beneath the overlay
+	if (phase === "in_game" || phase === "paused") {
 		const entry = GAME_REGISTRY.find((g) => g.id === gameId);
-		if (entry) return <entry.inGame />;
+		if (entry) {
+			return (
+				<div className="relative isolate">
+					<entry.inGame />
+					<AnimatePresence>
+						{phase === "paused" && (
+							<PauseOverlay
+								pauseReason={pauseReason}
+								hostReconnectDeadline={hostReconnectDeadline}
+								isHost={role === "host"}
+								onResume={resumeGame}
+								onQuit={handleLeave}
+							/>
+						)}
+					</AnimatePresence>
+				</div>
+			);
+		}
 	}
 
 	if (phase === "ended") {
@@ -61,7 +93,7 @@ export function Room() {
 
 	return (
 		<div className="flex flex-col min-h-screen bg-bg">
-			{/* Top bar */}
+			{/* top bar */}
 			<div className="flex items-center justify-between px-6 py-5 border-b border-border">
 				<div className="flex items-center gap-3">
 					{game && (
