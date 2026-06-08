@@ -7,8 +7,6 @@ import type { GameState } from "@shared/types";
 
 const CONN_TOAST_ID = "conn-status";
 
-// call this before socket.disconnect() to suppress the spurious warning toast
-// e.g. when the user intentionally leaves a room
 export function markIntentionalDisconnect() {
 	_intentional = true;
 }
@@ -24,35 +22,24 @@ export function useSocketInit(): void {
 			const wasDisconnected = hasConnectedOnce;
 			hasConnectedOnce = true;
 			getStore()._setStatus("connected");
-
 			toast.dismiss(CONN_TOAST_ID);
-
 			if (wasDisconnected) {
 				toast.success("Reconnected!", { id: CONN_TOAST_ID, duration: 2500 });
 			}
-
 			const session = loadRoomSession();
 			if (session) getStore()._attemptRejoin(session);
 		};
 
 		const onDisconnect = () => {
 			getStore()._setStatus("disconnected");
-
 			if (_intentional) {
-				// user-triggered — no toast needed
 				_intentional = false;
 				return;
 			}
-
-			// don't show a toast here — onReconnectAttempt fires immediately after
-			// and is the right place for it. showing here would cause a double-set
-			// on the same id within the same tick.
 		};
 
 		const onConnectError = () => {
 			getStore()._setStatus("error");
-
-			// only show on the very first attempt — after that onReconnectAttempt covers it
 			if (!hasConnectedOnce) {
 				toast.error("Could not connect to server.", {
 					id: CONN_TOAST_ID,
@@ -84,21 +71,27 @@ export function useSocketInit(): void {
 		const onGameState = (state: GameState) => getStore()._syncState(state);
 		const onRoomError = (msg: string) => toast.error(msg);
 		const onRoomClosed = () => getStore()._closeRoom();
-		const onRejoinFailed = () => getStore()._closeRoom();
-		const onPlayerSecret = (payload: unknown) => getStore()._setSecret(payload);
 		const onRoomAbandoned = (msg: string) => {
 			getStore()._abandonRoom(msg);
 			toast.error(msg, { duration: 6000 });
 		};
+		const onKicked = () => {
+			toast.error("You were removed from the room by the host.");
+			getStore()._closeRoom();
+		};
+		const onRejoinFailed = () => getStore()._closeRoom();
+		const onPlayerSecret = (payload: unknown) => getStore()._setSecret(payload);
+
 		socket.on("connect", onConnect);
 		socket.on("disconnect", onDisconnect);
 		socket.on("connect_error", onConnectError);
 		socket.on("game_state", onGameState);
 		socket.on("room_error", onRoomError);
 		socket.on("room_closed", onRoomClosed);
+		socket.on("room_abandoned", onRoomAbandoned);
+		socket.on("kicked", onKicked);
 		socket.on("rejoin_failed", onRejoinFailed);
 		socket.on("player_secret", onPlayerSecret);
-		socket.on("room_abandoned", onRoomAbandoned);
 		socket.io.on("reconnect_attempt", onReconnectAttempt);
 		socket.io.on("reconnect_failed", onReconnectFailed);
 
@@ -113,9 +106,10 @@ export function useSocketInit(): void {
 			socket.off("game_state", onGameState);
 			socket.off("room_error", onRoomError);
 			socket.off("room_closed", onRoomClosed);
+			socket.off("room_abandoned", onRoomAbandoned);
+			socket.off("kicked", onKicked);
 			socket.off("rejoin_failed", onRejoinFailed);
 			socket.off("player_secret", onPlayerSecret);
-			socket.off("room_abandoned", onRoomAbandoned);
 			socket.io.off("reconnect_attempt", onReconnectAttempt);
 			socket.io.off("reconnect_failed", onReconnectFailed);
 		};

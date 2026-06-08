@@ -10,7 +10,12 @@ import {
 	type Room,
 	type RoomRegistry,
 } from "./registry";
-import { CreateRoomSchema, JoinRoomSchema, RejoinRoomSchema } from "./schemas";
+import {
+	CreateRoomSchema,
+	JoinRoomSchema,
+	RejoinRoomSchema,
+	KickPlayerSchema,
+} from "./schemas";
 import type { GameRunner } from "../engine/GameRunner";
 import type { IO, ClientSocket } from "../types";
 
@@ -243,6 +248,27 @@ export function registerHandlers(
 		if (room.phase === "in_game") {
 			runner.resendSecret(room, playerId, io);
 		}
+	});
+
+	socket.on("kick_player", (payload) => {
+		const result = KickPlayerSchema.safeParse(payload);
+		if (!result.success) return;
+
+		const room = store.findBySocket(socket.id);
+		if (!room || !isHostSocket(room, socket.id) || room.phase !== "lobby")
+			return;
+
+		const target = room.players.get(result.data.playerId);
+		if (!target) return;
+
+		const partyLeaderId = room.players.keys().next().value;
+		if (result.data.playerId === partyLeaderId) return;
+
+		io.to(target.socketId).emit("kicked");
+		io.in(target.socketId).socketsLeave(room.code);
+		store.untrackSocket(target.socketId);
+		removePlayer(room, target.socketId);
+		broadcast(io, room);
 	});
 
 	socket.on("start_game", () => {

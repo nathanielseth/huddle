@@ -39,6 +39,7 @@ interface GameStore {
 	startGame: () => void;
 	pauseGame: () => void;
 	resumeGame: () => void;
+	kickPlayer: (playerId: string) => void;
 	_syncState: (state: GameState) => void;
 	_setStatus: (status: ConnectionStatus) => void;
 	_setError: (message: string) => void;
@@ -148,10 +149,16 @@ export const useGameStore = create<GameStore>((set, get) => ({
 		socket.emit("resume_game");
 	},
 
+	kickPlayer: (playerId) => {
+		if (get().status !== "connected") return;
+		socket.emit("kick_player", { playerId });
+	},
+
 	_syncState: (state) => {
 		clearRejoinTimeout();
 
 		const { role, playerId, playerName } = get();
+
 		const resolvedName =
 			state.players.find((p) => p.id === playerId)?.name ?? playerName;
 

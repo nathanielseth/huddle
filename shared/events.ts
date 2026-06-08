@@ -5,6 +5,7 @@ export interface ServerToClientEvents {
 	room_error: (message: string) => void;
 	room_closed: () => void;
 	room_abandoned: (message: string) => void;
+	kicked: () => void;
 	rejoin_failed: () => void;
 	player_secret: (payload: unknown) => void;
 }
@@ -26,4 +27,5 @@ export interface ClientToServerEvents {
 	player_action: (payload: unknown) => void;
 	pause_game: () => void;
 	resume_game: () => void;
+	kick_player: (payload: { playerId: string }) => void;
 }

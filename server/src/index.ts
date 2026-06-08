@@ -23,6 +23,6 @@ const io = createSocketServer(httpServer, registry, runner);
 const cleanupTimer = startRoomCleanup(io, registry, runner);
 registerShutdownHandlers(httpServer, io, cleanupTimer);
 
-httpServer.listen(env.PORT, () => {
+httpServer.listen(env.PORT, "0.0.0.0", () => {
 	logger.info("server started", { port: env.PORT, env: env.NODE_ENV });
 });

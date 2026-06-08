@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { useNavigate, Navigate } from "react-router";
 import { motion, AnimatePresence } from "motion/react";
-import { LogOut, Copy, Check } from "lucide-react";
+import { LogOut, Copy, Check, X } from "lucide-react";
 import { useGameStore } from "../app/store";
 import { GAMES } from "../data/games";
 import { FinishedHost, FinishedPlayer } from "../games/sabong/phases/Finished";
@@ -23,10 +23,14 @@ export function Room() {
 	const pauseReason = useGameStore((s) => s.pauseReason);
 	const hostReconnectDeadline = useGameStore((s) => s.hostReconnectDeadline);
 	const resumeGame = useGameStore((s) => s.resumeGame);
+	const kickPlayer = useGameStore((s) => s.kickPlayer);
 
 	const [copied, setCopied] = useState(false);
 
-	// escape to pause (host only)
+	useEffect(() => {
+		if (!roomCode) navigate("/", { replace: true });
+	}, [roomCode, navigate]);
+
 	useEffect(() => {
 		if (phase !== "in_game" || role !== "host") return;
 		const onKeyDown = (e: KeyboardEvent) => {
@@ -55,7 +59,7 @@ export function Room() {
 		setTimeout(() => setCopied(false), 2000);
 	}
 
-	// game component stays mounted during pause so the frozen state shows beneath the overlay
+	// Game component stays mounted during pause so the frozen state shows beneath the overlay.
 	if (phase === "in_game" || phase === "paused") {
 		const entry = GAME_REGISTRY.find((g) => g.id === gameId);
 		if (entry) {
@@ -93,7 +97,7 @@ export function Room() {
 
 	return (
 		<div className="flex flex-col min-h-screen bg-bg">
-			{/* top bar */}
+			{/* Top bar */}
 			<div className="flex items-center justify-between px-6 py-5 border-b border-border">
 				<div className="flex items-center gap-3">
 					{game && (
@@ -181,7 +185,7 @@ export function Room() {
 							</p>
 						</motion.div>
 
-						<PlayerList players={players} playerId={null} />
+						<PlayerList players={players} playerId={null} onKick={kickPlayer} />
 
 						<motion.div
 							className="flex flex-col items-center gap-2"
@@ -287,9 +291,11 @@ export function Room() {
 function PlayerList({
 	players,
 	playerId,
+	onKick,
 }: {
 	players: Player[];
 	playerId: string | null;
+	onKick?: (playerId: string) => void;
 }) {
 	return (
 		<motion.div
@@ -320,7 +326,7 @@ function PlayerList({
 					players.map((player, index) => (
 						<motion.div
 							key={player.id}
-							className="flex items-center gap-3 px-4 py-3 rounded-xl bg-white/4 border border-border"
+							className="group flex items-center gap-3 px-4 py-3 rounded-xl bg-white/4 border border-border"
 							initial={{ opacity: 0, x: -10 }}
 							animate={{ opacity: 1, x: 0 }}
 							exit={{ opacity: 0, x: 10 }}
@@ -329,7 +335,7 @@ function PlayerList({
 							<div className="flex items-center justify-center w-8 h-8 rounded-lg bg-white/8 text-xs font-bold text-white/60 shrink-0 uppercase">
 								{index === 0 ? "👑" : player.name.slice(0, 2)}
 							</div>
-							<span className="flex-1 text-sm font-medium text-white">
+							<span className="flex-1 text-sm font-medium text-white truncate">
 								{player.name}
 								{player.id === playerId && (
 									<span className="ml-2 text-xs text-white/30">(you)</span>
@@ -340,6 +346,16 @@ function PlayerList({
 									player.isConnected ? "bg-green-400" : "bg-white/20"
 								}`}
 							/>
+							{onKick && index !== 0 && (
+								<button
+									type="button"
+									onClick={() => onKick(player.id)}
+									aria-label={`Kick ${player.name}`}
+									className="shrink-0 flex items-center justify-center w-6 h-6 rounded-md opacity-0 group-hover:opacity-100 text-white/50 hover:text-red-400 hover:bg-red-400/10 transition-all cursor-pointer"
+								>
+									<X size={12} />
+								</button>
+							)}
 						</motion.div>
 					))
 				)}
