@@ -1,4 +1,4 @@
-import { motion } from "motion/react";
+import { m } from "motion/react";
 import type { Pack } from "../../types/game";
 import { cn } from "../../lib/utils/cn";
 
@@ -30,7 +30,7 @@ export function PackTabs({ packs, selectedPackId, onSelect }: PackTabsProps) {
 					All
 				</span>
 				{selectedPackId === "all" && (
-					<motion.div
+					<m.div
 						layoutId="pack-underline"
 						className="absolute bottom-0 left-0 right-7 h-0.5 rounded-full bg-white/70"
 						transition={{ type: "spring", stiffness: 420, damping: 38 }}
@@ -63,7 +63,7 @@ export function PackTabs({ packs, selectedPackId, onSelect }: PackTabsProps) {
 							{pack.name}
 						</span>
 						{isSelected && (
-							<motion.div
+							<m.div
 								layoutId="pack-underline"
 								className="absolute bottom-0 left-0 right-7 h-0.5 rounded-full"
 								style={{ backgroundColor: activeAccent }}

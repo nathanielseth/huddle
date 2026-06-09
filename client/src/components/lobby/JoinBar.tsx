@@ -1,5 +1,5 @@
 import { useRef, useState } from "react";
-import { AnimatePresence, motion } from "motion/react";
+import { AnimatePresence, m } from "motion/react";
 import { X, Loader2 } from "lucide-react";
 import { useGameStore } from "../../app/store";
 
@@ -94,7 +94,7 @@ export function JoinBar({ onFocus }: JoinBarProps) {
 					>
 						Room Code
 					</label>
-					<motion.div
+					<m.div
 						className="relative"
 						animate={{ x: shakeCode ? SHAKE : 0 }}
 						transition={SHAKE_TRANSITION}
@@ -116,7 +116,7 @@ export function JoinBar({ onFocus }: JoinBarProps) {
 						/>
 						<AnimatePresence>
 							{code.length > 0 && (
-								<motion.button
+								<m.button
 									type="button"
 									initial={{ opacity: 0, scale: 0.7 }}
 									animate={{ opacity: 1, scale: 1 }}
@@ -131,10 +131,10 @@ export function JoinBar({ onFocus }: JoinBarProps) {
 									aria-label="Clear room code"
 								>
 									<X size={14} strokeWidth={2.5} />
-								</motion.button>
+								</m.button>
 							)}
 						</AnimatePresence>
-					</motion.div>
+					</m.div>
 				</div>
 
 				{/* Player Name Input */}
@@ -145,7 +145,7 @@ export function JoinBar({ onFocus }: JoinBarProps) {
 					>
 						Your Name
 					</label>
-					<motion.div
+					<m.div
 						className="relative"
 						animate={{ x: shakeName ? SHAKE : 0 }}
 						transition={SHAKE_TRANSITION}
@@ -168,7 +168,7 @@ export function JoinBar({ onFocus }: JoinBarProps) {
 						/>
 						<AnimatePresence>
 							{name.length > 0 && (
-								<motion.span
+								<m.span
 									initial={{ opacity: 0 }}
 									animate={{ opacity: 1 }}
 									exit={{ opacity: 0 }}
@@ -176,10 +176,10 @@ export function JoinBar({ onFocus }: JoinBarProps) {
 									className="absolute right-3 top-1/2 -translate-y-1/2 text-xs font-mono tabular-nums pointer-events-none text-white/25"
 								>
 									{10 - name.length}
-								</motion.span>
+								</m.span>
 							)}
 						</AnimatePresence>
-					</motion.div>
+					</m.div>
 				</div>
 
 				{/* Action Button */}

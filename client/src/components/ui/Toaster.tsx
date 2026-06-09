@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { AnimatePresence, motion, type PanInfo } from "motion/react";
+import { AnimatePresence, m, type PanInfo } from "motion/react";
 import { useStore } from "zustand";
 import { X, CheckCircle2, AlertTriangle, XCircle, Info } from "lucide-react";
 import { toastStore, type Toast } from "../../lib/utils/toast";
@@ -158,7 +158,7 @@ function ToastItem({ t, onDismiss, reducedMotion }: ToastItemProps) {
 	const animProps = getAnimationProps(reducedMotion);
 
 	return (
-		<motion.li
+		<m.li
 			layout
 			layoutId={t.id}
 			initial={animProps.initial}
@@ -240,7 +240,7 @@ function ToastItem({ t, onDismiss, reducedMotion }: ToastItemProps) {
 					/>
 				</div>
 			)}
-		</motion.li>
+		</m.li>
 	);
 }
 
@@ -275,7 +275,7 @@ export function Toaster() {
 
 			<AnimatePresence>
 				{queueLength > 0 && (
-					<motion.p
+					<m.p
 						key="queue-badge"
 						initial={{ opacity: 0, y: -4 }}
 						animate={{ opacity: 1, y: 0 }}
@@ -284,7 +284,7 @@ export function Toaster() {
 						className="pointer-events-none select-none text-[10px] font-bold tracking-widest uppercase text-white/25"
 					>
 						+{queueLength} queued
-					</motion.p>
+					</m.p>
 				)}
 			</AnimatePresence>
 		</section>,

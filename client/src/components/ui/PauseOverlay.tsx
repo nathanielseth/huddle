@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { motion, AnimatePresence } from "motion/react";
+import { m, AnimatePresence } from "motion/react";
 import type { PauseReason } from "@shared/types";
 
 interface Props {
@@ -57,14 +57,14 @@ export function PauseOverlay({
 	const isHostDisconnected = pauseReason === "host_disconnected";
 
 	return (
-		<motion.div
+		<m.div
 			className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 backdrop-blur-sm"
 			initial={{ opacity: 0 }}
 			animate={{ opacity: 1 }}
 			exit={{ opacity: 0 }}
 			transition={{ duration: 0.2 }}
 		>
-			<motion.div
+			<m.div
 				className="flex flex-col items-center gap-6 w-full max-w-sm mx-4 px-8 py-10 rounded-2xl bg-bg border border-border text-center"
 				initial={{ scale: 0.94, opacity: 0 }}
 				animate={{ scale: 1, opacity: 1 }}
@@ -96,7 +96,7 @@ export function PauseOverlay({
 				) : (
 					<AnimatePresence mode="wait">
 						{confirming ? (
-							<motion.div
+							<m.div
 								key="confirm"
 								className="flex flex-col items-center gap-6 w-full"
 								initial={{ opacity: 0, y: 6 }}
@@ -129,9 +129,9 @@ export function PauseOverlay({
 										Cancel
 									</button>
 								</div>
-							</motion.div>
+							</m.div>
 						) : (
-							<motion.div
+							<m.div
 								key="paused"
 								className="flex flex-col items-center gap-6 w-full"
 								initial={{ opacity: 0, y: 6 }}
@@ -168,11 +168,11 @@ export function PauseOverlay({
 										</button>
 									</div>
 								)}
-							</motion.div>
+							</m.div>
 						)}
 					</AnimatePresence>
 				)}
-			</motion.div>
-		</motion.div>
+			</m.div>
+		</m.div>
 	);
 }

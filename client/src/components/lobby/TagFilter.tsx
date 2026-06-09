@@ -1,5 +1,5 @@
 import { useRef, useState, useEffect } from "react";
-import { motion, AnimatePresence } from "motion/react";
+import { m, AnimatePresence } from "motion/react";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { cn } from "../../lib/utils/cn";
 
@@ -58,7 +58,7 @@ export function TagFilter({ tags, selectedTag, onSelect }: TagFilterProps) {
 		<div className="relative flex items-center">
 			<AnimatePresence>
 				{canScrollLeft && (
-					<motion.button
+					<m.button
 						type="button"
 						initial={{ opacity: 0, scale: 0.8 }}
 						animate={{ opacity: 1, scale: 1 }}
@@ -69,7 +69,7 @@ export function TagFilter({ tags, selectedTag, onSelect }: TagFilterProps) {
 						aria-label="Scroll left"
 					>
 						<ChevronLeft size={18} strokeWidth={2.5} />
-					</motion.button>
+					</m.button>
 				)}
 			</AnimatePresence>
 
@@ -107,7 +107,7 @@ export function TagFilter({ tags, selectedTag, onSelect }: TagFilterProps) {
 
 			<AnimatePresence>
 				{canScrollRight && (
-					<motion.button
+					<m.button
 						type="button"
 						initial={{ opacity: 0, scale: 0.8 }}
 						animate={{ opacity: 1, scale: 1 }}
@@ -118,7 +118,7 @@ export function TagFilter({ tags, selectedTag, onSelect }: TagFilterProps) {
 						aria-label="Scroll right"
 					>
 						<ChevronRight size={18} strokeWidth={2.5} />
-					</motion.button>
+					</m.button>
 				)}
 			</AnimatePresence>
 		</div>

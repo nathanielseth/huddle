@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef } from "react";
 import { createPortal } from "react-dom";
-import { AnimatePresence, motion } from "motion/react";
+import { AnimatePresence, m } from "motion/react";
 import { useStore } from "zustand";
 import { AlertCircle, AlertTriangle, Info } from "lucide-react";
 import { modalStore, type ModalEntry } from "../../lib/utils/modal";
@@ -145,7 +145,7 @@ function ModalDialog({ entry, reducedMotion }: ModalDialogProps) {
 	}, [entry.id, entry.variant]);
 
 	return (
-		<motion.div
+		<m.div
 			// backdrop + centering container
 			className="fixed inset-0 z-10000 flex items-center justify-center p-5 bg-black/60"
 			initial={{ opacity: 0 }}
@@ -158,7 +158,7 @@ function ModalDialog({ entry, reducedMotion }: ModalDialogProps) {
 			}}
 		>
 			{/* panel */}
-			<motion.div
+			<m.div
 				// callback ref: safe against framer motion's forwarded-ref timing
 				ref={panelTrapRef}
 				role="dialog"
@@ -232,8 +232,8 @@ function ModalDialog({ entry, reducedMotion }: ModalDialogProps) {
 						{entry.confirmLabel}
 					</button>
 				</div>
-			</motion.div>
-		</motion.div>
+			</m.div>
+		</m.div>
 	);
 }
 
