@@ -1,4 +1,5 @@
-import { useEffect, useRef, type RefObject } from "react";
+import { useRef, useEffect } from "react";
+import type { RefObject } from "react";
 
 // shaders
 const VERT = `#version 300 es
@@ -122,6 +123,8 @@ function initWebGL(gl: WebGL2RenderingContext): GLResources {
 	gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
 	gl.clearColor(0, 0, 0, 0);
 
+	gl.useProgram(prog);
+
 	return { prog, vert, frag, buf, vao };
 }
 
@@ -131,6 +134,58 @@ function destroyWebGL(gl: WebGL2RenderingContext, res: GLResources): void {
 	gl.deleteShader(res.frag);
 	gl.deleteBuffer(res.buf);
 	gl.deleteVertexArray(res.vao);
+}
+
+function rafTick(
+	glStateRef: React.RefObject<GLState | null>,
+	paramsRef: React.RefObject<WaveParams>,
+	start: number,
+) {
+	const state = glStateRef.current;
+	if (!state) return; // unmounted — exit cleanly
+
+	if (!document.hidden) {
+		const { gl, res, u } = state;
+		const { threshold, flip, color } = paramsRef.current;
+		const t = (performance.now() - start) / 1000;
+
+		gl.uniform1f(u.u_threshold, threshold);
+		gl.uniform1f(u.u_time, t);
+		gl.uniform1f(u.u_flip, flip);
+		gl.uniform3f(u.u_color, color[0], color[1], color[2]);
+
+		gl.clear(gl.COLOR_BUFFER_BIT);
+
+		gl.bindVertexArray(res.vao);
+		gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+		gl.bindVertexArray(null);
+	}
+
+	state.raf = requestAnimationFrame(() =>
+		rafTick(glStateRef, paramsRef, start),
+	);
+}
+
+function startLoop(
+	glStateRef: React.RefObject<GLState | null>,
+	paramsRef: React.RefObject<WaveParams>,
+) {
+	const s = glStateRef.current;
+	if (!s) return;
+	cancelAnimationFrame(s.raf);
+	s.raf = requestAnimationFrame(() => rafTick(glStateRef, paramsRef, s.start));
+}
+
+function stopLoop(glStateRef: React.RefObject<GLState | null>) {
+	const s = glStateRef.current;
+	if (s) cancelAnimationFrame(s.raf);
+}
+
+function updateParams(
+	paramsRef: React.RefObject<WaveParams>,
+	next: Partial<WaveParams>,
+) {
+	Object.assign(paramsRef.current, next);
 }
 
 // hook
@@ -149,29 +204,28 @@ export function useWaveShader(canvasRef: RefObject<HTMLCanvasElement | null>) {
 		const canvas = canvasRef.current;
 		if (!canvas) return;
 
-		const gl = canvas.getContext("webgl2", {
+		const ctx = canvas.getContext("webgl2", {
 			alpha: true,
 			antialias: false,
 			depth: false,
 		});
 
-		if (!gl) {
+		if (!ctx) {
 			console.error("[WaveShader] WebGL2 not supported.");
 			return;
 		}
 
-		const res = initWebGL(gl);
-		gl.useProgram(res.prog);
+		const res = initWebGL(ctx);
 
 		const u: Uniforms = {
-			u_res: gl.getUniformLocation(res.prog, "u_res"),
-			u_threshold: gl.getUniformLocation(res.prog, "u_threshold"),
-			u_time: gl.getUniformLocation(res.prog, "u_time"),
-			u_flip: gl.getUniformLocation(res.prog, "u_flip"),
-			u_color: gl.getUniformLocation(res.prog, "u_color"),
+			u_res: ctx.getUniformLocation(res.prog, "u_res"),
+			u_threshold: ctx.getUniformLocation(res.prog, "u_threshold"),
+			u_time: ctx.getUniformLocation(res.prog, "u_time"),
+			u_flip: ctx.getUniformLocation(res.prog, "u_flip"),
+			u_color: ctx.getUniformLocation(res.prog, "u_color"),
 		};
 
-		glState.current = { gl, res, u, raf: 0, start: performance.now() };
+		glState.current = { gl: ctx, res, u, raf: 0, start: performance.now() };
 
 		const resize = () => {
 			const dpr = window.devicePixelRatio ?? 1;
@@ -179,8 +233,8 @@ export function useWaveShader(canvasRef: RefObject<HTMLCanvasElement | null>) {
 			const h = Math.round(canvas.offsetHeight * dpr);
 			canvas.width = w;
 			canvas.height = h;
-			gl.viewport(0, 0, w, h);
-			gl.uniform2f(u.u_res, w, h); // only changes on resize
+			ctx.viewport(0, 0, w, h);
+			ctx.uniform2f(u.u_res, w, h);
 		};
 
 		const ro = new ResizeObserver(resize);
@@ -197,51 +251,9 @@ export function useWaveShader(canvasRef: RefObject<HTMLCanvasElement | null>) {
 		};
 	}, [canvasRef]); // refobject identity is stable across renders
 
-	// raf loop
-	const startLoop = () => {
-		const s = glState.current;
-		if (!s) return;
-
-		const { gl, res, u, start } = s;
-
-		const tick = () => {
-			const state = glState.current;
-			if (!state) return; // unmounted — exit cleanly
-
-			// browser throttles background tabs, but skip the draw call explicitly
-			// so we don't submit gpu work while invisible
-			if (!document.hidden) {
-				const { threshold, flip, color } = params.current;
-				const t = (performance.now() - start) / 1000;
-
-				gl.uniform1f(u.u_threshold, threshold);
-				gl.uniform1f(u.u_time, t);
-				gl.uniform1f(u.u_flip, flip);
-				gl.uniform3f(u.u_color, color[0], color[1], color[2]);
-
-				gl.clear(gl.COLOR_BUFFER_BIT);
-
-				// bind vao, draw, unbind vao
-				gl.bindVertexArray(res.vao);
-				gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
-				gl.bindVertexArray(null);
-			}
-
-			state.raf = requestAnimationFrame(tick);
-		};
-
-		cancelAnimationFrame(s.raf);
-		s.raf = requestAnimationFrame(tick);
-	};
-
-	const stopLoop = () => {
-		const s = glState.current;
-		if (s) cancelAnimationFrame(s.raf);
-	};
-
-	const updateParams = (next: Partial<WaveParams>) => {
-		Object.assign(params.current, next);
-	};
-
-	return { startLoop, stopLoop, updateParams } as const;
+	return {
+		startLoop: () => startLoop(glState, params),
+		stopLoop: () => stopLoop(glState),
+		updateParams: (next: Partial<WaveParams>) => updateParams(params, next),
+	} as const;
 }

@@ -46,8 +46,6 @@ export function use3DTilt<T extends HTMLElement>(config?: TiltConfig) {
 			if (!ref.current) return;
 			ref.current.style.transition = cfg.transitionMove;
 			ref.current.style.transform = `perspective(${cfg.perspective}px) rotateX(${-dy * cfg.rotateX}deg) rotateY(${dx * cfg.rotateY}deg) scale(${cfg.scale})`;
-			ref.current.style.setProperty("--mouse-x", `${x}px`);
-			ref.current.style.setProperty("--mouse-y", `${y}px`);
 		});
 	};
 
@@ -57,8 +55,6 @@ export function use3DTilt<T extends HTMLElement>(config?: TiltConfig) {
 
 		ref.current.style.transition = cfg.transitionLeave;
 		ref.current.style.transform = `perspective(${cfg.perspective}px) rotateX(0deg) rotateY(0deg) scale(1)`;
-		ref.current.style.setProperty("--mouse-x", "-9999px");
-		ref.current.style.setProperty("--mouse-y", "-9999px");
 
 		ref.current.addEventListener(
 			"transitionend",
