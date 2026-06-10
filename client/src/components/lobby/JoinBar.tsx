@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useRef, useReducer } from "react";
 import { AnimatePresence, m } from "motion/react";
 import { X, Loader2 } from "lucide-react";
 import { useGameStore } from "../../app/store";
@@ -11,12 +11,59 @@ const SHAKE = [0, -6, 6, -5, 5, -3, 3, 0];
 const SHAKE_TRANSITION = { type: "tween" as const, duration: 0.4 };
 const JOIN_TIMEOUT_MS = 350;
 
+type JoinState = {
+	code: string;
+	name: string;
+	shakeCode: boolean;
+	shakeName: boolean;
+	isPending: boolean;
+};
+
+type JoinAction =
+	| { type: "SET_CODE"; value: string }
+	| { type: "SET_NAME"; value: string }
+	| { type: "SHAKE"; field: "code" | "name" | "both" }
+	| { type: "CLEAR_SHAKE" }
+	| { type: "SET_PENDING"; value: boolean }
+	| { type: "CANCEL" }
+	| { type: "CLEAR_CODE" };
+
+const INITIAL_JOIN: JoinState = {
+	code: "",
+	name: "",
+	shakeCode: false,
+	shakeName: false,
+	isPending: false,
+};
+
+function joinReducer(state: JoinState, action: JoinAction): JoinState {
+	switch (action.type) {
+		case "SET_CODE":
+			return { ...state, code: action.value, isPending: false };
+		case "SET_NAME":
+			return { ...state, name: action.value, isPending: false };
+		case "SHAKE":
+			return {
+				...state,
+				shakeCode: action.field === "code" || action.field === "both",
+				shakeName: action.field === "name" || action.field === "both",
+			};
+		case "CLEAR_SHAKE":
+			return { ...state, shakeCode: false, shakeName: false };
+		case "SET_PENDING":
+			return { ...state, isPending: action.value };
+		case "CANCEL":
+			return { ...state, isPending: false };
+		case "CLEAR_CODE":
+			return { ...state, code: "", isPending: false };
+		default:
+			return state;
+	}
+}
+
 export function JoinBar({ onFocus }: JoinBarProps) {
-	const [code, setCode] = useState("");
-	const [name, setName] = useState("");
-	const [shakeCode, setShakeCode] = useState(false);
-	const [shakeName, setShakeName] = useState(false);
-	const [isPending, setIsPending] = useState(false);
+	const [state, dispatch] = useReducer(joinReducer, INITIAL_JOIN);
+	const { code, name, shakeCode, shakeName, isPending } = state;
 
 	const nameRef = useRef<HTMLInputElement>(null);
 	const pendingTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -24,19 +71,15 @@ export function JoinBar({ onFocus }: JoinBarProps) {
 	const joinRoom = useGameStore((s) => s.joinRoom);
 
 	const isValid = code.length === 4 && name.trim().length > 0;
+	const buttonActive = isValid && !isPending;
 
-	function shake(field: "code" | "name") {
-		if (field === "code") {
-			setShakeCode(true);
-			setTimeout(() => setShakeCode(false), 400);
-		} else {
-			setShakeName(true);
-			setTimeout(() => setShakeName(false), 400);
-		}
+	function shake(field: "code" | "name" | "both") {
+		dispatch({ type: "SHAKE", field });
+		setTimeout(() => dispatch({ type: "CLEAR_SHAKE" }), 400);
 	}
 
 	function cancelPending() {
-		setIsPending(false);
+		dispatch({ type: "CANCEL" });
 		if (pendingTimer.current) {
 			clearTimeout(pendingTimer.current);
 			pendingTimer.current = null;
@@ -46,40 +89,38 @@ export function JoinBar({ onFocus }: JoinBarProps) {
 	function handleCodeChange(e: React.ChangeEvent<HTMLInputElement>) {
 		if (isPending) cancelPending();
 		const val = e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, "");
-		setCode(val);
+		dispatch({ type: "SET_CODE", value: val });
 		if (val.length === 4) nameRef.current?.focus();
 	}
 
 	function handleNameChange(e: React.ChangeEvent<HTMLInputElement>) {
 		if (isPending) cancelPending();
-		setName(e.target.value);
+		dispatch({ type: "SET_NAME", value: e.target.value });
 	}
 
 	function handleJoin() {
 		if (isPending) return;
 		if (!isValid) {
-			if (code.length < 4) shake("code");
-			if (name.trim().length === 0) shake("name");
+			if (code.length < 4 && name.trim().length === 0) shake("both");
+			else if (code.length < 4) shake("code");
+			else shake("name");
 			return;
 		}
 
-		setIsPending(true);
+		dispatch({ type: "SET_PENDING", value: true });
 		joinRoom(code, name.trim());
 
 		if (pendingTimer.current) clearTimeout(pendingTimer.current);
 		pendingTimer.current = setTimeout(() => {
-			setIsPending(false);
+			dispatch({ type: "SET_PENDING", value: false });
 			pendingTimer.current = null;
-			shake("code");
-			shake("name");
+			shake("both");
 		}, JOIN_TIMEOUT_MS);
 	}
 
 	function handleKeyDown(e: React.KeyboardEvent) {
 		if (e.key === "Enter") handleJoin();
 	}
-
-	const buttonActive = isValid && !isPending;
 
 	return (
 		<div className="flex flex-col gap-4">
@@ -123,7 +164,7 @@ export function JoinBar({ onFocus }: JoinBarProps) {
 									exit={{ opacity: 0, scale: 0.7 }}
 									transition={{ duration: 0.12 }}
 									onClick={() => {
-										setCode("");
+										dispatch({ type: "CLEAR_CODE" });
 										cancelPending();
 									}}
 									className="absolute right-2.5 top-1/2 -translate-y-1/2 text-white/30 hover:text-white/70 transition-colors cursor-pointer"

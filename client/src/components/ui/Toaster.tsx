@@ -57,6 +57,10 @@ function getAnimationProps(reduced: boolean) {
 	};
 }
 
+function dismiss(id: string) {
+	toastStore.getState()._dismiss(id);
+}
+
 // ToastItem
 
 interface ToastItemProps {
@@ -250,10 +254,6 @@ export function Toaster() {
 	const toasts = useStore(toastStore, (s) => s.toasts);
 	const queueLength = useStore(toastStore, (s) => s.queue.length);
 	const reducedMotion = useReducedMotion();
-
-	function dismiss(id: string) {
-		toastStore.getState()._dismiss(id);
-	}
 
 	return createPortal(
 		<section

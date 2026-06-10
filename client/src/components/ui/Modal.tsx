@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef } from "react";
+import { useEffect, useRef } from "react";
 import { createPortal } from "react-dom";
 import { AnimatePresence, m } from "motion/react";
 import { useStore } from "zustand";
@@ -57,10 +57,8 @@ function lockScroll(): () => void {
 const FOCUSABLE =
 	'button:not([disabled]),[href],input:not([disabled]),select:not([disabled]),textarea:not([disabled]),[tabindex]:not([tabindex="-1"])';
 
-// returns a callback ref. attach it to the panel element
-// using a callback ref instead of useref + useeffect avoids the timing race where useeffect fires before the ref is populated
 function useFocusTrap() {
-	return useCallback((el: HTMLElement | null) => {
+	return (el: HTMLElement | null) => {
 		if (!el) return;
 
 		function onKeyDown(e: KeyboardEvent) {
@@ -81,7 +79,7 @@ function useFocusTrap() {
 
 		el.addEventListener("keydown", onKeyDown);
 		return () => el.removeEventListener("keydown", onKeyDown);
-	}, []);
+	};
 }
 
 // saves the element that had focus before the modal opened
@@ -94,7 +92,7 @@ function useFocusRestoration() {
 
 		return () => {
 			// restore on unmount
-			// guard: element must still be in the dom and focusable (the trigger might have been removed while the modal was open, e.g. a button that was conditionally rendered)
+			// guard: element must still be in the dom and focusable
 			const el = triggerRef.current;
 			if (el instanceof HTMLElement && document.contains(el)) {
 				el.focus({ preventScroll: true });
@@ -115,7 +113,15 @@ function ModalDialog({ entry, reducedMotion }: ModalDialogProps) {
 	const panelTrapRef = useFocusTrap();
 	const cfg = VARIANTS[entry.variant];
 
+	// destructive: focus cancel by default to prevent fat-finger confirms
+	// alert + confirm: focus the primary action immediately
+	const initialFocusRef = useRef<HTMLButtonElement>(null);
+
 	useFocusRestoration();
+
+	useEffect(() => {
+		initialFocusRef.current?.focus({ preventScroll: true });
+	}, []);
 
 	function resolve(value: boolean) {
 		modalStore.getState()._resolve(entry.id, value);
@@ -130,18 +136,16 @@ function ModalDialog({ entry, reducedMotion }: ModalDialogProps) {
 	// scroll lock with scrollbar-width compensation to prevent layout shift
 	useEffect(() => lockScroll(), []);
 
-	// escape captured in capture phase so running game key-listeners don't win
 	useEffect(() => {
 		function onKey(e: KeyboardEvent) {
 			if (e.key !== "Escape") return;
 			e.preventDefault();
 			e.stopImmediatePropagation();
-			dismiss();
+			modalStore.getState()._resolve(entry.id, entry.variant === "alert");
 		}
 		document.addEventListener("keydown", onKey, { capture: true });
 		return () =>
 			document.removeEventListener("keydown", onKey, { capture: true });
-		// eslint-disable-next-line react-hooks/exhaustive-deps
 	}, [entry.id, entry.variant]);
 
 	return (
@@ -214,8 +218,10 @@ function ModalDialog({ entry, reducedMotion }: ModalDialogProps) {
 					{entry.cancelLabel !== null && (
 						<button
 							type="button"
-							// destructive: focus cancel by default to prevent fat-finger confirms
-							autoFocus={entry.variant === "destructive"}
+							// destructive: cancel button gets initial focus
+							ref={
+								entry.variant === "destructive" ? initialFocusRef : undefined
+							}
 							onClick={() => resolve(false)}
 							className="flex-1 cursor-pointer border-r border-border py-3.5 text-sm font-medium text-white/50 transition-colors hover:bg-white/5 hover:text-white/80 active:bg-white/10"
 						>
@@ -224,8 +230,8 @@ function ModalDialog({ entry, reducedMotion }: ModalDialogProps) {
 					)}
 					<button
 						type="button"
-						// alert + confirm: focus the primary action immediately
-						autoFocus={entry.variant !== "destructive"}
+						// alert + confirm: confirm button gets initial focus
+						ref={entry.variant !== "destructive" ? initialFocusRef : undefined}
 						onClick={() => resolve(true)}
 						className={`flex-1 cursor-pointer py-3.5 text-sm font-semibold transition-colors ${cfg.confirmCls}`}
 					>
@@ -244,8 +250,6 @@ export function Modal() {
 	const reducedMotion = useReducedMotion();
 
 	// fifo: stack[0] is always active
-	// newer entries wait silently until the current one resolves and drops off the front
-	// animatepresence mode="wait" ensures the exit animation for the outgoing modal completes before the next one mounts
 	const current = stack[0] ?? null;
 
 	return createPortal(

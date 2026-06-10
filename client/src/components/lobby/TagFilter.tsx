@@ -1,4 +1,4 @@
-import { useRef, useState, useEffect } from "react";
+import { useRef, useState, useLayoutEffect } from "react";
 import { m, AnimatePresence } from "motion/react";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { cn } from "../../lib/utils/cn";
@@ -14,7 +14,7 @@ export function TagFilter({ tags, selectedTag, onSelect }: TagFilterProps) {
 	const [canScrollLeft, setCanScrollLeft] = useState(false);
 	const [canScrollRight, setCanScrollRight] = useState(false);
 
-	useEffect(() => {
+	useLayoutEffect(() => {
 		const el = scrollRef.current;
 		if (!el) return;
 
