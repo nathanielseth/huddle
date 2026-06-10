@@ -1,6 +1,6 @@
-import { useRef, useState } from "react";
+import { useRef, useState, useTransition } from "react";
 import { useNavigate, useParams, Navigate } from "react-router";
-import { motion, AnimatePresence } from "motion/react";
+import { m, AnimatePresence } from "motion/react";
 import { X, Loader2 } from "lucide-react";
 import { useGameStore } from "../app/store";
 
@@ -15,7 +15,7 @@ export function Join() {
 
 	const [name, setName] = useState("");
 	const [shake, setShake] = useState(false);
-	const [isPending, setIsPending] = useState(false);
+	const [isPending, startTransition] = useTransition();
 	const pendingTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 	const inputRef = useRef<HTMLInputElement>(null);
 
@@ -34,12 +34,12 @@ export function Join() {
 		}
 		if (isPending) return;
 
-		setIsPending(true);
-		joinRoom(code.toUpperCase(), trimmed);
+		startTransition(() => {
+			joinRoom(code.toUpperCase(), trimmed);
+		});
 
 		if (pendingTimer.current) clearTimeout(pendingTimer.current);
 		pendingTimer.current = setTimeout(() => {
-			setIsPending(false);
 			pendingTimer.current = null;
 			triggerShake();
 		}, JOIN_TIMEOUT_MS);
@@ -53,7 +53,7 @@ export function Join() {
 
 	return (
 		<div className="flex flex-col items-center justify-center min-h-screen px-6 bg-bg text-white">
-			<motion.div
+			<m.div
 				className="w-full max-w-sm flex flex-col gap-8"
 				initial={{ opacity: 0, y: 20 }}
 				animate={{ opacity: 1, y: 0 }}
@@ -84,28 +84,24 @@ export function Join() {
 						>
 							Your name
 						</label>
-						<motion.div
+						<m.div
 							className="relative"
 							animate={{ x: shake ? SHAKE : 0 }}
 							transition={{ type: "tween", duration: 0.4 }}
 						>
+							{/* autoFocus removed — screen reader / keyboard users navigate here
+							    themselves; stealing focus on load disorients them mid-page-read. */}
 							<input
 								id="join-name"
 								ref={inputRef}
 								type="text"
 								value={name}
 								onChange={(e) => {
-									if (isPending) {
-										setIsPending(false);
-										if (pendingTimer.current)
-											clearTimeout(pendingTimer.current);
-									}
 									setName(e.target.value.slice(0, 10));
 								}}
 								onKeyDown={handleKeyDown}
 								placeholder="Enter your name"
 								maxLength={10}
-								autoFocus
 								className={`h-11 w-full px-4 pr-10 rounded-lg bg-white/5 border text-sm placeholder:text-white/30 outline-none transition-colors ${
 									shake
 										? "border-red-500/70"
@@ -114,7 +110,7 @@ export function Join() {
 							/>
 							<AnimatePresence>
 								{name.length > 0 && (
-									<motion.button
+									<m.button
 										type="button"
 										initial={{ opacity: 0, scale: 0.7 }}
 										animate={{ opacity: 1, scale: 1 }}
@@ -126,10 +122,10 @@ export function Join() {
 										aria-label="Clear name"
 									>
 										<X size={14} strokeWidth={2.5} />
-									</motion.button>
+									</m.button>
 								)}
 							</AnimatePresence>
-						</motion.div>
+						</m.div>
 					</div>
 
 					<button
@@ -160,7 +156,7 @@ export function Join() {
 				>
 					Back to home
 				</button>
-			</motion.div>
+			</m.div>
 		</div>
 	);
 }

@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useNavigate, Navigate } from "react-router";
-import { motion, AnimatePresence } from "motion/react";
+import { m, AnimatePresence } from "motion/react";
 import { LogOut, Copy, Check, X } from "lucide-react";
 import { useGameStore } from "../app/store";
 import { GAMES } from "../data/games";
@@ -119,7 +119,7 @@ export function Room() {
 			<div className="flex flex-col flex-1 items-center justify-center gap-12 px-6 py-12">
 				{role === "host" ? (
 					<>
-						<motion.div
+						<m.div
 							className="flex flex-col items-center gap-4"
 							initial={{ opacity: 0, y: 16 }}
 							animate={{ opacity: 1, y: 0 }}
@@ -140,7 +140,7 @@ export function Room() {
 								>
 									<AnimatePresence mode="wait">
 										{copied ? (
-											<motion.span
+											<m.span
 												key="check"
 												initial={{ scale: 0.7, opacity: 0 }}
 												animate={{ scale: 1, opacity: 1 }}
@@ -148,9 +148,9 @@ export function Room() {
 												transition={{ duration: 0.15 }}
 											>
 												<Check size={16} className="text-green-400" />
-											</motion.span>
+											</m.span>
 										) : (
-											<motion.span
+											<m.span
 												key="copy"
 												initial={{ scale: 0.7, opacity: 0 }}
 												animate={{ scale: 1, opacity: 1 }}
@@ -158,14 +158,14 @@ export function Room() {
 												transition={{ duration: 0.15 }}
 											>
 												<Copy size={16} />
-											</motion.span>
+											</m.span>
 										)}
 									</AnimatePresence>
 								</button>
 							</div>
-						</motion.div>
+						</m.div>
 
-						<motion.div
+						<m.div
 							className="flex flex-col items-center gap-3"
 							initial={{ opacity: 0, scale: 0.95 }}
 							animate={{ opacity: 1, scale: 1 }}
@@ -183,11 +183,11 @@ export function Room() {
 							<p className="text-[10px] font-semibold tracking-[0.2em] uppercase text-white/30">
 								Scan to join
 							</p>
-						</motion.div>
+						</m.div>
 
 						<PlayerList players={players} playerId={null} onKick={kickPlayer} />
 
-						<motion.div
+						<m.div
 							className="flex flex-col items-center gap-2"
 							initial={{ opacity: 0 }}
 							animate={{ opacity: 1 }}
@@ -210,11 +210,11 @@ export function Room() {
 									Need at least {minPlayers} players to start
 								</p>
 							)}
-						</motion.div>
+						</m.div>
 					</>
 				) : (
 					<>
-						<motion.div
+						<m.div
 							className="flex flex-col items-center gap-2"
 							initial={{ opacity: 0, y: 16 }}
 							animate={{ opacity: 1, y: 0 }}
@@ -226,10 +226,10 @@ export function Room() {
 							<span className="font-display text-4xl font-black tracking-[0.12em] uppercase text-white">
 								{roomCode}
 							</span>
-						</motion.div>
+						</m.div>
 
 						{isPartyLeader ? (
-							<motion.div
+							<m.div
 								className="flex flex-col items-center gap-2"
 								initial={{ opacity: 0 }}
 								animate={{ opacity: 1 }}
@@ -241,22 +241,22 @@ export function Room() {
 								<p className="text-white/40 text-xs">
 									You can start the game whenever you're ready.
 								</p>
-							</motion.div>
+							</m.div>
 						) : (
-							<motion.p
+							<m.p
 								className="text-white/50 text-sm"
 								initial={{ opacity: 0 }}
 								animate={{ opacity: 1 }}
 								transition={{ delay: 0.15, duration: 0.3 }}
 							>
 								Waiting for the host to start...
-							</motion.p>
+							</m.p>
 						)}
 
 						<PlayerList players={players} playerId={playerId} />
 
 						{isPartyLeader && (
-							<motion.div
+							<m.div
 								className="flex flex-col items-center gap-2"
 								initial={{ opacity: 0 }}
 								animate={{ opacity: 1 }}
@@ -279,7 +279,7 @@ export function Room() {
 										Need at least {minPlayers} players to start
 									</p>
 								)}
-							</motion.div>
+							</m.div>
 						)}
 					</>
 				)}
@@ -298,7 +298,7 @@ function PlayerList({
 	onKick?: (playerId: string) => void;
 }) {
 	return (
-		<motion.div
+		<m.div
 			className="flex flex-col gap-3 w-full max-w-sm"
 			initial={{ opacity: 0 }}
 			animate={{ opacity: 1 }}
@@ -313,7 +313,7 @@ function PlayerList({
 
 			<AnimatePresence>
 				{players.length === 0 ? (
-					<motion.p
+					<m.p
 						key="empty"
 						className="text-sm text-white/25 py-4 text-center"
 						initial={{ opacity: 0 }}
@@ -321,10 +321,10 @@ function PlayerList({
 						exit={{ opacity: 0 }}
 					>
 						No players yet
-					</motion.p>
+					</m.p>
 				) : (
 					players.map((player, index) => (
-						<motion.div
+						<m.div
 							key={player.id}
 							className="group flex items-center gap-3 px-4 py-3 rounded-xl bg-white/4 border border-border"
 							initial={{ opacity: 0, x: -10 }}
@@ -356,10 +356,10 @@ function PlayerList({
 									<X size={12} />
 								</button>
 							)}
-						</motion.div>
+						</m.div>
 					))
 				)}
 			</AnimatePresence>
-		</motion.div>
+		</m.div>
 	);
 }

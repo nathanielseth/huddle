@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Navigate } from "react-router";
-import { AnimatePresence, motion } from "motion/react";
+import { AnimatePresence, m } from "motion/react";
 import { JoinBar } from "../components/lobby/JoinBar";
 import { PackTabs } from "../components/lobby/PackTabs";
 import { TagFilter } from "../components/lobby/TagFilter";
@@ -10,10 +10,16 @@ import { PACKS } from "../data/packs";
 import { useGameStore } from "../app/store";
 import { toast } from "../lib/utils/toast";
 import type { Game } from "../types/game";
-import { checkCreateRateLimit, nextAngryMessage } from "@/lib/utils/roomLimiter";
+import {
+	checkCreateRateLimit,
+	nextAngryMessage,
+} from "@/lib/utils/roomLimiter";
 
 const ALL_TAGS = Array.from(
-	new Set(GAMES.filter((g) => !g.comingSoon).flatMap((g) => g.tags)),
+	GAMES.reduce<Set<string>>((acc, g) => {
+		if (!g.comingSoon) g.tags.forEach((t) => acc.add(t));
+		return acc;
+	}, new Set()),
 ).sort();
 
 export function Home() {
@@ -92,7 +98,7 @@ export function Home() {
 					/>
 
 					<AnimatePresence mode="wait">
-						<motion.div
+						<m.div
 							key={`${selectedPackId}:${selectedTag}`}
 							initial={{ opacity: 0, y: 5 }}
 							animate={{ opacity: 1, y: 0 }}
@@ -110,14 +116,14 @@ export function Home() {
 									onSelect={handleSelect}
 								/>
 							)}
-						</motion.div>
+						</m.div>
 					</AnimatePresence>
 				</section>
 			</main>
 
 			<AnimatePresence>
 				{selected && (
-					<motion.div
+					<m.div
 						key="bottom-bar"
 						className="fixed bottom-0 left-0 right-0 z-20 border-t border-border bg-surface/95 backdrop-blur-md"
 						initial={{ y: "100%" }}
@@ -132,29 +138,29 @@ export function Home() {
 					>
 						<div className="flex items-center justify-between gap-6 px-6 py-5 mx-auto max-w-5xl">
 							<div className="flex items-center min-w-0 gap-4">
-								<motion.div
+								<m.div
 									className="hidden shrink-0 w-11 h-11 rounded-lg sm:block"
 									style={{ backgroundColor: selected.placeholderColor }}
 									layoutId="selected-color"
 								/>
 								<div className="flex flex-col min-w-0 gap-1">
-									<motion.span
+									<m.span
 										className="font-display text-xl font-extrabold leading-none uppercase truncate"
 										initial={{ opacity: 0, x: -6 }}
 										animate={{ opacity: 1, x: 0 }}
 										transition={{ delay: 0.08, duration: 0.2 }}
 									>
 										{selected.name}
-									</motion.span>
-									<motion.p
+									</m.span>
+									<m.p
 										className="text-xs leading-snug text-white/70 line-clamp-2"
 										initial={{ opacity: 0 }}
 										animate={{ opacity: 1 }}
 										transition={{ delay: 0.12, duration: 0.2 }}
 									>
 										{selected.description}
-									</motion.p>
-									<motion.div
+									</m.p>
+									<m.div
 										className="flex flex-wrap items-center gap-1.5"
 										initial={{ opacity: 0 }}
 										animate={{ opacity: 1 }}
@@ -175,7 +181,7 @@ export function Home() {
 										<span className="px-2 py-0.5 text-[10px] font-semibold tracking-wider uppercase rounded-full bg-white/8 text-white/60">
 											~{selected.duration} min
 										</span>
-									</motion.div>
+									</m.div>
 								</div>
 							</div>
 							<button
@@ -186,7 +192,7 @@ export function Home() {
 								Create Room →
 							</button>
 						</div>
-					</motion.div>
+					</m.div>
 				)}
 			</AnimatePresence>
 		</div>
