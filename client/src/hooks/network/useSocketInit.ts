@@ -7,10 +7,6 @@ import type { GameState } from "@shared/types";
 
 const CONN_TOAST_ID = "conn-status";
 
-export function markIntentionalDisconnect() {
-	_intentional = true;
-}
-
 let _intentional = false;
 
 export function useSocketInit(): void {

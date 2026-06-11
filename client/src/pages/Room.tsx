@@ -1,14 +1,23 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, Suspense } from "react";
 import { useNavigate, Navigate } from "react-router";
 import { m, AnimatePresence } from "motion/react";
 import { LogOut, Copy, Check, X } from "lucide-react";
 import { useGameStore } from "../app/store";
 import { GAMES } from "../data/games";
-import { FinishedHost, FinishedPlayer } from "../games/sabong/phases/Finished";
 import { QRCodeSVG } from "qrcode.react";
 import type { Player } from "@shared/types";
 import { GAME_REGISTRY } from "@/app/registry";
 import { PauseOverlay } from "../components/ui/PauseOverlay";
+
+function GameShell() {
+	return (
+		<div className="flex items-center justify-center min-h-screen bg-bg">
+			<span className="text-white/20 text-xs tracking-widest uppercase animate-pulse">
+				Loading…
+			</span>
+		</div>
+	);
+}
 
 export function Room() {
 	const navigate = useNavigate();
@@ -59,13 +68,14 @@ export function Room() {
 		setTimeout(() => setCopied(false), 2000);
 	}
 
-	// Game component stays mounted during pause so the frozen state shows beneath the overlay.
 	if (phase === "in_game" || phase === "paused") {
 		const entry = GAME_REGISTRY.find((g) => g.id === gameId);
 		if (entry) {
 			return (
 				<div className="relative isolate">
-					<entry.inGame />
+					<Suspense fallback={<GameShell />}>
+						<entry.inGame />
+					</Suspense>
 					<AnimatePresence>
 						{phase === "paused" && (
 							<PauseOverlay
@@ -82,19 +92,38 @@ export function Room() {
 		}
 	}
 
-	if (phase === "ended") {
-		if (gameId === "super-sabong") {
-			return role === "host" ? <FinishedHost /> : <FinishedPlayer />;
-		}
+	if (phase === "in_game" || phase === "paused" || phase === "ended") {
 		const entry = GAME_REGISTRY.find((g) => g.id === gameId);
-		if (entry?.ended) return <entry.ended />;
+
+		if (!entry) {
+			return (
+				<div className="flex items-center justify-center min-h-screen bg-bg text-white/40 text-sm">
+					Game over.
+				</div>
+			);
+		}
+
 		return (
-			<div className="flex items-center justify-center min-h-screen bg-bg text-white/40 text-sm">
-				Game over.
+			<div className="relative isolate">
+				<Suspense fallback={<GameShell />}>
+					<entry.inGame />
+				</Suspense>
+				<AnimatePresence>
+					{phase === "paused" && (
+						<PauseOverlay
+							pauseReason={pauseReason}
+							hostReconnectDeadline={hostReconnectDeadline}
+							isHost={role === "host"}
+							onResume={resumeGame}
+							onQuit={handleLeave}
+						/>
+					)}
+				</AnimatePresence>
 			</div>
 		);
 	}
 
+	// lobby
 	return (
 		<div className="flex flex-col min-h-screen bg-bg">
 			{/* Top bar */}
