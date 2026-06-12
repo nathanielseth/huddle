@@ -18,7 +18,24 @@ export default defineConfig({
 		dedupe: ["react", "react-dom"],
 	},
 	server: {
-		port: 5173,
+		port: 3000,
 		host: true,
+		strictPort: true,
+		proxy: {
+			"/api": {
+				target: "http://localhost:3001",
+				changeOrigin: true,
+			},
+			"/socket.io": {
+				target: "http://localhost:3001",
+				changeOrigin: true,
+				ws: true,
+			},
+		},
+	},
+	preview: {
+		port: 3000,
+		host: true,
+		strictPort: true,
 	},
 });

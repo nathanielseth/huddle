@@ -12,7 +12,7 @@ import type {
 	ConnectionStatus,
 	GameTimer,
 	PauseReason,
-} from "@shared/types";
+} from "@shared/core/room";
 
 interface GameStore {
 	playerId: string;

@@ -8,6 +8,7 @@ import { GameGrid } from "../components/lobby/GameGrid";
 import { GAMES } from "../data/games";
 import { PACKS } from "../data/packs";
 import { useGameStore } from "../app/store";
+import { useIsMobile } from "../hooks/core/useIsMobile";
 import { toast } from "../lib/utils/toast";
 import type { Game } from "../types/game";
 import {
@@ -26,11 +27,15 @@ export function Home() {
 	const [selected, setSelected] = useState<Game | null>(null);
 	const [selectedPackId, setSelectedPackId] = useState<string>("all");
 	const [selectedTag, setSelectedTag] = useState<string>("all");
+	const [showHosting, setShowHosting] = useState(false);
 
+	const isMobile = useIsMobile();
 	const createRoom = useGameStore((s) => s.createRoom);
 	const roomCode = useGameStore((s) => s.roomCode);
 
 	if (roomCode) return <Navigate to={`/room/${roomCode}`} replace />;
+
+	const hostingVisible = !isMobile || showHosting;
 
 	const filteredGames = GAMES.filter((g) => {
 		const packMatch = selectedPackId === "all" || g.packId === selectedPackId;
@@ -82,43 +87,69 @@ export function Home() {
 
 				<JoinBar onFocus={() => setSelected(null)} />
 
-				<section className="flex flex-col gap-5">
-					<h2 className="text-sm font-semibold text-white">HOST A GAME</h2>
+				{isMobile && !showHosting && (
+					<button
+						type="button"
+						onClick={() => setShowHosting(true)}
+						className="self-center text-sm font-semibold text-white/40 hover:text-white/70 transition-colors cursor-pointer"
+					>
+						Host a game instead →
+					</button>
+				)}
 
-					<PackTabs
-						packs={PACKS}
-						selectedPackId={selectedPackId}
-						onSelect={handlePackChange}
-					/>
-
-					<TagFilter
-						tags={ALL_TAGS}
-						selectedTag={selectedTag}
-						onSelect={handleTagChange}
-					/>
-
-					<AnimatePresence mode="wait">
-						<m.div
-							key={`${selectedPackId}:${selectedTag}`}
-							initial={{ opacity: 0, y: 5 }}
-							animate={{ opacity: 1, y: 0 }}
-							exit={{ opacity: 0 }}
-							transition={{ duration: 0.14 }}
-						>
-							{filteredGames.length === 0 ? (
-								<p className="py-14 text-center text-sm text-white/20">
-									No games match those filters.
-								</p>
-							) : (
-								<GameGrid
-									games={filteredGames}
-									selectedId={selected?.id ?? null}
-									onSelect={handleSelect}
-								/>
+				{hostingVisible && (
+					<section className="flex flex-col gap-5">
+						<div className="flex items-center justify-between">
+							<h2 className="text-sm font-semibold text-white">HOST A GAME</h2>
+							{isMobile && (
+								<button
+									type="button"
+									onClick={() => {
+										setShowHosting(false);
+										setSelected(null);
+									}}
+									className="text-xs text-white/30 hover:text-white/55 transition-colors cursor-pointer"
+								>
+									← Back to join
+								</button>
 							)}
-						</m.div>
-					</AnimatePresence>
-				</section>
+						</div>
+
+						<PackTabs
+							packs={PACKS}
+							selectedPackId={selectedPackId}
+							onSelect={handlePackChange}
+						/>
+
+						<TagFilter
+							tags={ALL_TAGS}
+							selectedTag={selectedTag}
+							onSelect={handleTagChange}
+						/>
+
+						<AnimatePresence mode="wait">
+							<m.div
+								key={`${selectedPackId}:${selectedTag}`}
+								initial={{ opacity: 0, y: 5 }}
+								animate={{ opacity: 1, y: 0 }}
+								exit={{ opacity: 0 }}
+								transition={{ duration: 0.14 }}
+							>
+								{filteredGames.length === 0 ? (
+									<p className="py-14 text-center text-sm text-white/20">
+										No games match those filters.
+									</p>
+								) : (
+									<GameGrid
+										games={filteredGames}
+										selectedId={selected?.id ?? null}
+										onSelect={handleSelect}
+									/>
+								)}
+							</m.div>
+						</AnimatePresence>
+					</section>
+				)}
 			</main>
 
 			<AnimatePresence>

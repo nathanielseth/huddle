@@ -2,7 +2,7 @@ import { io, type Socket } from "socket.io-client";
 import type {
 	ServerToClientEvents,
 	ClientToServerEvents,
-} from "@shared/events";
+} from "@shared/core/socket-events";
 
 const SOCKET_URL =
 	import.meta.env.VITE_SERVER_URL ??
