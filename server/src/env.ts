@@ -1,7 +1,7 @@
 import { z } from "zod";
 
 const EnvSchema = z.object({
-	CLIENT_URL: z.string().url().default("http://localhost:5173"),
+	CLIENT_URL: z.string().url().default("http://localhost:3000"),
 	PORT: z.coerce.number().int().positive().default(3001),
 	NODE_ENV: z
 		.enum(["development", "production", "test"])
@@ -11,8 +11,8 @@ const EnvSchema = z.object({
 const parsed = EnvSchema.safeParse(process.env);
 
 if (!parsed.success) {
-	console.error("[env] Invalid environment variables:");
-	console.error(parsed.error.flatten().fieldErrors);
+	console.error("[env] Invalid environment variables");
+	console.error(z.prettifyError(parsed.error));
 	process.exit(1);
 }
 
