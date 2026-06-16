@@ -13,6 +13,7 @@ import type {
 	GameTimer,
 	PauseReason,
 } from "@shared/core/room";
+import { generateUUID } from "../lib/utils/uuid";
 
 interface GameStore {
 	playerId: string;
@@ -47,23 +48,6 @@ interface GameStore {
 	_abandonRoom: (message: string) => void;
 	_attemptRejoin: (session: RoomSession) => void;
 	_setSecret: (payload: unknown) => void;
-}
-
-function generateUUID(): string {
-	if (typeof crypto.randomUUID === "function") {
-		return crypto.randomUUID();
-	}
-
-	const bytes = crypto.getRandomValues(new Uint8Array(16));
-	bytes[6] = (bytes[6] & 0x0f) | 0x40;
-	bytes[8] = (bytes[8] & 0x3f) | 0x80;
-	return [...bytes]
-		.map((b, i) =>
-			[4, 6, 8, 10].includes(i)
-				? "-" + b.toString(16).padStart(2, "0")
-				: b.toString(16).padStart(2, "0"),
-		)
-		.join("");
 }
 
 function getOrCreatePlayerId(): string {
@@ -130,6 +114,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
 
 	createRoom: (gameId) => {
 		const { playerId, status } = get();
+		console.log("[createRoom] status:", status, "gameId:", gameId);
 		if (status !== "connected") return;
 		set({ role: "host", gameId });
 		socket.emit("create_room", { gameId, playerId });

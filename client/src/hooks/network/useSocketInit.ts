@@ -3,7 +3,7 @@ import { socket } from "../../lib/network/socket";
 import { useGameStore } from "../../app/store";
 import { toast } from "../../lib/utils/toast";
 import { loadRoomSession } from "../../lib/network/session";
-import type { GameState } from "@shared/types";
+import type { GameState } from "@shared/core/room";
 
 const CONN_TOAST_ID = "conn-status";
 

@@ -10,6 +10,7 @@ import { PACKS } from "../data/packs";
 import { useGameStore } from "../app/store";
 import { useIsMobile } from "../hooks/core/useIsMobile";
 import { toast } from "../lib/utils/toast";
+import { modal } from "../lib/utils/modal";
 import type { Game } from "../types/game";
 import {
 	checkCreateRateLimit,
@@ -22,6 +23,8 @@ const ALL_TAGS = Array.from(
 		return acc;
 	}, new Set()),
 ).sort();
+
+const BETA_ACK_KEY = "huddle_beta_ack";
 
 export function Home() {
 	const [selected, setSelected] = useState<Game | null>(null);
@@ -62,18 +65,29 @@ export function Home() {
 		}
 	};
 
-	function handleCreateRoom() {
+	async function handleCreateRoom() {
 		if (!selected) return;
 		if (!checkCreateRateLimit()) {
 			toast.error(nextAngryMessage(), { duration: 3000 });
 			return;
 		}
+
+		if (!sessionStorage.getItem(BETA_ACK_KEY)) {
+			await modal.alert({
+				title: "🚧 Early Access",
+				body: "This game is still in beta — expect rough edges, bugs, or unfinished bits. Play at your own risk and let us know what breaks.",
+				confirmLabel: "Got it, let's play",
+			});
+			sessionStorage.setItem(BETA_ACK_KEY, "1");
+			await new Promise((res) => setTimeout(res, 210));
+		}
+
 		createRoom(selected.id);
 	}
 
 	return (
 		<div className="flex flex-col min-h-screen">
-			<main className="flex flex-col flex-1 gap-10 px-6 py-14 mx-auto w-full max-w-3xl pb-44">
+			<main className="flex flex-col flex-1 gap-10 px-6 py-14 mx-auto w-full max-w-3xl pb-52">
 				<header className="flex flex-col items-center gap-3">
 					<img
 						src="/huddle-logo.svg"
@@ -167,7 +181,7 @@ export function Home() {
 							mass: 1,
 						}}
 					>
-						<div className="flex items-center justify-between gap-6 px-6 py-5 mx-auto max-w-5xl">
+						<div className="flex items-center justify-between gap-6 px-6 pt-5 pb-[calc(1.25rem+env(safe-area-inset-bottom))] mx-auto max-w-5xl">
 							<div className="flex items-center min-w-0 gap-4">
 								<m.div
 									className="hidden shrink-0 w-11 h-11 rounded-lg sm:block"

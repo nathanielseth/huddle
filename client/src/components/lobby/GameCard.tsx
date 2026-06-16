@@ -53,8 +53,7 @@ export function GameCard({
 			<img
 				src={game.thumbnail}
 				alt=""
-				loading="eager"
-				fetchPriority="high"
+				loading="lazy"
 				decoding="async"
 				className="absolute inset-0 w-full h-full object-cover"
 			/>

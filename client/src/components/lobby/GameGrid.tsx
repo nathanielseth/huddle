@@ -3,9 +3,14 @@ import { GameCard } from "./GameCard";
 import { GAMES } from "../../data/games";
 
 if (typeof window !== "undefined") {
-	for (const { thumbnail } of GAMES) {
-		if (thumbnail) new Image().src = thumbnail;
-	}
+	requestIdleCallback(
+		() => {
+			for (const { thumbnail } of GAMES) {
+				if (thumbnail) new Image().src = thumbnail;
+			}
+		},
+		{ timeout: 2000 },
+	);
 }
 
 interface GameGridProps {

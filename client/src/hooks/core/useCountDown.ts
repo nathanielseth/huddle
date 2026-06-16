@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import type { GameTimer } from "@shared/types";
+import type { GameTimer } from "@shared/core/room";
 
 export function useCountdown(timer: GameTimer | null): number {
 	const startsAt = timer?.startsAt;

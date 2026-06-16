@@ -18,6 +18,7 @@ export interface Game {
 	playerCount: [number, number];
 	duration: number;
 	comingSoon?: boolean;
+	beta?: boolean;
 }
 
 export interface Pack {

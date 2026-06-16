@@ -13,7 +13,10 @@ export function createSocketServer(
 	runner: GameRunner,
 ): IO {
 	const io: IO = new Server(httpServer, {
-		cors: { origin: env.CLIENT_URL, methods: ["GET", "POST"] },
+		cors: {
+			origin: env.NODE_ENV === "development" ? true : env.CLIENT_URL,
+			methods: ["GET", "POST"],
+		},
 		transports: ["websocket"],
 		pingTimeout: 10_000,
 		pingInterval: 25_000,

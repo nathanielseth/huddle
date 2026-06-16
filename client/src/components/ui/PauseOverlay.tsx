@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { m, AnimatePresence } from "motion/react";
-import type { PauseReason } from "@shared/types";
+import type { PauseReason } from "@shared/core/room";
 
 interface Props {
 	pauseReason: PauseReason | null;

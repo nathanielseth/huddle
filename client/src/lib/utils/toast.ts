@@ -1,8 +1,5 @@
 import { createStore } from "zustand/vanilla";
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Types
-// ─────────────────────────────────────────────────────────────────────────────
+import { generateUUID } from "./uuid";
 
 export type ToastVariant = "success" | "error" | "warning" | "info";
 
@@ -22,16 +19,8 @@ export interface Toast {
 
 export type ToastOptions = Partial<Pick<Toast, "id" | "duration" | "action">>;
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Constants
-// ─────────────────────────────────────────────────────────────────────────────
-
 const MAX_VISIBLE = 3;
 const DEFAULT_DURATION = 4000;
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Store
-// ─────────────────────────────────────────────────────────────────────────────
 
 interface ToastState {
 	toasts: Toast[];
@@ -55,8 +44,6 @@ export const toastStore = createStore<ToastStore>((set) => ({
 
 	_add(input) {
 		set((s) => {
-			// ── Deduplicate: already visible → update in place and bump createdAt
-			// to reset the timer in ToastItem.
 			if (s.toasts.some((t) => t.id === input.id)) {
 				return {
 					toasts: s.toasts.map((t) =>
@@ -65,8 +52,6 @@ export const toastStore = createStore<ToastStore>((set) => ({
 				};
 			}
 
-			// ── Deduplicate: waiting in queue → update quietly (no timer reset
-			// needed since it hasn't started yet).
 			if (s.queue.some((t) => t.id === input.id)) {
 				return {
 					queue: s.queue.map((t) =>
@@ -88,13 +73,10 @@ export const toastStore = createStore<ToastStore>((set) => ({
 	},
 
 	_dismiss(id) {
-		// Everything happens inside set() so we always read the latest state
-		// atomically — no separate get() call that could race with another action.
 		set((s) => {
 			const isVisible = s.toasts.some((t) => t.id === id);
 
 			if (isVisible) {
-				// Pull the next queued toast into the visible slot being freed.
 				const [next, ...rest] = s.queue;
 				return {
 					toasts: [
@@ -109,34 +91,26 @@ export const toastStore = createStore<ToastStore>((set) => ({
 				return { queue: s.queue.filter((t) => t.id !== id) };
 			}
 
-			// ID not found — no-op.
 			return s;
 		});
 	},
 
 	_update(id, patch) {
 		set((s) => ({
-			// Patch both visible and queued — silently ignoring queued toasts was
-			// a previous bug.
 			toasts: s.toasts.map((t) => (t.id === id ? { ...t, ...patch } : t)),
 			queue: s.queue.map((t) => (t.id === id ? { ...t, ...patch } : t)),
 		}));
 	},
 }));
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Public API
-// ─────────────────────────────────────────────────────────────────────────────
+// public API
 
-// `createdAt` is set exclusively inside `_add` so callers never need to
-// supply it. `id` is resolved here (not in buildToast) so the returned id
-// is always the one that ends up in the store.
 function add(
 	variant: ToastVariant,
 	message: string,
 	opts: ToastOptions = {},
 ): string {
-	const id = opts.id ?? crypto.randomUUID();
+	const id = opts.id ?? generateUUID();
 	return toastStore.getState()._add({
 		id,
 		variant,
