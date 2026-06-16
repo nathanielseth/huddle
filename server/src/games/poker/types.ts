@@ -4,7 +4,7 @@ import type {
 	PokerPhase,
 	LastAction,
 	HandResult,
-} from "../../../../shared/poker.js";
+} from "../../../../shared/games/poker.js";
 import type { AIPersonality } from "./ai/types.js";
 import type { PokerLogger } from "./logger.js";
 import type { ActiveLine } from "./ai/strategy/lines.js";

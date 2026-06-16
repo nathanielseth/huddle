@@ -11,7 +11,7 @@ import type {
 	SussyRoundResult,
 	SussyTaskVoteResult,
 	TaskType,
-} from "../../../../shared/sussy";
+} from "../../../../shared/games/sussy";
 import {
 	SELECTABLE_TASKS,
 	TASK_DURATIONS_MS,

@@ -155,7 +155,7 @@ export function scoreActions(
 	const commitmentRatio =
 		totalHandInvestment > 0 ? chipsInvested / totalHandInvestment : 0;
 	const potCommitBonus = Math.max(0, (commitmentRatio - 0.6) * 3.0);
-	const potCommitted = spr < 0.8;
+	const potCommitted = spr < 0.8 - personality.tightness * 0.5;
 	const positionRaiseBonus = positionFactor * 0.08 * personality.aggression;
 	const evScaledEdge = evEdge * evScale;
 
@@ -199,10 +199,15 @@ export function scoreActions(
 			)
 		: -Infinity;
 
-	const foldThreshold = potOdds + personality.tightness * 0.30;
+	const multiwayCommitPenalty = Math.max(0, (numOpponents - 1) * 0.08);
+	const foldThreshold =
+		potOdds + personality.tightness * 0.3 + multiwayCommitPenalty;
 	const shortfall = foldThreshold - equity;
 	const foldScore =
-		callAmount > 0 && !potCommitted && commitmentRatio < 0.7 && shortfall > 0
+		callAmount > 0 &&
+		commitmentRatio < 0.7 &&
+		shortfall > 0 &&
+		(!potCommitted || evEdge < -0.25)
 			? shortfall * personality.tightness * (evScale + spr * 0.1)
 			: -Infinity;
 

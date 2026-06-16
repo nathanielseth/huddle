@@ -16,7 +16,7 @@ import type {
 	BelievableLiesPlayerView,
 	BelievableLiesRoundResult,
 	BelievableLiesAnswer,
-} from "../../../../shared/believable-lies";
+} from "../../../../shared/games/believable-lies";
 import {
 	LIE_INPUT_MS,
 	PICKING_MS,

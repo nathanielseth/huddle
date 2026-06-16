@@ -1,4 +1,4 @@
-import type { GameState } from "./types";
+import type { GameState } from "./room";
 
 export interface ServerToClientEvents {
 	game_state: (state: GameState) => void;

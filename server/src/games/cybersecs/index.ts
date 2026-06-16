@@ -4,12 +4,12 @@ import type {
 	GameContext,
 	EngineResult,
 } from "../../engine/GameEngine";
-import type { GameTimer } from "../../../../shared/types";
+import type { GameTimer } from "../../../../shared/core/room";
 import type {
 	CybsecsState,
 	CybsecsPlayerView,
 	CybsecsSecret,
-} from "../../../../shared/cybersecs";
+} from "../../../../shared/games/cybersecs";
 import type { CybsecsServerState, CybsecsServerAction } from "./types";
 import { C } from "./constants";
 import { pickMode, assignRoles, buildRoleIndex } from "./roles";

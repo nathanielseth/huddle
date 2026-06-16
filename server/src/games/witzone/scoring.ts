@@ -2,7 +2,7 @@ import type { WitzoneServerPrompt, WitzoneFinalPrompt } from "./types";
 import type {
 	WitzoneReveal,
 	WitzoneFinalReveal,
-} from "../../../../shared/witzone";
+} from "../../../../shared/games/witzone";
 import {
 	PTS_PER_VOTE,
 	WINNER_BONUS,

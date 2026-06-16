@@ -3,7 +3,7 @@ import type {
 	BelievableLiesRound,
 	BelievableLiesRoundResult,
 	BelievableLiesState,
-} from "../../../../shared/believable-lies";
+} from "../../../../shared/games/believable-lies";
 
 export interface BelievableLiesQuestion {
 	id: string;

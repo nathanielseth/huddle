@@ -1,4 +1,4 @@
-import type { GameMode, CybsecsRole } from "../../../../shared/cybersecs";
+import type { GameMode, CybsecsRole } from "../../../../shared/games/cybersecs";
 import type { CybsecsServerPlayer } from "./types";
 import { ROLE_ALIGNMENT, MODE_WEIGHTS, SINGLETON_ROLES } from "./constants";
 import { shuffle } from "../lib/random";

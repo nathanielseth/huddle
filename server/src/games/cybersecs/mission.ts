@@ -2,7 +2,7 @@ import type {
 	GameMode,
 	MissionResult,
 	EhIntel,
-} from "../../../../shared/cybersecs";
+} from "../../../../shared/games/cybersecs";
 import type {
 	CybsecsServerState,
 	CybsecsServerPlayer,

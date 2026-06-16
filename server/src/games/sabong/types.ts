@@ -3,12 +3,11 @@ import type {
 	BattleEvent,
 	SabongState,
 	HideableStat,
-} from "../../../../shared/sabong";
+} from "../../../../shared/games/sabong";
 
 export type { HideableStat };
 
-// runtime array of hideable stat names. lives server-side because shared/ is
-// CommonJS and verbatimModuleSyntax forbids value exports there
+// runtime array of hideable stat names, lives server-side because shared/ is commonjs
 export const HIDEABLE_STATS: readonly HideableStat[] = [
 	"health",
 	"attack",
@@ -26,19 +25,17 @@ export interface ManokStats {
 	defense: number;
 	speed: number;
 	critRate: number;
-	// reduces effective defense of the opponent, never shown to players
+	// hidden combat stat, reduces opponent defense per hit
 	determination: number;
-	// accumulated mid-battle attack bonus, reset between matches
+	// accumulated mid-battle attack bonus, reset per match
 	attackBoost: number;
-	// two stats hidden from public betting view, randomised per manok
+	// randomised set of stats hidden from public view
 	hiddenStats: Set<HideableStat>;
-	// set when a player uses sabotage. effect: attack ×0.8, determination → 0.
-	// not reflected in public odds — only saboteur sees impact via private view
+	// set by sabotage, attack x0.8 and determination 0, persists entire tournament, rewards early investment and creates info asymmetry, public odds unchanged
 	isSabotaged: boolean;
 }
 
-// always computed from clean (pre-sabotage) stats so public odds never leak
-// whether a sabotage has occurred. mirrors OddsResult from odds.ts
+// computed from clean (pre-sabotage) stats so public odds never reveal sabotage, mirrors oddsresult
 export interface SlotOdds {
 	probability: { fighter1: number; fighter2: number };
 	moneyline: { fighter1: number; fighter2: number };
@@ -49,7 +46,7 @@ export interface ServerBracketSlot {
 	fighter1Id: string | null;
 	fighter2Id: string | null;
 	winnerId: string | null;
-	// full odds snapshot, null until betting opens, always based on clean stats
+	// odds snapshot, null until betting opens, based on clean stats
 	odds: SlotOdds | null;
 }
 
@@ -57,21 +54,18 @@ export interface SabongServerPlayer {
 	playerId: string;
 	balance: number;
 
-	// bracket pick
 	bracketPickId: string | null;
 	bracketPickLocked: boolean;
 
-	// shop intelligence (private, never in public state)
-	// all fighters this player has sabotaged, persists across shop phases
+	// shop intelligence, private, never in public state
+	// sabotaged fighters, persists across shop phases
 	sabotageTargets: Set<string>;
-	// per-fighter revealed stats, persists across shop phases
+	// revealed stats per fighter, persists across shop phases
 	revealedStats: Map<string, Set<HideableStat>>;
-	// spy uses consumed in current shop phase, reset by openShop
+	// uses consumed this shop phase, reset by openshop
 	shopSpyUsed: number;
-	// sabotage uses consumed in current shop phase, reset by openShop
 	shopSabotageUsed: number;
 
-	// per-match bet
 	currentBet: { manokId: string; amount: number } | null;
 	betLocked: boolean;
 
@@ -83,7 +77,7 @@ export interface SabongServerState {
 	manoks: Map<string, ManokStats>;
 	bracket: ServerBracketSlot[];
 	currentMatchIndex: number;
-	// full event log of the last simulated fight, replayed as animation on client
+	// last fight event log, replayed as animation on client
 	battleLog: BattleEvent[] | null;
 	players: Map<string, SabongServerPlayer>;
 
@@ -91,7 +85,7 @@ export interface SabongServerState {
 	lockedBetCount: number;
 	matchCount: number;
 
-	// public state cache
+	// public state cache, invalidated by markdirty on mutations
 	_publicStateCacheValid: boolean;
 	_cachedPublicState: SabongState | null;
 }
@@ -100,21 +94,22 @@ export const SABONG_CONSTANTS = {
 	STARTING_BALANCE: 200,
 	AYUDA_AMOUNT: 40,
 	AYUDA_SCALE: 0.25,
-	// effective ayuda: QF0→₱40 QF1→₱50 QF2→₱60 QF3→₱70 SF0→₱80 SF1→₱90 Final→₱100
+	// effective ayuda: qf0→40 qf1→50 qf2→60 qf3→70 sf0→80 sf1→90 final→100
 	BRACKET_PICK_BONUS: 150,
 	CONTRARIAN_BONUS_MAX: 0.5,
 
-	// match indices (0-based) after whose payout the shop opens.
-	// default: after last QF (3) and last SF (5). set to [] to disable shop
+	// match indices after payout where shop opens, set to [] to disable
 	SHOP_AFTER_MATCH_INDICES: [3, 5] as readonly number[],
 	SHOP_DURATION_MS: 45_000,
 	SPY_PRICE: 25,
 	SABOTAGE_PRICE: 70,
-	// max uses per player per shop phase. 0 = unlimited
+	// max uses per player per shop phase, 0 = unlimited
 	SPY_CAP: 2 as number,
 	SABOTAGE_CAP: 1 as number,
 
 	MANOK_COUNT: 8,
+	// hidden stats count per manok, ≤ hideable_stats.length
+	HIDDEN_STAT_COUNT: 2,
 	MAX_TURNS: 100,
 	STAT_RANGES: {
 		health: [90, 150] as [number, number],

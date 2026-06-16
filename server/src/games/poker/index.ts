@@ -5,7 +5,7 @@ import type {
 	EngineResult,
 } from "../../engine/GameEngine";
 import type { Room } from "../../room/registry";
-import type { GameTimer } from "../../../../shared/types";
+import type { GameTimer } from "../../../../shared/core/room";
 
 import { POKER_CONSTANTS as C } from "./constants";
 import type {
@@ -21,7 +21,7 @@ import type {
 	LastAction,
 	Card,
 	BettingPhase,
-} from "../../../../shared/poker";
+} from "../../../../shared/games/poker";
 
 import { freshShuffledDeck, dealN } from "./deck";
 import {

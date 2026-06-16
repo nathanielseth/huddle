@@ -1,4 +1,4 @@
-import type { BattleEvent } from "../../../../shared/sabong";
+import type { BattleEvent } from "../../../../shared/games/sabong";
 import { SABONG_CONSTANTS } from "./types";
 
 const { CRIT_MULTIPLIER, MAX_TURNS, MAX_ATTACK_BOOST } = SABONG_CONSTANTS;

@@ -13,7 +13,7 @@ import type {
 	WitzonePlayerSecret,
 	WitzonePublicPrompt,
 	WitzonePlayerView,
-} from "../../../../shared/witzone";
+} from "../../../../shared/games/witzone";
 import {
 	ANSWERING_MS,
 	VOTING_MS,

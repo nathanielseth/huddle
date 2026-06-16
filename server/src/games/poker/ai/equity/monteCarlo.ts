@@ -1,5 +1,5 @@
 import { evaluate, getCardCode } from "@pokertools/evaluator";
-import type { Card } from "../../../../../../shared/poker";
+import type { Card } from "../../../../../../shared/games/poker";
 import {
 	buildComboAlias,
 	sampleComboAlias,

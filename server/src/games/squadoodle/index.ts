@@ -4,7 +4,7 @@ import type {
 	GameContext,
 	EngineResult,
 } from "../../engine/GameEngine.js";
-import type { GameTimer } from "../../../../shared/types.js";
+import type { GameTimer } from "../../../../shared/core/room.js";
 import type {
 	SquadoodleState,
 	SquadoodleSecret,
@@ -16,7 +16,7 @@ import type {
 	AccoladeKind,
 	ReactionType,
 	Stroke,
-} from "../../../../shared/squadoodle.js";
+} from "../../../../shared/games/squadoodle.js";
 import type { SquadoodleServerState } from "./types.js";
 import { C } from "./constants.js";
 import { SquadoodleActionSchema } from "./schemas.js";

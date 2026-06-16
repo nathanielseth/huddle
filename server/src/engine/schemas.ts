@@ -1,5 +1,5 @@
 import { z } from "zod";
-import type { GameTimer, RoomPhase } from "../../../shared/types";
+import type { GameTimer, RoomPhase } from "../../../shared/core/room";
 
 export const GameTimerSchema: z.ZodType<GameTimer> = z.object({
 	startsAt: z.number(),

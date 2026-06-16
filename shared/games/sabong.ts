@@ -15,7 +15,6 @@ export type SabongPhase =
 
 export type MatchupTier = "even" | "slight_edge" | "favored" | "heavy_favorite";
 
-// 2. Add four fields to ManokView
 export interface ManokView {
 	readonly id: string;
 	readonly name: string;
@@ -33,6 +32,7 @@ export interface ManokView {
 	readonly matchupLabel: string | null;
 	readonly matchupSubtitle: string | null;
 	readonly matchupEdge: number | null;
+	readonly isSabotaged: boolean;
 }
 
 export interface BracketSlot {
@@ -70,9 +70,6 @@ export type BattleEvent =
 			readonly winnerId: string;
 			readonly reason: "hp_advantage" | "coinflip";
 	  };
-
-// the slice of a player's state visible to all participants.
-// shop activity (spy/sabotage) lives exclusively in SabongPrivateView
 export interface SabongPlayerView {
 	readonly playerId: string;
 	readonly balance: number;
@@ -85,27 +82,14 @@ export interface SabongPlayerView {
 	readonly betLocked: boolean;
 }
 
-// intelligence data visible only to the owning player. delivered via
-// EngineResult.privatePayloads, never included in public SabongState
 export interface SabongPrivateView {
-	// stats revealed via spy use this session. accumulates across shop phases
 	readonly revealedStats: Readonly<
 		Record<string, Partial<Record<HideableStat, number>>>
 	>;
-	// fighters this player has sabotaged. lets the client show real weakened
-	// stats only to the saboteur
 	readonly sabotaged: Readonly<
-		Record<
-			string,
-			{
-				readonly attack: number;
-				readonly determination: number;
-			}
-		>
+		Record<string, { readonly attack: number; readonly determination: number }>
 	>;
-	// remaining spy uses for current shop phase. null = unlimited
 	readonly shopSpyRemaining: number | null;
-	// remaining sabotage uses for current shop phase. null = unlimited
 	readonly shopSabotageRemaining: number | null;
 }
 
@@ -118,8 +102,6 @@ export interface SabongState {
 	readonly players: Readonly<Record<string, SabongPlayerView>>;
 	readonly allBracketPicksLocked: boolean;
 	readonly matchCount: number;
-	// shop item prices sourced from server constants, always present so client
-	// can display prices without duplicating values
 	readonly shopConfig: {
 		readonly spyPrice: number;
 		readonly sabotagePrice: number;

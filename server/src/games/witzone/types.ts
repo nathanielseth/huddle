@@ -4,7 +4,7 @@ import type {
 	WitzoneReveal,
 	WitzoneFinalReveal,
 	WitzoneState,
-} from "../../../../shared/witzone";
+} from "../../../../shared/games/witzone";
 
 export interface WitzoneAnswerSlot {
 	// stable random id used as the answer's identity during voting

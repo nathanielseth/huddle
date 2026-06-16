@@ -2,7 +2,7 @@ import type {
 	GameMode,
 	CybsecsRole,
 	CybsecsAlignment,
-} from "../../../../shared/cybersecs";
+} from "../../../../shared/games/cybersecs";
 
 export const C = {
 	ROLE_REVEAL_MS: 15_000,

@@ -5,7 +5,7 @@ import type {
 } from "./GameEngine";
 import { getPublicState, touchRoom, type Room } from "../room/registry";
 import type { RoomRegistry } from "../room/registry";
-import type { GameTimer, PauseReason } from "../../../shared/types";
+import type { GameTimer, PauseReason } from "../../../shared/core/room";
 import type { IO } from "../types";
 import { parseEngineResult, parsePlayerAction } from "./schemas";
 
@@ -19,7 +19,6 @@ export class GameRunner {
 
 	register(engine: GameEngine): void {
 		this.engines.set(engine.gameId, engine);
-		console.log(`[engine] registered ${engine.gameId}`);
 	}
 
 	hasEngine(gameId: string | null): boolean {

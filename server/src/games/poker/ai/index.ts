@@ -1,6 +1,6 @@
 import { getCardCode } from "@pokertools/evaluator";
-import type { BettingPhase } from "../../../../../shared/poker";
-import type { GameTimer } from "../../../../../shared/types";
+import type { BettingPhase } from "../../../../../shared/games/poker";
+import type { GameTimer } from "../../../../../shared/core/room";
 import type { PokerServerState, PokerServerAction } from "../types";
 import { validateAction, countInHandPlayers } from "../betting";
 import {

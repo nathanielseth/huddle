@@ -3,7 +3,7 @@ import type {
 	ChainEntry,
 	ReactionType,
 	Accolade,
-} from "../../../../shared/squadoodle";
+} from "../../../../shared/games/squadoodle";
 
 // engine mutates this in place (same pattern as CyberSecs). public-safe fields
 // projected into SquadoodleState by buildPublicState(). secret fields (chain

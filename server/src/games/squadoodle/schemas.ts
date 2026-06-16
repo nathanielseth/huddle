@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { C, HEX_COLOR_RE } from "./constants.js";
-import { CANVAS_WIDTH, CANVAS_HEIGHT } from "../../../../shared/squadoodle.js";
+import { CANVAS_WIDTH, CANVAS_HEIGHT } from "../../../../shared/games/squadoodle.js";
 
 // clamps v into [lo, hi] and rounds to nearest integer.
 // coordinates stored as integers because:

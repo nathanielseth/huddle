@@ -1,4 +1,4 @@
-import type { Card, Rank, Suit } from "../../../../shared/poker";
+import type { Card, Rank, Suit } from "../../../../shared/games/poker";
 import { shuffle } from "../lib/random";
 import { RANK_CHARS, SUIT_CHARS } from "./lib/cards";
 

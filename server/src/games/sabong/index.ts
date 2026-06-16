@@ -11,7 +11,7 @@ import type {
 	SabongPrivateView,
 	SabongPhase,
 	HideableStat,
-} from "../../../../shared/sabong";
+} from "../../../../shared/games/sabong";
 import type {
 	SabongServerState,
 	SabongServerPlayer,
@@ -39,10 +39,10 @@ const FINAL_MATCH_INDEX = TOTAL_MATCHES - 1;
 const BALANCE_ATTEMPTS = 30;
 const BINARY_SEARCH_ITERATIONS = 8;
 
-// O(1) lookup for match indices that trigger a shop phase after payout
+// set ensures o(1) membership test
 const SHOP_TRIGGER_INDICES = new Set(C.SHOP_AFTER_MATCH_INDICES);
 
-const VALID_TRANSITIONS: Record<SabongPhase, SabongPhase[]> = {
+const VALID_TRANSITIONS: Record<SabongPhase, readonly SabongPhase[]> = {
 	pre_tournament: ["betting"],
 	shop: ["betting"],
 	betting: ["fighting"],
@@ -51,9 +51,19 @@ const VALID_TRANSITIONS: Record<SabongPhase, SabongPhase[]> = {
 	finished: [],
 };
 
+// throws on illegal transitions (timer-driven paths, indicates bug)
+// use warninvalidphase for action-driven paths (stale client actions)
 function assertTransition(from: SabongPhase, to: SabongPhase): void {
 	if (!VALID_TRANSITIONS[from].includes(to)) {
 		throw new Error(`[sabong] illegal phase transition: ${from} → ${to}`);
+	}
+}
+
+function warnInvalidPhase(expected: SabongPhase, actual: SabongPhase): void {
+	if (process.env["NODE_ENV"] !== "production") {
+		console.warn(
+			`[sabong] action rejected: expected phase "${expected}", got "${actual}"`,
+		);
 	}
 }
 
@@ -73,8 +83,7 @@ function estimateFightDuration(logLength: number): number {
 	return logLength * C.FIGHT_EVENT_DURATION_MS + C.FIGHT_BUFFER_MS;
 }
 
-// applies sabotage debuffs (attack ×0.8, determination → 0) so actual fight
-// outcome reflects them — public odds do not
+// applies sabotage debuffs for actual fight, public odds never use this path
 function toFighterStats(m: ManokStats): FighterStats {
 	return {
 		id: m.id,
@@ -87,8 +96,7 @@ function toFighterStats(m: ManokStats): FighterStats {
 	};
 }
 
-// sabotage ignored — used exclusively for odds computation so public moneyline
-// never leaks whether a sabotage has occurred
+// ignores sabotage for odds computation, avoids leaking sabotage status
 function toCleanFighterStats(m: ManokStats): FighterStats {
 	return {
 		id: m.id,
@@ -103,7 +111,7 @@ function toCleanFighterStats(m: ManokStats): FighterStats {
 
 function generateHiddenStats(): Set<HideableStat> {
 	const shuffled = [...HIDEABLE_STATS].sort(() => Math.random() - 0.5);
-	return new Set(shuffled.slice(0, 2) as HideableStat[]);
+	return new Set(shuffled.slice(0, C.HIDDEN_STAT_COUNT) as HideableStat[]);
 }
 
 function generateManok(id: string, name: string): ManokStats {
@@ -124,8 +132,7 @@ function generateManok(id: string, name: string): ManokStats {
 	};
 }
 
-// ensures at least MIN_STAT_DIFF_COUNT stats differ by ≥ MIN_STAT_DIFF for
-// visible betting contrast. adjusts low-impact stats first, mutates f2 in place
+// ensures enough stats differ by min_stat_diff for visible contrast, mutates f2 in place
 function enforceStatDifferencesInPlace(f1: ManokStats, f2: ManokStats): void {
 	const differs = (a: number, b: number) => Math.abs(a - b) >= MIN_STAT_DIFF;
 	const clamp = (v: number, range: readonly [number, number]) =>
@@ -143,29 +150,30 @@ function enforceStatDifferencesInPlace(f1: ManokStats, f2: ManokStats): void {
 
 	if (count >= C.MIN_STAT_DIFF_COUNT) return;
 
-	const candidates = [
-		{
-			needsAdjust: () => !differs(f1.speed, f2.speed),
-			adjust: () => {
-				const s = f2.speed <= f1.speed ? MIN_STAT_DIFF : -MIN_STAT_DIFF;
-				f2.speed = clamp(f2.speed + s, C.STAT_RANGES.speed);
+	const candidates: Array<{ needsAdjust: () => boolean; adjust: () => void }> =
+		[
+			{
+				needsAdjust: () => !differs(f1.speed, f2.speed),
+				adjust: () => {
+					const s = f2.speed <= f1.speed ? MIN_STAT_DIFF : -MIN_STAT_DIFF;
+					f2.speed = clamp(f2.speed + s, C.STAT_RANGES.speed);
+				},
 			},
-		},
-		{
-			needsAdjust: () => !differs(f1.critRate, f2.critRate),
-			adjust: () => {
-				const s = f2.critRate <= f1.critRate ? MIN_STAT_DIFF : -MIN_STAT_DIFF;
-				f2.critRate = clamp(f2.critRate + s, C.STAT_RANGES.critRate);
+			{
+				needsAdjust: () => !differs(f1.critRate, f2.critRate),
+				adjust: () => {
+					const s = f2.critRate <= f1.critRate ? MIN_STAT_DIFF : -MIN_STAT_DIFF;
+					f2.critRate = clamp(f2.critRate + s, C.STAT_RANGES.critRate);
+				},
 			},
-		},
-		{
-			needsAdjust: () => !differs(f1.defense, f2.defense),
-			adjust: () => {
-				const s = f2.defense <= f1.defense ? MIN_STAT_DIFF : -MIN_STAT_DIFF;
-				f2.defense = clamp(f2.defense + s, C.STAT_RANGES.defense);
+			{
+				needsAdjust: () => !differs(f1.defense, f2.defense),
+				adjust: () => {
+					const s = f2.defense <= f1.defense ? MIN_STAT_DIFF : -MIN_STAT_DIFF;
+					f2.defense = clamp(f2.defense + s, C.STAT_RANGES.defense);
+				},
 			},
-		},
-	];
+		];
 
 	for (const c of candidates) {
 		if (count >= C.MIN_STAT_DIFF_COUNT) break;
@@ -304,7 +312,7 @@ function advanceBracket(
 	if (next) bracket[next.slot]![next.position] = winnerId;
 }
 
-// always uses clean stats so public moneyline is unaffected by sabotage
+// uses clean stats so public odds unaffected by sabotage
 function computeSlotOdds(
 	slot: ServerBracketSlot,
 	manoks: Map<string, ManokStats>,
@@ -315,8 +323,7 @@ function computeSlotOdds(
 	return getMatchupOdds(toCleanFighterStats(f1), toCleanFighterStats(f2));
 }
 
-// builds per-player private snapshot. called on every engine result so clients
-// always have fresh intelligence data
+// builds per-player private snapshots for each engine result
 function buildPrivatePayloads(
 	state: SabongServerState,
 ): Map<string, SabongPrivateView> {
@@ -336,7 +343,7 @@ function buildPrivatePayloads(
 			}
 		}
 
-		// show debuffed values only to this player
+		// show debuffed values only to sabotaging player
 		const sabotaged: Record<string, { attack: number; determination: number }> =
 			{};
 		for (const manokId of player.sabotageTargets) {
@@ -351,7 +358,7 @@ function buildPrivatePayloads(
 		payloads.set(playerId, {
 			revealedStats,
 			sabotaged,
-			// 0 cap means unlimited → null in the view
+			// 0 cap means unlimited, so null in view
 			shopSpyRemaining:
 				C.SPY_CAP === 0 ? null : Math.max(0, C.SPY_CAP - player.shopSpyUsed),
 			shopSabotageRemaining:
@@ -383,112 +390,6 @@ function allPicksLocked(state: SabongServerState): boolean {
 
 function allBetsLocked(state: SabongServerState): boolean {
 	return state.lockedBetCount >= state.players.size;
-}
-
-// opens shop between tournament rounds. resets per-phase counters; accumulated
-// intelligence (reveals, sabotages) persists across shop phases
-function openShop(state: SabongServerState): void {
-	assertTransition(state.phase, "shop");
-	for (const player of state.players.values()) {
-		player.shopSpyUsed = 0;
-		player.shopSabotageUsed = 0;
-	}
-	state.phase = "shop";
-	markDirty(state);
-}
-
-// opens betting. computes odds from clean stats — sabotage already applied on
-// ManokStats but excluded from public odds to preserve information asymmetry.
-// grants ayuda to broke players
-function openBetting(state: SabongServerState): void {
-	assertTransition(state.phase, "betting");
-
-	const slot = state.bracket[state.currentMatchIndex]!;
-	state.lockedBetCount = 0;
-
-	if (slot.fighter1Id && slot.fighter2Id) {
-		slot.odds = computeSlotOdds(slot, state.manoks);
-	}
-
-	const ayuda = Math.round(
-		C.AYUDA_AMOUNT * (1 + state.currentMatchIndex * C.AYUDA_SCALE),
-	);
-	for (const player of state.players.values()) {
-		if (player.balance <= 0) {
-			player.balance = ayuda;
-			player.receivedAyudaThisRound = true;
-		} else {
-			player.receivedAyudaThisRound = false;
-		}
-		player.currentBet = null;
-		player.betLocked = false;
-	}
-
-	state.phase = "betting";
-	markDirty(state);
-}
-
-// toFighterStats applies sabotage debuff at simulation time
-function startFight(state: SabongServerState): number {
-	assertTransition(state.phase, "fighting");
-
-	const slot = state.bracket[state.currentMatchIndex]!;
-	const f1 = state.manoks.get(slot.fighter1Id!)!;
-	const f2 = state.manoks.get(slot.fighter2Id!)!;
-
-	const { winnerId, log } = simulateBattle(
-		toFighterStats(f1),
-		toFighterStats(f2),
-	);
-	slot.winnerId = winnerId;
-	state.battleLog = log;
-	state.phase = "fighting";
-	markDirty(state);
-
-	return estimateFightDuration(log.length);
-}
-
-// distributes winnings. contrarian bonus rewards betting against the crowd
-function applyPayouts(state: SabongServerState): Record<string, number> {
-	const slot = state.bracket[state.currentMatchIndex]!;
-	const winnerId = slot.winnerId!;
-	const odds = slot.odds!;
-	const deltas: Record<string, number> = {};
-
-	let totalPool = 0,
-		fighter1Pool = 0,
-		fighter2Pool = 0;
-	for (const player of state.players.values()) {
-		if (!player.currentBet) continue;
-		totalPool += player.currentBet.amount;
-		if (player.currentBet.manokId === slot.fighter1Id)
-			fighter1Pool += player.currentBet.amount;
-		else fighter2Pool += player.currentBet.amount;
-	}
-
-	for (const [playerId, player] of state.players) {
-		if (!player.currentBet) continue;
-		const { manokId, amount } = player.currentBet;
-		const betOnFighter1 = manokId === slot.fighter1Id;
-
-		if (manokId === winnerId) {
-			const ml = betOnFighter1
-				? odds.moneyline.fighter1
-				: odds.moneyline.fighter2;
-			const sidePool = betOnFighter1 ? fighter1Pool : fighter2Pool;
-			const contraryMult =
-				1 +
-				(totalPool > 0 ? 1 - sidePool / totalPool : 0) * C.CONTRARIAN_BONUS_MAX;
-			const payout = Math.round(
-				Math.round(amount * moneylineToDecimal(ml)) * contraryMult,
-			);
-			player.balance += payout;
-			deltas[playerId] = payout - amount;
-		} else {
-			deltas[playerId] = -amount;
-		}
-	}
-	return deltas;
 }
 
 function buildManokView(
@@ -536,6 +437,7 @@ function buildManokView(
 		matchupLabel: side?.label ?? null,
 		matchupSubtitle: side?.subtitle ?? null,
 		matchupEdge: side?.edge ?? null,
+		isSabotaged: manok.isSabotaged,
 	};
 }
 
@@ -590,6 +492,130 @@ function buildPublicState(state: SabongServerState): SabongState {
 			spyCap: C.SPY_CAP === 0 ? null : C.SPY_CAP,
 			sabotageCap: C.SABOTAGE_CAP === 0 ? null : C.SABOTAGE_CAP,
 		},
+	};
+}
+
+// opens shop between rounds, resets per-phase counters
+// intelligence data persists across shop phases
+function openShop(state: SabongServerState): void {
+	assertTransition(state.phase, "shop");
+	for (const player of state.players.values()) {
+		player.shopSpyUsed = 0;
+		player.shopSabotageUsed = 0;
+	}
+	state.phase = "shop";
+	markDirty(state);
+}
+
+// opens betting, compute odds from clean stats (sabotage excluded), grant ayuda to broke players
+function openBetting(state: SabongServerState): void {
+	// transition check happens before mutation
+	assertTransition(state.phase, "betting");
+
+	const slot = state.bracket[state.currentMatchIndex]!;
+	state.lockedBetCount = 0;
+
+	if (slot.fighter1Id && slot.fighter2Id) {
+		slot.odds = computeSlotOdds(slot, state.manoks);
+	}
+
+	const ayuda = Math.round(
+		C.AYUDA_AMOUNT * (1 + state.currentMatchIndex * C.AYUDA_SCALE),
+	);
+	for (const player of state.players.values()) {
+		if (player.balance <= 0) {
+			player.balance = ayuda;
+			player.receivedAyudaThisRound = true;
+		} else {
+			player.receivedAyudaThisRound = false;
+		}
+		player.currentBet = null;
+		player.betLocked = false;
+	}
+
+	state.phase = "betting";
+	markDirty(state);
+}
+
+// simulates fight, tofighterstats applies sabotage debuff
+function startFight(state: SabongServerState): number {
+	assertTransition(state.phase, "fighting");
+
+	const slot = state.bracket[state.currentMatchIndex]!;
+	const f1 = state.manoks.get(slot.fighter1Id!)!;
+	const f2 = state.manoks.get(slot.fighter2Id!)!;
+
+	const { winnerId, log } = simulateBattle(
+		toFighterStats(f1),
+		toFighterStats(f2),
+	);
+	slot.winnerId = winnerId;
+	state.battleLog = log;
+	state.phase = "fighting";
+	markDirty(state);
+
+	return estimateFightDuration(log.length);
+}
+
+// distributes winnings with contrarian bonus
+function applyPayouts(state: SabongServerState): Record<string, number> {
+	const slot = state.bracket[state.currentMatchIndex]!;
+	const winnerId = slot.winnerId!;
+	const odds = slot.odds!;
+	const deltas: Record<string, number> = {};
+
+	let totalPool = 0;
+	let fighter1Pool = 0;
+	let fighter2Pool = 0;
+
+	for (const player of state.players.values()) {
+		if (!player.currentBet) continue;
+		totalPool += player.currentBet.amount;
+		if (player.currentBet.manokId === slot.fighter1Id) {
+			fighter1Pool += player.currentBet.amount;
+		} else {
+			fighter2Pool += player.currentBet.amount;
+		}
+	}
+
+	for (const [playerId, player] of state.players) {
+		if (!player.currentBet) continue;
+		const { manokId, amount } = player.currentBet;
+		const betOnFighter1 = manokId === slot.fighter1Id;
+
+		if (manokId === winnerId) {
+			const ml = betOnFighter1
+				? odds.moneyline.fighter1
+				: odds.moneyline.fighter2;
+			const sidePool = betOnFighter1 ? fighter1Pool : fighter2Pool;
+			const contraryMult =
+				1 +
+				(totalPool > 0 ? 1 - sidePool / totalPool : 0) * C.CONTRARIAN_BONUS_MAX;
+			const payout = Math.round(
+				Math.round(amount * moneylineToDecimal(ml)) * contraryMult,
+			);
+			player.balance += payout;
+			deltas[playerId] = payout - amount;
+		} else {
+			deltas[playerId] = -amount;
+		}
+	}
+	return deltas;
+}
+
+// defined once to avoid repeated closures
+// timer explicitly passed to force caller awareness
+function makeResult(
+	state: SabongServerState,
+	timer: EngineResult["timer"],
+	extras?: Partial<EngineResult>,
+): EngineResult {
+	return {
+		serverPayload: state,
+		publicPayload: getPublicState(state),
+		privatePayloads: buildPrivatePayloads(state),
+		timer,
+		...extras,
 	};
 }
 
@@ -657,12 +683,10 @@ export const sabongEngine: GameEngine = {
 
 		state.phase = "pre_tournament";
 
-		return {
-			serverPayload: state,
-			publicPayload: getPublicState(state),
-			privatePayloads: buildPrivatePayloads(state),
-			timer: { startsAt: Date.now(), duration: C.PRE_TOURNAMENT_DURATION_MS },
-		};
+		return makeResult(state, {
+			startsAt: Date.now(),
+			duration: C.PRE_TOURNAMENT_DURATION_MS,
+		});
 	},
 
 	onAction(ctx: GameContext, playerId: string, raw: unknown): EngineResult {
@@ -671,20 +695,17 @@ export const sabongEngine: GameEngine = {
 		const action = parseSabongAction(raw);
 		const player = state.players.get(playerId);
 
-		function noOp(): EngineResult {
-			return {
-				serverPayload: state,
-				publicPayload: getPublicState(state),
-				privatePayloads: buildPrivatePayloads(state),
-				timer: room.timer,
-			};
-		}
+		// preserve current timer, no new phase
+		const noOp = () => makeResult(state, room.timer);
 
 		if (!action || !player) return noOp();
 
 		switch (action.type) {
 			case "pick_bracket_winner": {
-				if (state.phase !== "pre_tournament") return noOp();
+				if (state.phase !== "pre_tournament") {
+					warnInvalidPhase("pre_tournament", state.phase);
+					return noOp();
+				}
 				if (player.bracketPickLocked) return noOp();
 				if (!state.manoks.has(action.manokId)) return noOp();
 				player.bracketPickId = action.manokId;
@@ -693,27 +714,30 @@ export const sabongEngine: GameEngine = {
 			}
 
 			case "lock_bracket_pick": {
-				if (state.phase !== "pre_tournament") return noOp();
+				if (state.phase !== "pre_tournament") {
+					warnInvalidPhase("pre_tournament", state.phase);
+					return noOp();
+				}
 				if (!player.bracketPickId) return noOp();
 				player.bracketPickLocked = true;
 				state.lockedPickCount++;
 				if (allPicksLocked(state)) {
 					openBetting(state);
-					return {
-						serverPayload: state,
-						publicPayload: getPublicState(state),
-						privatePayloads: buildPrivatePayloads(state),
-						timer: { startsAt: Date.now(), duration: C.BETTING_DURATION_MS },
-					};
+					return makeResult(state, {
+						startsAt: Date.now(),
+						duration: C.BETTING_DURATION_MS,
+					});
 				}
 				markDirty(state);
 				break;
 			}
 
-			// reveal one randomly-chosen hidden stat on the target fighter.
-			// fighter's hiddenStats unchanged; only this player's revealedStats gains entry
+			// reveals one random hidden stat
 			case "reveal_stat": {
-				if (state.phase !== "shop") return noOp();
+				if (state.phase !== "shop") {
+					warnInvalidPhase("shop", state.phase);
+					return noOp();
+				}
 
 				const manok = state.manoks.get(action.manokId);
 				if (!manok) return noOp();
@@ -732,13 +756,17 @@ export const sabongEngine: GameEngine = {
 				player.revealedStats.set(action.manokId, alreadyRevealed);
 				player.balance -= C.SPY_PRICE;
 				player.shopSpyUsed++;
+				// marks dirty: balance changed
+				markDirty(state);
 				break;
 			}
 
-			// apply sabotage to target fighter. effect (attack ×0.8, determination → 0)
-			// applied immediately to ManokStats. public odds never recalculated
+			// applies permanent debuff (attack ×0.8, determination → 0), persists, public odds not recalculated
 			case "sabotage_manok": {
-				if (state.phase !== "shop") return noOp();
+				if (state.phase !== "shop") {
+					warnInvalidPhase("shop", state.phase);
+					return noOp();
+				}
 
 				const manok = state.manoks.get(action.manokId);
 				if (!manok) return noOp();
@@ -751,19 +779,25 @@ export const sabongEngine: GameEngine = {
 				player.sabotageTargets.add(action.manokId);
 				player.balance -= C.SABOTAGE_PRICE;
 				player.shopSabotageUsed++;
+				// marks dirty: sabotage exposed and balance changed
+				markDirty(state);
 				break;
 			}
 
 			case "place_bet": {
-				if (state.phase !== "betting") return noOp();
+				if (state.phase !== "betting") {
+					warnInvalidPhase("betting", state.phase);
+					return noOp();
+				}
 				if (player.betLocked) return noOp();
 
 				const slot = state.bracket[state.currentMatchIndex]!;
 				if (
 					action.manokId !== slot.fighter1Id &&
 					action.manokId !== slot.fighter2Id
-				)
+				) {
 					return noOp();
+				}
 
 				player.currentBet = {
 					manokId: action.manokId,
@@ -774,7 +808,10 @@ export const sabongEngine: GameEngine = {
 			}
 
 			case "lock_bet": {
-				if (state.phase !== "betting") return noOp();
+				if (state.phase !== "betting") {
+					warnInvalidPhase("betting", state.phase);
+					return noOp();
+				}
 				if (!player.currentBet || player.betLocked) return noOp();
 
 				player.balance -= player.currentBet.amount;
@@ -790,66 +827,46 @@ export const sabongEngine: GameEngine = {
 				if (!slot.fighter1Id || !slot.fighter2Id) return noOp();
 
 				const duration = startFight(state);
-				return {
-					serverPayload: state,
-					publicPayload: getPublicState(state),
-					privatePayloads: buildPrivatePayloads(state),
-					timer: { startsAt: Date.now(), duration },
-				};
+				return makeResult(state, { startsAt: Date.now(), duration });
 			}
 		}
 
-		return {
-			serverPayload: state,
-			publicPayload: getPublicState(state),
-			privatePayloads: buildPrivatePayloads(state),
-			timer: room.timer,
-		};
+		return makeResult(state, room.timer);
 	},
 
 	onTimerExpired(ctx: GameContext): EngineResult {
 		const { room } = ctx;
 		const state = room.gamePayload as SabongServerState;
 
-		function noOp(): EngineResult {
-			return {
-				serverPayload: state,
-				publicPayload: getPublicState(state),
-				privatePayloads: buildPrivatePayloads(state),
-				timer: null,
-			};
-		}
+		const noOp = () => makeResult(state, null);
 
 		if (state.phase === "pre_tournament") {
 			const manokIds = [...state.manoks.keys()];
 			for (const player of state.players.values()) {
-				if (!player.bracketPickId)
+				if (!player.bracketPickId) {
 					player.bracketPickId =
 						manokIds[Math.floor(Math.random() * manokIds.length)]!;
+				}
 				if (!player.bracketPickLocked) {
 					player.bracketPickLocked = true;
 					state.lockedPickCount++;
 				}
 			}
 			openBetting(state);
-			return {
-				serverPayload: state,
-				publicPayload: getPublicState(state),
-				privatePayloads: buildPrivatePayloads(state),
-				timer: { startsAt: Date.now(), duration: C.BETTING_DURATION_MS },
-			};
+			return makeResult(state, {
+				startsAt: Date.now(),
+				duration: C.BETTING_DURATION_MS,
+			});
 		}
 
 		if (state.phase === "shop") {
 			state.currentMatchIndex++;
 			state.battleLog = null;
 			openBetting(state);
-			return {
-				serverPayload: state,
-				publicPayload: getPublicState(state),
-				privatePayloads: buildPrivatePayloads(state),
-				timer: { startsAt: Date.now(), duration: C.BETTING_DURATION_MS },
-			};
+			return makeResult(state, {
+				startsAt: Date.now(),
+				duration: C.BETTING_DURATION_MS,
+			});
 		}
 
 		if (state.phase === "betting") {
@@ -869,12 +886,7 @@ export const sabongEngine: GameEngine = {
 			}
 
 			const duration = startFight(state);
-			return {
-				serverPayload: state,
-				publicPayload: getPublicState(state),
-				privatePayloads: buildPrivatePayloads(state),
-				timer: { startsAt: Date.now(), duration },
-			};
+			return makeResult(state, { startsAt: Date.now(), duration });
 		}
 
 		if (state.phase === "fighting") {
@@ -892,13 +904,11 @@ export const sabongEngine: GameEngine = {
 			state.phase = "payout";
 			markDirty(state);
 
-			return {
-				serverPayload: state,
-				publicPayload: getPublicState(state),
-				privatePayloads: buildPrivatePayloads(state),
-				timer: { startsAt: Date.now(), duration: C.PAYOUT_DURATION_MS },
-				scoreDeltas,
-			};
+			return makeResult(
+				state,
+				{ startsAt: Date.now(), duration: C.PAYOUT_DURATION_MS },
+				{ scoreDeltas },
+			);
 		}
 
 		if (state.phase === "payout") {
@@ -919,37 +929,29 @@ export const sabongEngine: GameEngine = {
 				state.battleLog = null;
 				markDirty(state);
 
-				return {
-					serverPayload: state,
-					publicPayload: getPublicState(state),
-					privatePayloads: buildPrivatePayloads(state),
-					timer: null,
+				return makeResult(state, null, {
 					roomPhase: "ended",
 					scoreDeltas: bonusDeltas,
-				};
+				});
 			}
 
-			// round break — open shop if this match triggers one, else advance directly
+			// round break: open shop if triggered, else advance
 			if (SHOP_TRIGGER_INDICES.has(state.currentMatchIndex)) {
 				state.battleLog = null;
 				openShop(state);
-				return {
-					serverPayload: state,
-					publicPayload: getPublicState(state),
-					privatePayloads: buildPrivatePayloads(state),
-					timer: { startsAt: Date.now(), duration: C.SHOP_DURATION_MS },
-				};
+				return makeResult(state, {
+					startsAt: Date.now(),
+					duration: C.SHOP_DURATION_MS,
+				});
 			}
 
 			state.currentMatchIndex++;
 			state.battleLog = null;
 			openBetting(state);
-			return {
-				serverPayload: state,
-				publicPayload: getPublicState(state),
-				privatePayloads: buildPrivatePayloads(state),
-				timer: { startsAt: Date.now(), duration: C.BETTING_DURATION_MS },
-			};
+			return makeResult(state, {
+				startsAt: Date.now(),
+				duration: C.BETTING_DURATION_MS,
+			});
 		}
 
 		return noOp();

@@ -1,4 +1,4 @@
-import type { TaskType } from "../../../../shared/sussy.js";
+import type { TaskType } from "../../../../shared/games/sussy.js";
 
 export const SELECTABLE_TASKS: readonly TaskType[] = [
 	"show_of_hands",

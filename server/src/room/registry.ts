@@ -4,7 +4,7 @@ import type {
 	RoomPhase,
 	GameTimer,
 	PauseReason,
-} from "../../../shared/types";
+} from "../../../shared/core/room";
 
 export interface RoomPlayer {
 	playerId: string;

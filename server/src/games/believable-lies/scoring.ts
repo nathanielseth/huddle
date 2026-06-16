@@ -1,7 +1,7 @@
 import { TRUTH_BASE, FOOL_BASE, ROUND_MULTIPLIER } from "./constants";
 import { ABSTAIN } from "./types";
 import type { BelievableLiesBuiltAnswer } from "./types";
-import type { BelievableLiesRound } from "../../../../shared/believable-lies";
+import type { BelievableLiesRound } from "../../../../shared/games/believable-lies";
 
 export function scoreRound(params: {
 	round: BelievableLiesRound;

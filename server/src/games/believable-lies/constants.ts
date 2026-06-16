@@ -1,4 +1,4 @@
-import type { BelievableLiesRound } from "../../../../shared/believable-lies";
+import type { BelievableLiesRound } from "../../../../shared/games/believable-lies";
 
 export const LIE_INPUT_MS = 60_000;
 export const PICKING_MS = 30_000;

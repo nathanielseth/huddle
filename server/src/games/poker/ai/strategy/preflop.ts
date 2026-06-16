@@ -303,7 +303,7 @@ function handleVs4Bet(
 	);
 
 	// small personality gate
-	const tightnessBuffer = personality.tightness * 0.06;
+	const tightnessBuffer = 0.05 + personality.tightness * 0.10;
 	if (equity >= ctx.potOdds + tightnessBuffer) {
 		return { type: "all_in" };
 	}

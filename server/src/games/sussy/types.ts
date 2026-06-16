@@ -5,7 +5,7 @@ import type {
 	SussyResponse,
 	SussyRoundResult,
 	SussyTaskVoteResult,
-} from "../../../../shared/sussy";
+} from "../../../../shared/games/sussy";
 
 export interface SussyServerPlayer {
 	playerId: string;
