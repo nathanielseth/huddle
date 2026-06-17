@@ -4,7 +4,7 @@ const R = SABONG_CONSTANTS.STAT_RANGES;
 
 // per-stat value ranges for normalising raw deltas to [-1, 1].
 // derived from STAT_RANGES at module load so they never drift
-export const SPREADS = {
+const SPREADS = {
 	health: R.health[1] - R.health[0],
 	attack: R.attack[1] - R.attack[0],
 	defense: R.defense[1] - R.defense[0],

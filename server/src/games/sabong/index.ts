@@ -570,11 +570,12 @@ function applyPayouts(state: SabongServerState): Record<string, number> {
 
 	for (const player of state.players.values()) {
 		if (!player.currentBet) continue;
-		totalPool += player.currentBet.amount;
-		if (player.currentBet.manokId === slot.fighter1Id) {
-			fighter1Pool += player.currentBet.amount;
+		const { manokId, amount } = player.currentBet;
+		totalPool += amount;
+		if (manokId === slot.fighter1Id) {
+			fighter1Pool += amount;
 		} else {
-			fighter2Pool += player.currentBet.amount;
+			fighter2Pool += amount;
 		}
 	}
 

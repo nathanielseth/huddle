@@ -108,7 +108,7 @@ function computeRaiseTo(
 type ActionKey = "fold" | "check" | "call" | "raise" | "all_in";
 type ActionScores = Record<ActionKey, number>;
 
-export function scoreActions(
+function scoreActions(
 	ctx: AIDecisionContext,
 	personality: AIPersonality,
 	nudges?: Partial<Record<ActionKey, number>>,

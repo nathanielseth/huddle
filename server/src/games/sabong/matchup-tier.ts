@@ -1,13 +1,13 @@
 export type MatchupTier = "even" | "slight_edge" | "favored" | "heavy_favorite";
 
-export const TIER_LABELS: Record<MatchupTier, string> = {
+const TIER_LABELS: Record<MatchupTier, string> = {
 	even: "Even",
 	slight_edge: "Slight edge",
 	favored: "Favored",
 	heavy_favorite: "Heavy favorite",
 } as const;
 
-export const TIER_SUBTITLES: Record<
+const TIER_SUBTITLES: Record<
 	MatchupTier,
 	{ favorite: string; underdog: string }
 > = {
@@ -32,14 +32,6 @@ export interface TierResult {
 	// normalised edge strength in [0, 1]. 0 = low end of tier, 1 = high end.
 	// useful for continuous visual effects (bar width, colour intensity)
 	edge: number;
-}
-
-// classify a single fighter's win probability into a tier.
-// use describeMatchup for both sides
-export function getMatchupTier(winProbability: number): TierResult {
-	const p = Math.max(winProbability, 1 - winProbability);
-	const tier = classifyFavoredProb(p);
-	return { tier, label: TIER_LABELS[tier], edge: computeEdge(p, tier) };
 }
 
 function classifyFavoredProb(p: number): MatchupTier {
@@ -124,18 +116,3 @@ function toMoneylineString(p: number): string {
 export interface TierStyle {
 	colorKey: "neutral" | "yellow" | "orange" | "red";
 }
-
-export const TIER_STYLES: Record<MatchupTier, TierStyle> = {
-	even: { colorKey: "neutral" },
-	slight_edge: { colorKey: "yellow" },
-	favored: { colorKey: "orange" },
-	heavy_favorite: { colorKey: "red" },
-} as const;
-
-// tiers in ascending advantage order — useful for rendering a legend
-export const TIER_ORDER: readonly MatchupTier[] = [
-	"even",
-	"slight_edge",
-	"favored",
-	"heavy_favorite",
-] as const;

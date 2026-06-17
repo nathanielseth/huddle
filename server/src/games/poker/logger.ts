@@ -345,10 +345,13 @@ export class PokerLogger {
 					: "nobody";
 				const finalStacks =
 					(payload["finalStacks"] as Record<string, number> | undefined) ?? {};
-				const stackLine = Object.entries(finalStacks)
-					.filter(([, s]) => s > 0)
-					.map(([id, s]) => `${fmtPid(id)} ${fmtChips(s)}`)
-					.join("  ·  ");
+
+				const stackParts: string[] = [];
+				for (const [id, s] of Object.entries(finalStacks)) {
+					if (s > 0) stackParts.push(`${fmtPid(id)} ${fmtChips(s)}`);
+				}
+				const stackLine = stackParts.join("  ·  ");
+
 				this.sep(null);
 				this.out(
 					null,

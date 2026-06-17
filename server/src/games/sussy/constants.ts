@@ -3,7 +3,7 @@ import type { TaskType } from "../../../../shared/games/sussy.js";
 export const SELECTABLE_TASKS: readonly TaskType[] = [
 	"show_of_hands",
 	"finger_pointing",
-	"finger_blast",
+	"numbers_game",
 	"thumb_shot",
 	"face_turn",
 ];
@@ -11,7 +11,7 @@ export const SELECTABLE_TASKS: readonly TaskType[] = [
 export const TASK_DURATIONS_MS: Record<TaskType, number> = {
 	show_of_hands: 15_000,
 	finger_pointing: 20_000,
-	finger_blast: 15_000,
+	numbers_game: 15_000,
 	thumb_shot: 25_000,
 	face_turn: 20_000,
 	glitch_in_the_chat: 60_000,

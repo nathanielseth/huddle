@@ -11,7 +11,7 @@ export type SussyPhase =
 export type TaskType =
 	| "show_of_hands"
 	| "finger_pointing"
-	| "finger_blast"
+	| "numbers_game"
 	| "thumb_shot"
 	| "face_turn"
 	| "glitch_in_the_chat";
@@ -21,7 +21,7 @@ export type PlayerRole = "crew" | "impostor";
 export type SussyResponse =
 	| { readonly type: "show_of_hands"; readonly raised: boolean }
 	| { readonly type: "finger_pointing"; readonly targetId: string | null }
-	| { readonly type: "finger_blast"; readonly count: number }
+	| { readonly type: "numbers_game"; readonly count: number }
 	| { readonly type: "thumb_shot"; readonly choices: readonly boolean[] }
 	| { readonly type: "face_turn"; readonly emoji: string | null }
 	| {

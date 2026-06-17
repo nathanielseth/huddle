@@ -19,10 +19,7 @@ export function pickMode(playerCount: number): GameMode {
 	return "override";
 }
 
-export function getRoleList(
-	playerCount: number,
-	mode: GameMode,
-): CybsecsRole[] {
+function getRoleList(playerCount: number, mode: GameMode): CybsecsRole[] {
 	let roles: CybsecsRole[];
 
 	if (mode === "baseline") {
@@ -164,7 +161,18 @@ const HACKER_RING_ROLES = new Set<CybsecsRole>([
 	"obfuscator",
 ]);
 
-export function buildKnowledge(
+function collectIds(
+	others: [string, CybsecsServerPlayer][],
+	roleSet: Set<CybsecsRole>,
+): string[] {
+	const ids: string[] = [];
+	for (const [id, p] of others) {
+		if (roleSet.has(p.role)) ids.push(id);
+	}
+	return ids;
+}
+
+function buildKnowledge(
 	playerId: string,
 	role: CybsecsRole,
 	allPlayers: Map<string, CybsecsServerPlayer>,
@@ -184,28 +192,30 @@ export function buildKnowledge(
 		case "spoofer":
 		case "obfuscator":
 			return {
-				knownHackerIds: others
-					.filter(([, p]) => HACKER_RING_ROLES.has(p.role))
-					.map(([id]) => id),
+				knownHackerIds: collectIds(others, HACKER_RING_ROLES),
 				knownEthicalHackerId: null,
 			};
 
 		case "black_hat": {
-			const knownHackerIds = others
-				.filter(([, p]) => HACKER_RING_ROLES.has(p.role))
-				.map(([id]) => id);
-			const ehEntry = others.find(([, p]) => p.role === "ethical_hacker");
-			return { knownHackerIds, knownEthicalHackerId: ehEntry?.[0] ?? null };
+			const knownHackerIds = collectIds(others, HACKER_RING_ROLES);
+			let knownEthicalHackerId: string | null = null;
+			for (const [id, p] of others) {
+				if (p.role === "ethical_hacker") {
+					knownEthicalHackerId = id;
+					break;
+				}
+			}
+			return { knownHackerIds, knownEthicalHackerId };
 		}
 
-		case "sysadmin":
-			// sees all hacker-aligned players, honeypot excluded (agent-aligned)
-			return {
-				knownHackerIds: others
-					.filter(([, p]) => p.alignment === "hacker")
-					.map(([id]) => id),
-				knownEthicalHackerId: null,
-			};
+		case "sysadmin": {
+			// sees all hacker-aligned players, honeypot excluded
+			const knownHackerIds: string[] = [];
+			for (const [id, p] of others) {
+				if (p.alignment === "hacker") knownHackerIds.push(id);
+			}
+			return { knownHackerIds, knownEthicalHackerId: null };
+		}
 
 		default:
 			return assertNever(role);

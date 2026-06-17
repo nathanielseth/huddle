@@ -14,11 +14,7 @@ export function computePotOdds(callAmount: number, pot: number): number {
 }
 
 // net EV of calling: equity × (pot + callAmount) − callAmount
-export function callEV(
-	equity: number,
-	callAmount: number,
-	pot: number,
-): number {
+function callEV(equity: number, callAmount: number, pot: number): number {
 	return equity * (pot + callAmount) - callAmount;
 }
 
@@ -37,7 +33,7 @@ export function stackToPotRatio(effectiveStack: number, pot: number): number {
 	return pot <= 0 ? Infinity : effectiveStack / pot;
 }
 
-export const BET_FRACTIONS = [0.33, 0.67, 1.0, 1.5] as const;
+const BET_FRACTIONS = [0.33, 0.67, 1.0, 1.5] as const;
 
 export function sampleBetFraction(
 	baseWeights: readonly [number, number, number, number],
@@ -73,7 +69,6 @@ export function sampleBetFraction(
 			w[3] *= 1 + wet * 0.85; // grow 1.5x overbet
 		}
 		if (texture.monotone && streetIndex >= 2) {
-			// monotone turn/river: polarize hard 
 			w[0] *= 1.3;
 			w[1] *= 0.65;
 			w[2] *= 0.75;

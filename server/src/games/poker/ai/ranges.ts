@@ -88,7 +88,7 @@ function buildHandTypes(): HandType[] {
 export const ALL_HAND_TYPES: readonly HandType[] =
 	Object.freeze(buildHandTypes());
 
-export const PREFLOP_EQUITY: ReadonlyArray<Float32Array> = Object.freeze(
+const PREFLOP_EQUITY: ReadonlyArray<Float32Array> = Object.freeze(
 	PREFLOP_EQUITY_DATA.map((row) => new Float32Array(row)),
 );
 
@@ -349,7 +349,7 @@ export interface WeightedCombo {
 
 // converts RangeWeights into normalized list of specific two-card combos,
 // excluding any combo blocked by hero's hand + board
-export function buildWeightedCombos(
+function buildWeightedCombos(
 	range: RangeWeights,
 	blocked: ReadonlySet<number>,
 ): WeightedCombo[] {
@@ -425,20 +425,4 @@ export function sampleComboAlias(ca: ComboAlias): [number, number] | null {
 	if (!combo) return null;
 
 	return [combo.c0, combo.c1];
-}
-
-// kept for reference and utility; not used in hot path
-export function sampleWeightedCombo(
-	combos: WeightedCombo[],
-): [number, number] | null {
-	if (combos.length === 0) return null;
-	let r = Math.random();
-	for (const { c0, c1, weight } of combos) {
-		r -= weight;
-		if (r <= 0) return [c0, c1];
-	}
-	const last = combos[combos.length - 1];
-	if (!last) return null;
-
-	return [last.c0, last.c1];
 }

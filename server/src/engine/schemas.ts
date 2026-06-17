@@ -1,14 +1,14 @@
 import { z } from "zod";
 import type { GameTimer, RoomPhase } from "../../../shared/core/room";
 
-export const GameTimerSchema: z.ZodType<GameTimer> = z.object({
+const GameTimerSchema: z.ZodType<GameTimer> = z.object({
 	startsAt: z.number(),
 	duration: z.number().positive(),
 });
 
-export const RoomPhaseSchema = z.string() as z.ZodType<RoomPhase>;
+const RoomPhaseSchema = z.string() as z.ZodType<RoomPhase>;
 
-export const EngineResultSchema = z.object({
+const EngineResultSchema = z.object({
 	serverPayload: z.unknown(),
 	publicPayload: z.unknown(),
 	timer: GameTimerSchema.nullable(),

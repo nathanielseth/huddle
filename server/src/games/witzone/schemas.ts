@@ -3,13 +3,13 @@ import { MAX_ANSWER_LENGTH, FINAL_VOTE_TOKENS } from "./constants";
 
 // individual action schemas
 
-export const SubmitAnswerSchema = z.object({
+const SubmitAnswerSchema = z.object({
 	type: z.literal("submit_answer"),
 	promptIndex: z.number().int().min(0),
 	text: z.string().min(1).max(MAX_ANSWER_LENGTH).trim(),
 });
 
-export const CastVoteSchema = z.object({
+const CastVoteSchema = z.object({
 	type: z.literal("cast_vote"),
 	answerId: z.string().min(1),
 });
@@ -18,7 +18,7 @@ export const CastVoteSchema = z.object({
 //
 // in the engine, the sum is validated imperatively after parsing so that
 // the discriminated union can still fast-path on "type"
-export const CastFinalVotesSchema = z.object({
+const CastFinalVotesSchema = z.object({
 	type: z.literal("cast_final_votes"),
 	votes: z.record(
 		z.string().min(1), // answerid key
@@ -31,7 +31,7 @@ export const CastFinalVotesSchema = z.object({
 // discriminatedunion gives zod a fast path (no need to try each branch)
 // and better error messages when the wrong action type is sent
 
-export const WitzoneActionSchema = z.discriminatedUnion("type", [
+const WitzoneActionSchema = z.discriminatedUnion("type", [
 	SubmitAnswerSchema,
 	CastVoteSchema,
 	CastFinalVotesSchema,
@@ -44,22 +44,6 @@ export type ParsedWitzoneAction = z.infer<typeof WitzoneActionSchema>;
 export type ParsedSubmitAnswer = z.infer<typeof SubmitAnswerSchema>;
 export type ParsedCastVote = z.infer<typeof CastVoteSchema>;
 export type ParsedCastFinalVotes = z.infer<typeof CastFinalVotesSchema>;
-
-// refined final-vote schema (for tests / one-off validation)
-//
-// adds the semantic constraint that votes must sum to exactly final_vote_tokens
-// returns zodeffects, so it cannot be used inside the discriminatedunion above
-
-export const CastFinalVotesRefinedSchema = CastFinalVotesSchema.refine(
-	(data) => {
-		const total = Object.values(data.votes).reduce((sum, n) => sum + n, 0);
-		return total === FINAL_VOTE_TOKENS;
-	},
-	{
-		message: `votes must sum to exactly ${FINAL_VOTE_TOKENS}`,
-		path: ["votes"],
-	},
-);
 
 // parse helper
 

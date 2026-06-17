@@ -3,7 +3,7 @@ import { shuffle } from "../lib/random";
 import { RANK_CHARS, SUIT_CHARS } from "./lib/cards";
 
 // builds an unshuffled 52-card deck. new array every call, rank-major order
-export function buildDeck(): Card[] {
+function buildDeck(): Card[] {
 	const deck: Card[] = [];
 	for (const rank of RANK_CHARS) {
 		for (const suit of SUIT_CHARS) {

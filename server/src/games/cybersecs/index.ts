@@ -13,11 +13,7 @@ import type {
 import type { CybsecsServerState, CybsecsServerAction } from "./types";
 import { C } from "./constants";
 import { pickMode, assignRoles, buildRoleIndex } from "./roles";
-import {
-	resolveMission,
-	commitMissionResult,
-	getWinCounts,
-} from "./mission";
+import { resolveMission, commitMissionResult, getWinCounts } from "./mission";
 import { CybsecsActionSchema } from "./schemas";
 import { shuffle } from "../lib/random";
 import { makeTimer } from "../lib/timer";
@@ -56,13 +52,14 @@ function allSecrets(state: CybsecsServerState): Map<string, CybsecsSecret> {
 
 function buildPublicState(state: CybsecsServerState): CybsecsState {
 	const revealVotes = state.phase !== "voting";
+	const nominatedSet = new Set(state.nominatedTeam);
 
 	const players: Record<string, CybsecsPlayerView> = {};
 	for (const [id, p] of state.players) {
 		players[id] = {
 			playerId: id,
 			isLeader: state.playerOrder[state.leaderIndex] === id,
-			isNominated: state.nominatedTeam.includes(id),
+			isNominated: nominatedSet.has(id),
 			hasVoted: p.vote !== null,
 			vote: revealVotes ? p.vote : null,
 			hasSubmittedMissionAction: p.missionAction !== null,
@@ -76,9 +73,10 @@ function buildPublicState(state: CybsecsServerState): CybsecsState {
 			)
 		: null;
 
-	const skipVotedIds = [...state.players.entries()]
-		.filter(([, p]) => p.skipVote === true)
-		.map(([id]) => id);
+	const skipVotedIds: string[] = [];
+	for (const [id, p] of state.players) {
+		if (p.skipVote === true) skipVotedIds.push(id);
+	}
 
 	// apparent counts exclude obfuscated missions. true counts via getWinCounts
 	let apparentSecureds = 0;
@@ -208,9 +206,11 @@ function executeMission(state: CybsecsServerState): EngineResult {
 
 function resolveVoting(state: CybsecsServerState): EngineResult {
 	const totalPlayers = state.playerOrder.length;
-	const approvals = [...state.players.values()].filter(
-		(p) => p.vote === "approve",
-	).length;
+
+	let approvals = 0;
+	for (const p of state.players.values()) {
+		if (p.vote === "approve") approvals++;
+	}
 
 	if (approvals > totalPlayers / 2) {
 		return makeResult(state, enterMission(state));
@@ -334,9 +334,10 @@ export const cybsecsEngine: GameEngine & GameEngineWithSecrets = {
 				if (action.type !== "skip_vote") return noOp();
 				player.skipVote = action.skip;
 
-				const skipCount = [...state.players.values()].filter(
-					(p) => p.skipVote === true,
-				).length;
+				let skipCount = 0;
+				for (const p of state.players.values()) {
+					if (p.skipVote === true) skipCount++;
+				}
 				if (skipCount > state.playerOrder.length / 2) {
 					return makeResult(state, enterNominating(state));
 				}
@@ -353,9 +354,12 @@ export const cybsecsEngine: GameEngine & GameEngineWithSecrets = {
 
 				if (action.type === "pass") {
 					if (state.playerOrder[state.leaderIndex] !== playerId) return noOp();
-					if (state.passedPlayerIds.includes(playerId)) return noOp();
+
+					const passedSet = new Set(state.passedPlayerIds);
+					if (passedSet.has(playerId)) return noOp();
+
 					const unpassed = state.playerOrder.filter(
-						(id) => !state.passedPlayerIds.includes(id) && id !== playerId,
+						(id) => !passedSet.has(id) && id !== playerId,
 					);
 					if (unpassed.length === 0) return noOp();
 
@@ -480,18 +484,19 @@ export const cybsecsEngine: GameEngine & GameEngineWithSecrets = {
 				return afterMissionResult(state);
 
 			case "doxxing": {
-				const agentPlayers = [...state.players.values()].filter(
-					(p) => p.alignment === "agent",
-				);
-				const target =
-					agentPlayers[Math.floor(Math.random() * agentPlayers.length)];
+				const agentPlayers: string[] = [];
+				for (const p of state.players.values()) {
+					if (p.alignment === "agent") agentPlayers.push(p.playerId);
+				}
 
 				invariant(
-					target !== undefined,
+					agentPlayers.length > 0,
 					"Doxxing phase has no agent-aligned players — invalid game state",
 				);
 
-				return resolveDoxx(state, target.playerId);
+				const targetId =
+					agentPlayers[Math.floor(Math.random() * agentPlayers.length)]!;
+				return resolveDoxx(state, targetId);
 			}
 
 			case "game_over":

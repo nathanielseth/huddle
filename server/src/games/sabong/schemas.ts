@@ -1,37 +1,37 @@
 import { z } from "zod";
 
-export const PickBracketWinnerSchema = z.object({
+const PickBracketWinnerSchema = z.object({
 	type: z.literal("pick_bracket_winner"),
 	manokId: z.string().min(1),
 });
 
-export const LockBracketPickSchema = z.object({
+const LockBracketPickSchema = z.object({
 	type: z.literal("lock_bracket_pick"),
 });
 
 // debuff (attack ×0.8, determination → 0) applied privately, public odds unchanged
-export const SabotageManokSchema = z.object({
+const SabotageManokSchema = z.object({
 	type: z.literal("sabotage_manok"),
 	manokId: z.string().min(1),
 });
 
 // server reveals one randomly-chosen hidden stat to requesting player only
-export const RevealStatSchema = z.object({
+const RevealStatSchema = z.object({
 	type: z.literal("reveal_stat"),
 	manokId: z.string().min(1),
 });
 
-export const PlaceBetSchema = z.object({
+const PlaceBetSchema = z.object({
 	type: z.literal("place_bet"),
 	manokId: z.string().min(1),
 	amount: z.number().int().min(1), // engine caps to player balance
 });
 
-export const LockBetSchema = z.object({
+const LockBetSchema = z.object({
 	type: z.literal("lock_bet"),
 });
 
-export const SabongActionSchema = z.discriminatedUnion("type", [
+const SabongActionSchema = z.discriminatedUnion("type", [
 	PickBracketWinnerSchema,
 	LockBracketPickSchema,
 	SabotageManokSchema,

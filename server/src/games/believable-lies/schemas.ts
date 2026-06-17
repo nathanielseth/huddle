@@ -3,22 +3,22 @@ import { MAX_LIE_LENGTH } from "./constants";
 
 // semantic checks (category in choices, answer not own lie, text not truth)
 // require server state and stay in the engine as imperative guards
-export const SubmitLieSchema = z.object({
+const SubmitLieSchema = z.object({
 	type: z.literal("submit_lie"),
 	text: z.string().trim().min(1).max(MAX_LIE_LENGTH),
 });
 
-export const PickAnswerSchema = z.object({
+const PickAnswerSchema = z.object({
 	type: z.literal("pick_answer"),
 	answerId: z.string().min(1),
 });
 
-export const SelectCategorySchema = z.object({
+const SelectCategorySchema = z.object({
 	type: z.literal("select_category"),
 	category: z.string().min(1),
 });
 
-export const BelievableLiesActionSchema = z.discriminatedUnion("type", [
+const BelievableLiesActionSchema = z.discriminatedUnion("type", [
 	SubmitLieSchema,
 	PickAnswerSchema,
 	SelectCategorySchema,

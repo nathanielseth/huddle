@@ -31,7 +31,6 @@ import { makePreflopDecision } from "./strategy/preflop";
 export type { AIPersonality, AIDecisionContext } from "./types";
 export {
 	generateAIPlayer,
-	createAIPlayer,
 	PERSONALITIES,
 	NameDispenser,
 } from "./personality.js";
@@ -186,21 +185,6 @@ function getOpponentRanges(
 }
 
 // public api
-
-export function aiThinkTimer(
-	personality: AIPersonality,
-	equity: number,
-	potOdds: number,
-): GameTimer {
-	const [min, max] = personality.thinkTimeMs;
-	const range = max - min;
-	const closeness = Math.max(0, 1 - Math.abs(equity - potOdds) * 3);
-	const difficultyFactor = 0.25 + closeness * 0.5 + Math.random() * 0.35;
-	return {
-		startsAt: Date.now(),
-		duration: Math.round(min + range * Math.min(difficultyFactor, 1)),
-	};
-}
 
 export function makeAIAction(
 	state: PokerServerState,

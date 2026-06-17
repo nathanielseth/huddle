@@ -87,9 +87,11 @@ export function countInHandPlayers(state: PokerServerState): number {
 
 // all non-folded player ids, used by showdown
 export function getNonFoldedPlayerIds(state: PokerServerState): string[] {
-	return [...state.players.values()]
-		.filter((p) => p.status === "active" || p.status === "allin")
-		.map((p) => p.playerId);
+	const ids: string[] = [];
+	for (const p of state.players.values()) {
+		if (p.status === "active" || p.status === "allin") ids.push(p.playerId);
+	}
+	return ids;
 }
 
 // finds next player who must act, searching forward from currentplayerindex.
@@ -126,17 +128,17 @@ export function isBettingRoundOver(state: PokerServerState): boolean {
 //   eligible = non-folded players with totalcontributed >= l
 // remainder above highest all-in level works the same
 export function computeSidePots(state: PokerServerState): void {
-	const allPlayers = state.seatOrder
-		.map((id) => state.players.get(id)!)
-		.filter((p) => p.totalContributed > 0 && p.status !== "out");
+	const allPlayers: PokerServerPlayer[] = [];
+	for (const id of state.seatOrder) {
+		const p = state.players.get(id)!;
+		if (p.totalContributed > 0 && p.status !== "out") allPlayers.push(p);
+	}
 
-	const allinLevels: number[] = [
-		...new Set(
-			allPlayers
-				.filter((p) => p.status === "allin")
-				.map((p) => p.totalContributed),
-		),
-	].sort((a, b) => a - b);
+	const allinLevelsSet = new Set<number>();
+	for (const p of allPlayers) {
+		if (p.status === "allin") allinLevelsSet.add(p.totalContributed);
+	}
+	const allinLevels = [...allinLevelsSet].sort((a, b) => a - b);
 
 	const pots: SidePot[] = [];
 	let prevLevel = 0;

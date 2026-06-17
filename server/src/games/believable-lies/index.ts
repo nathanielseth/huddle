@@ -348,9 +348,10 @@ function enterResult(
 		playerIds: [...state.players.keys()],
 	});
 
-	const truthPickerIds = [...state.picks.entries()]
-		.filter(([, aid]) => aid === truthAnswer.id)
-		.map(([pid]) => pid);
+	const truthPickerIds: string[] = [];
+	for (const [pid, aid] of state.picks) {
+		if (aid === truthAnswer.id) truthPickerIds.push(pid);
+	}
 
 	state.results.push({
 		prompt: question.prompt,

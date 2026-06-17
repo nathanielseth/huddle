@@ -22,7 +22,7 @@ export const PERSONALITIES = {
 	tag: {
 		id: "tag",
 		displayName: "The Shark",
-		tightness: 0.60,
+		tightness: 0.6,
 		aggression: 0.72,
 		bluffFrequency: 0.26,
 		sizingWeights: [2, 4, 3, 1] as const,
@@ -85,7 +85,7 @@ export const PERSONALITIES = {
 
 export type PersonalityId = keyof typeof PERSONALITIES;
 
-export const BOT_ROSTER = {
+const BOT_ROSTER = {
 	nit: [
 		"Dora",
 		"Yona",
@@ -158,8 +158,6 @@ export class NameDispenser {
 	}
 }
 
-// 
-
 const PERSONALITY_WEIGHTS: readonly [PersonalityId, number][] = [
 	["nit", 20],
 	["tag", 30],
@@ -197,26 +195,6 @@ export function generateAIPlayer(
 		displayName: dispenser.issue(personality.id as PersonalityId),
 		personality,
 	};
-}
-
-export function createAIPlayer(
-	playerId: string,
-	username: string,
-	personalityId: PersonalityId,
-	dispenser: NameDispenser,
-	options: { forceName?: boolean } = {},
-): AIPlayerConfig {
-	let displayName: BotDisplayName;
-
-	if (options.forceName || !dispenser.has(username)) {
-		(dispenser as unknown as { issued: Set<string> })["issued"].add(username);
-		displayName = username as BotDisplayName;
-	} else {
-		// name already taken fallback
-		displayName = dispenser.issue(personalityId);
-	}
-
-	return { playerId, displayName, personality: PERSONALITIES[personalityId] };
 }
 
 export function humanizeBet(

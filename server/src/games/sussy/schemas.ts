@@ -1,39 +1,39 @@
 import { z } from "zod";
 
-export const ShowOfHandsResponseSchema = z.object({
+const ShowOfHandsResponseSchema = z.object({
 	type: z.literal("show_of_hands"),
 	raised: z.boolean(),
 });
 
-export const FingerPointingResponseSchema = z.object({
+const FingerPointingResponseSchema = z.object({
 	type: z.literal("finger_pointing"),
 	targetId: z.string().nullable(),
 });
 
-export const FingerBlastResponseSchema = z.object({
-	type: z.literal("finger_blast"),
+const NumbersGameResponseSchema = z.object({
+	type: z.literal("numbers_game"),
 	count: z.number().int().min(0).max(5),
 });
 
-export const ThumbShotResponseSchema = z.object({
+const ThumbShotResponseSchema = z.object({
 	type: z.literal("thumb_shot"),
 	choices: z.array(z.boolean()).length(3),
 });
 
-export const FaceTurnResponseSchema = z.object({
+const FaceTurnResponseSchema = z.object({
 	type: z.literal("face_turn"),
 	emoji: z.string().nullable(),
 });
 
-export const GlitchInTheChatResponseSchema = z.object({
+const GlitchInTheChatResponseSchema = z.object({
 	type: z.literal("glitch_in_the_chat"),
 	answers: z.array(z.string().min(1)).max(3),
 });
 
-export const SussyResponseSchema = z.discriminatedUnion("type", [
+const SussyResponseSchema = z.discriminatedUnion("type", [
 	ShowOfHandsResponseSchema,
 	FingerPointingResponseSchema,
-	FingerBlastResponseSchema,
+	NumbersGameResponseSchema,
 	ThumbShotResponseSchema,
 	FaceTurnResponseSchema,
 	GlitchInTheChatResponseSchema,
@@ -46,8 +46,8 @@ export type ParsedShowOfHandsResponse = z.infer<
 export type ParsedFingerPointingResponse = z.infer<
 	typeof FingerPointingResponseSchema
 >;
-export type ParsedFingerBlastResponse = z.infer<
-	typeof FingerBlastResponseSchema
+export type ParsedNumbersGameResponse = z.infer<
+	typeof NumbersGameResponseSchema
 >;
 export type ParsedThumbShotResponse = z.infer<typeof ThumbShotResponseSchema>;
 export type ParsedFaceTurnResponse = z.infer<typeof FaceTurnResponseSchema>;
@@ -57,28 +57,28 @@ export type ParsedGlitchInTheChatResponse = z.infer<
 
 // select_category intentionally excludes glitch_in_the_chat.
 // round 4 (glitch) is auto-assigned by the server — players never pick it
-export const SelectCategorySchema = z.object({
+const SelectCategorySchema = z.object({
 	type: z.literal("select_category"),
 	category: z.enum([
 		"show_of_hands",
 		"finger_pointing",
-		"finger_blast",
+		"numbers_game",
 		"thumb_shot",
 		"face_turn",
 	]),
 });
 
-export const SubmitResponseSchema = z.object({
+const SubmitResponseSchema = z.object({
 	type: z.literal("submit_response"),
 	response: SussyResponseSchema,
 });
 
-export const CastVoteSchema = z.object({
+const CastVoteSchema = z.object({
 	type: z.literal("cast_vote"),
 	targetId: z.string().min(1),
 });
 
-export const SussyActionSchema = z.discriminatedUnion("type", [
+const SussyActionSchema = z.discriminatedUnion("type", [
 	SelectCategorySchema,
 	SubmitResponseSchema,
 	CastVoteSchema,

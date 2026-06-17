@@ -4,7 +4,7 @@ interface ShowOfHandsPrompt {
 interface FingerPointingPrompt {
 	crew: string;
 }
-interface FingerBlastPrompt {
+interface NumbersGamePrompt {
 	crew: string;
 }
 interface ThumbShotPrompt {
@@ -21,7 +21,7 @@ interface GlitchPrompt {
 interface SussyPromptBank {
 	show_of_hands: ShowOfHandsPrompt[];
 	finger_pointing: FingerPointingPrompt[];
-	finger_blast: FingerBlastPrompt[];
+	numbers_game: NumbersGamePrompt[];
 	thumb_shot: ThumbShotPrompt[];
 	face_turn: FaceTurnPrompt[];
 	glitch_in_the_chat: GlitchPrompt[];
@@ -140,7 +140,7 @@ export const PROMPT_BANK: SussyPromptBank = {
 		},
 		{ crew: "Point at the person who'd have the most embarassing photos" },
 	],
-	finger_blast: [
+	numbers_game: [
 		{ crew: "How many pets do you have?" },
 		{ crew: "How many relationships have you had?" },
 		{ crew: "How many siblings do you have?" },
