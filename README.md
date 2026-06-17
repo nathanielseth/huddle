@@ -1,7 +1,9 @@
 <h1 align="center">huddle!</h1>
+
 <p align="center">
   A real-time multiplayer platform hosting a collection of party games.
 </p>
+
 <p align="center">
   <img src="https://img.shields.io/badge/React-20232A?style=flat-square&logo=react&logoColor=61DAFB" />
   <img src="https://img.shields.io/badge/TypeScript-007ACC?style=flat-square&logo=typescript&logoColor=white" />
@@ -27,9 +29,20 @@
 
 - 🃏 **Poker Night** — classic texas hold'em
 
+## Project Structure
+
+This is a monorepo:
+
+```
+huddle/
+├── client/   # React + Vite frontend
+├── server/   # Express + Socket.io game server
+└── shared/   # Types and schemas shared between client and server
+```
+
 ## Setup
 
-Requires **[Node.js 20+](https://nodejs.org/)**
+Requires **[Node.js 22+](https://nodejs.org/en/download)**
 
 **1. Clone**
 
@@ -45,6 +58,7 @@ cd huddle
 ```bash
 npm install
 ```
+This will install all depencies in the workspace.
 
 **3. Run**
 
