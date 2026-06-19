@@ -12,7 +12,7 @@ export const socket: Socket<ServerToClientEvents, ClientToServerEvents> = io(
 	SOCKET_URL,
 	{
 		autoConnect: false,
-		transports: ["websocket"],
+		transports: ["websocket", "polling"],
 		reconnectionAttempts: Infinity,
 		reconnectionDelay: 1000,
 		reconnectionDelayMax: 5000,

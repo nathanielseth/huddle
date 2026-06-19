@@ -17,7 +17,7 @@ export function createSocketServer(
 			origin: env.NODE_ENV === "development" ? true : env.CLIENT_URL,
 			methods: ["GET", "POST"],
 		},
-		transports: ["websocket"],
+		transports: ["websocket", "polling"],
 		pingTimeout: 10_000,
 		pingInterval: 25_000,
 	});
