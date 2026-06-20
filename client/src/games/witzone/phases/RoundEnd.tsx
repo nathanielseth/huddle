@@ -1,4 +1,4 @@
-import { motion } from "motion/react";
+import { m } from "motion/react";
 import { useWitzoneState } from "../hooks/useWitzoneState";
 import { Leaderboard } from "./shared";
 
@@ -12,22 +12,22 @@ export function RoundEnd() {
 	return (
 		<div className="flex flex-col items-center min-h-screen px-6 py-14 gap-10">
 			<div className="text-center">
-				<motion.p
+				<m.p
 					initial={{ opacity: 0, y: -6 }}
 					animate={{ opacity: 1, y: 0 }}
 					className="text-xs uppercase tracking-widest text-white/40 mb-2"
 				>
 					Round {state.round} complete
-				</motion.p>
-				<motion.h2
+				</m.p>
+				<m.h2
 					initial={{ opacity: 0, y: -6 }}
 					animate={{ opacity: 1, y: 0 }}
 					transition={{ delay: 0.07 }}
 					className="text-3xl font-display font-bold text-white"
 				>
 					{toFinal ? "Final Round up next!" : "Round 2 up next!"}
-				</motion.h2>
-				<motion.p
+				</m.h2>
+				<m.p
 					initial={{ opacity: 0 }}
 					animate={{ opacity: 1 }}
 					transition={{ delay: 0.18 }}
@@ -36,7 +36,7 @@ export function RoundEnd() {
 					{toFinal
 						? "One shared prompt. All players. 3 tokens to spend."
 						: "Everything doubled. Same rules, higher stakes."}
-				</motion.p>
+				</m.p>
 			</div>
 
 			<div className="w-full max-w-sm flex flex-col gap-2">

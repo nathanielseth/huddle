@@ -1,4 +1,4 @@
-import { motion } from "motion/react";
+import { m } from "motion/react";
 import { useWitzoneState } from "../hooks/useWitzoneState";
 import { TimerBar } from "../../sabong/components/TimerBar";
 import { Loading } from "./shared";
@@ -40,7 +40,7 @@ function RevealView() {
 			</div>
 
 			{wasJinx && (
-				<motion.div
+				<m.div
 					initial={{ opacity: 0, scale: 0.95 }}
 					animate={{ opacity: 1, scale: 1 }}
 					className="rounded-2xl border border-yellow-500/30 bg-yellow-500/10 px-6 py-4 text-center"
@@ -49,11 +49,11 @@ function RevealView() {
 					<p className="text-white/60 text-sm mt-1">
 						Both players wrote the same thing. No points for anyone.
 					</p>
-				</motion.div>
+				</m.div>
 			)}
 
 			{wasDefault && !wasJinx && (
-				<motion.div
+				<m.div
 					initial={{ opacity: 0, scale: 0.95 }}
 					animate={{ opacity: 1, scale: 1 }}
 					className="rounded-2xl border border-orange-500/30 bg-orange-500/10 px-6 py-4 text-center"
@@ -62,7 +62,7 @@ function RevealView() {
 					<p className="text-white/60 text-sm mt-1">
 						Default bonus to the player who showed up.
 					</p>
-				</motion.div>
+				</m.div>
 			)}
 
 			<div className="flex flex-col gap-3">
@@ -71,7 +71,7 @@ function RevealView() {
 					const isWinner = wittyWinnerId === answer.authorId;
 
 					return (
-						<motion.div
+						<m.div
 							key={answer.id}
 							initial={{ opacity: 0, x: -8 }}
 							animate={{ opacity: 1, x: 0 }}
@@ -113,13 +113,13 @@ function RevealView() {
 									)}
 								</div>
 							</div>
-						</motion.div>
+						</m.div>
 					);
 				})}
 			</div>
 
 			{wittyWinnerId && (
-				<motion.p
+				<m.p
 					initial={{ opacity: 0 }}
 					animate={{ opacity: 1 }}
 					transition={{ delay: 0.4 }}
@@ -127,7 +127,7 @@ function RevealView() {
 				>
 					{wittyWinnerId === playerId ? "You" : getName(wittyWinnerId)} got
 					every single vote! ✨
-				</motion.p>
+				</m.p>
 			)}
 		</div>
 	);
@@ -140,6 +140,42 @@ function HostVotingView() {
 	const { text, answers, votedCount, eligibleVoterCount, authorIds } =
 		state.currentPrompt;
 	const label = `${roundLabel(state.round)} · ${state.currentPromptIndex + 1} of ${state.totalPromptsThisRound}`;
+
+	// Fix: js-combine-iterations — single reduce() pass instead of filter().map()
+	const voterPips = Object.values(state.players).reduce<React.ReactNode[]>(
+		(acc, p) => {
+			if (!authorIds.includes(p.id)) {
+				acc.push(
+					<div
+						key={p.id}
+						className={`flex items-center gap-2 px-3 py-1.5 rounded-full text-xs transition-all duration-300 ${
+							p.hasVoted
+								? "bg-white/10 text-white/80"
+								: "bg-surface border border-border text-white/30"
+						}`}
+					>
+						<span
+							className={`w-1.5 h-1.5 rounded-full ${p.hasVoted ? "bg-white/80" : "bg-white/20"}`}
+						/>
+						{getName(p.id)}
+					</div>,
+				);
+			}
+			return acc;
+		},
+		[],
+	);
+
+	const authorPips = authorIds.map((id) => (
+		<div
+			key={id}
+			className="flex items-center gap-2 px-3 py-1.5 rounded-full text-xs bg-surface border border-border text-white/20"
+		>
+			<span className="w-1.5 h-1.5 rounded-full bg-white/10" />
+			{getName(id)}
+			<span className="text-white/20">(author)</span>
+		</div>
+	));
 
 	return (
 		<div className="flex flex-col min-h-screen px-10 py-10 gap-8">
@@ -178,33 +214,8 @@ function HostVotingView() {
 			</div>
 
 			<div className="flex flex-wrap gap-3 pt-2">
-				{Object.values(state.players)
-					.filter((p) => !authorIds.includes(p.id))
-					.map((p) => (
-						<div
-							key={p.id}
-							className={`flex items-center gap-2 px-3 py-1.5 rounded-full text-xs transition-all duration-300 ${
-								p.hasVoted
-									? "bg-white/10 text-white/80"
-									: "bg-surface border border-border text-white/30"
-							}`}
-						>
-							<span
-								className={`w-1.5 h-1.5 rounded-full ${p.hasVoted ? "bg-white/80" : "bg-white/20"}`}
-							/>
-							{getName(p.id)}
-						</div>
-					))}
-				{authorIds.map((id) => (
-					<div
-						key={id}
-						className="flex items-center gap-2 px-3 py-1.5 rounded-full text-xs bg-surface border border-border text-white/20"
-					>
-						<span className="w-1.5 h-1.5 rounded-full bg-white/10" />
-						{getName(id)}
-						<span className="text-white/20">(author)</span>
-					</div>
-				))}
+				{voterPips}
+				{authorPips}
 			</div>
 		</div>
 	);
@@ -248,6 +259,22 @@ function VoterView() {
 	const hasVoted = state.players[playerId]?.hasVoted ?? false;
 	const label = `${roundLabel(state.round)} · ${state.currentPromptIndex + 1} of ${state.totalPromptsThisRound}`;
 
+	// Fix: js-combine-iterations — single reduce() pass instead of filter().map()
+	const waitDots = Object.values(state.players).reduce<React.ReactNode[]>(
+		(acc, p) => {
+			if (!state.currentPrompt!.authorIds.includes(p.id)) {
+				acc.push(
+					<div
+						key={p.id}
+						className={`w-2 h-2 rounded-full transition-colors duration-300 ${p.hasVoted ? "bg-white/80" : "bg-white/20"}`}
+					/>,
+				);
+			}
+			return acc;
+		},
+		[],
+	);
+
 	return (
 		<div className="flex flex-col min-h-screen px-6 py-10">
 			<TimerBar timer={timer} />
@@ -271,8 +298,9 @@ function VoterView() {
 			{!hasVoted ? (
 				<div className="flex flex-col gap-3 flex-1">
 					{answers.map((answer) => (
-						<motion.button
+						<m.button
 							key={answer.id}
+							type="button"
 							whileTap={{ scale: 0.97 }}
 							onClick={() =>
 								sendAction({ type: "cast_vote", answerId: answer.id })
@@ -280,11 +308,11 @@ function VoterView() {
 							className="w-full px-6 py-5 rounded-2xl border border-border bg-surface text-left text-white font-medium text-base hover:border-white/30 hover:bg-white/5 transition-all active:scale-[0.97] cursor-pointer"
 						>
 							{answer.text}
-						</motion.button>
+						</m.button>
 					))}
 				</div>
 			) : (
-				<motion.div
+				<m.div
 					initial={{ opacity: 0 }}
 					animate={{ opacity: 1 }}
 					className="flex flex-col items-center gap-4 flex-1 justify-center"
@@ -295,17 +323,8 @@ function VoterView() {
 					<p className="text-white/50 text-sm">
 						Vote cast. Waiting for others...
 					</p>
-					<div className="flex gap-2">
-						{Object.values(state.players)
-							.filter((p) => !state.currentPrompt!.authorIds.includes(p.id))
-							.map((p) => (
-								<div
-									key={p.id}
-									className={`w-2 h-2 rounded-full transition-colors duration-300 ${p.hasVoted ? "bg-white/80" : "bg-white/20"}`}
-								/>
-							))}
-					</div>
-				</motion.div>
+					<div className="flex gap-2">{waitDots}</div>
+				</m.div>
 			)}
 		</div>
 	);

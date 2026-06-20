@@ -75,7 +75,7 @@ export function Home() {
 		if (!sessionStorage.getItem(BETA_ACK_KEY)) {
 			await modal.alert({
 				title: "🚧 Early Access",
-				body: "This game is still in beta — expect rough edges, bugs, or unfinished bits. Play at your own risk and let us know what breaks.",
+				body: "This game is still a work in progress. Some features may be incomplete or behave unexpectedly.",
 				confirmLabel: "Got it, let's play",
 			});
 			sessionStorage.setItem(BETA_ACK_KEY, "1");

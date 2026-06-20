@@ -1,4 +1,4 @@
-import { AnimatePresence, motion } from "motion/react";
+import { AnimatePresence, m } from "motion/react";
 import { useWitzoneState } from "./hooks/useWitzoneState";
 import { Answering } from "./phases/Answering";
 import { VotingPrompt } from "./phases/VotingPrompt";
@@ -6,7 +6,7 @@ import { RoundEnd } from "./phases/RoundEnd";
 import { FinalAnswering } from "./phases/FinalAnswering";
 import { FinalVoting } from "./phases/FinalVoting";
 import { Finished } from "./phases/Finished";
-import type { WitzonePhase } from "@shared/witzone";
+import type { WitzonePhase } from "@shared/games/witzone";
 import type { FC } from "react";
 
 const PHASES: Record<WitzonePhase, FC> = {
@@ -54,7 +54,7 @@ export function Witzone() {
 	return (
 		<div className="relative w-full min-h-screen bg-bg overflow-hidden">
 			<AnimatePresence mode="wait">
-				<motion.div
+				<m.div
 					key={key}
 					className="w-full min-h-screen"
 					initial={{ opacity: 0, y: 10 }}
@@ -63,7 +63,7 @@ export function Witzone() {
 					transition={{ duration: 0.18 }}
 				>
 					<Component />
-				</motion.div>
+				</m.div>
 			</AnimatePresence>
 		</div>
 	);

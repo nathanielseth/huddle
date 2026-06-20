@@ -1,4 +1,4 @@
-import { motion } from "motion/react";
+import { m } from "motion/react";
 import { useWitzoneState } from "../hooks/useWitzoneState";
 import { Leaderboard } from "./shared";
 
@@ -12,7 +12,7 @@ export function Finished() {
 
 	return (
 		<div className="flex flex-col items-center min-h-screen px-6 py-14 gap-10">
-			<motion.div
+			<m.div
 				initial={{ opacity: 0, scale: 0.92 }}
 				animate={{ opacity: 1, scale: 1 }}
 				transition={{ type: "spring", stiffness: 260, damping: 20 }}
@@ -30,10 +30,10 @@ export function Finished() {
 						{winner.score.toLocaleString()} points
 					</p>
 				)}
-			</motion.div>
+			</m.div>
 
 			{state.finalReveal && (
-				<motion.div
+				<m.div
 					initial={{ opacity: 0, y: 10 }}
 					animate={{ opacity: 1, y: 0 }}
 					transition={{ delay: 0.2 }}
@@ -52,7 +52,7 @@ export function Finished() {
 						{state.finalReveal.answers.map((answer, rank) => {
 							const isMe = answer.authorId === playerId;
 							return (
-								<motion.div
+								<m.div
 									key={answer.id}
 									initial={{ opacity: 0, x: -8 }}
 									animate={{ opacity: 1, x: 0 }}
@@ -81,11 +81,11 @@ export function Finished() {
 											+{answer.scoreDelta}
 										</span>
 									)}
-								</motion.div>
+								</m.div>
 							);
 						})}
 					</div>
-				</motion.div>
+				</m.div>
 			)}
 
 			<div className="w-full max-w-sm flex flex-col gap-2">

@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { motion } from "motion/react";
+import { m } from "motion/react";
 import { useWitzoneState } from "../hooks/useWitzoneState";
 import { TimerBar } from "../../sabong/components/TimerBar";
 import { Loading, WaitingView } from "./shared";
@@ -140,7 +140,7 @@ export function FinalVoting() {
 					const tokens = allocation[answer.id] ?? 0;
 
 					return (
-						<motion.div
+						<m.div
 							key={answer.id}
 							initial={{ opacity: 0, y: 8 }}
 							animate={{ opacity: 1, y: 0 }}
@@ -159,6 +159,7 @@ export function FinalVoting() {
 								) : (
 									<div className="flex items-center gap-2 shrink-0">
 										<button
+											type="button"
 											onClick={() => remove(answer.id)}
 											disabled={tokens === 0}
 											className="w-8 h-8 rounded-lg border border-border bg-bg text-white/60 text-lg font-bold disabled:opacity-20 disabled:cursor-not-allowed hover:border-white/30 transition-all active:scale-[0.93]"
@@ -169,6 +170,7 @@ export function FinalVoting() {
 											{tokens}
 										</span>
 										<button
+											type="button"
 											onClick={() => add(answer.id)}
 											disabled={remaining <= 0}
 											className="w-8 h-8 rounded-lg border border-border bg-bg text-white/60 text-lg font-bold disabled:opacity-20 disabled:cursor-not-allowed hover:border-white/30 transition-all active:scale-[0.93]"
@@ -178,13 +180,14 @@ export function FinalVoting() {
 									</div>
 								)}
 							</div>
-						</motion.div>
+						</m.div>
 					);
 				})}
 			</div>
 
 			<div className="pt-6">
 				<button
+					type="button"
 					onClick={handleSubmit}
 					disabled={remaining !== 0}
 					className="w-full py-4 rounded-2xl bg-white text-black font-semibold text-base disabled:opacity-30 disabled:cursor-not-allowed active:scale-[0.98] transition-all"
