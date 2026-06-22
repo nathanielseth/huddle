@@ -1,5 +1,6 @@
 {
 	"name": "huddle",
+	"type": "module",
 	"private": true,
 	"version": "0.1.0",
 	"workspaces": [
@@ -10,9 +11,16 @@
 	"scripts": {
 		"dev": "concurrently --names server,client --prefix-colors cyan,magenta -k --success first \"npm run dev -w server\" \"npm run dev -w client\"",
 		"build": "npm run build -w server && npm run build -w client",
-		"install:all": "npm install"
+		"install:all": "npm install",
+		"lint": "eslint ."
 	},
 	"devDependencies": {
-		"concurrently": "^10.0.3"
+		"@eslint/js": "^10.0.1",
+		"concurrently": "^10.0.3",
+		"eslint": "^10.5.0",
+		"eslint-plugin-react-hooks": "^7.1.1",
+		"eslint-plugin-react-refresh": "^0.5.3",
+		"globals": "^17.6.0",
+		"typescript-eslint": "^8.61.1"
 	}
 }

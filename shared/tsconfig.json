@@ -4,10 +4,11 @@
 		"declaration": true,
 		"declarationMap": true,
 		"strict": true,
-		"module": "nodenext",
-		"moduleResolution": "nodenext",
+		"module": "esnext",
+		"moduleResolution": "bundler",
 		"target": "es2020",
-		"outDir": "./dist"
+		"outDir": "./dist",
+		"verbatimModuleSyntax": true
 	},
 	"include": ["./**/*.ts"]
 }
