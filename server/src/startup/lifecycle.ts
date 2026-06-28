@@ -44,7 +44,7 @@ export function registerShutdownHandlers(
 			process.exit(1);
 		}, SHUTDOWN_TIMEOUT_MS).unref();
 
-		io.close(() => {
+		void io.close(() => {
 			httpServer.close(() => {
 				clearTimeout(forceExit);
 				logger.info("shutdown complete");
@@ -53,9 +53,8 @@ export function registerShutdownHandlers(
 		});
 	}
 
-	process.on("SIGTERM", () => shutdown("SIGTERM"));
-	process.on("SIGINT", () => shutdown("SIGINT"));
-
+	process.on("SIGTERM", () => { shutdown("SIGTERM"); });
+	process.on("SIGINT", () => { shutdown("SIGINT"); });
 	process.on("uncaughtException", (err) => {
 		logger.error("uncaughtException", {
 			error: String(err),
@@ -63,7 +62,6 @@ export function registerShutdownHandlers(
 		});
 		shutdown("uncaughtException");
 	});
-
 	process.on("unhandledRejection", (reason) => {
 		logger.error("unhandledRejection", { reason: String(reason) });
 	});

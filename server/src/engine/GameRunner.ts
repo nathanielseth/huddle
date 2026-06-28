@@ -37,13 +37,13 @@ export class GameRunner {
 		this.roomQueues.delete(roomCode);
 	}
 
-	private async executeSafely(
+	private executeSafely(
 		roomCode: string,
 		io: IO,
 		store: RoomRegistry,
 		task: () => Promise<EngineResult> | EngineResult,
 		onSuccess: (result: EngineResult) => void,
-	): Promise<void> {
+	): void {
 		const previousTask = this.roomQueues.get(roomCode) ?? Promise.resolve();
 
 		const nextTask = previousTask
@@ -62,7 +62,7 @@ export class GameRunner {
 
 		this.roomQueues.set(roomCode, nextTask);
 
-		nextTask.finally(() => {
+		void nextTask.finally(() => {
 			if (this.roomQueues.get(roomCode) === nextTask) {
 				this.roomQueues.delete(roomCode);
 			}
@@ -81,7 +81,7 @@ export class GameRunner {
 			io,
 			store,
 			() => engine.onStart({ room }),
-			(result) => this.applyResult(result, engine.gameId, room, io, store),
+			(result) => { this.applyResult(result, engine.gameId, room, io, store); },
 		);
 	}
 
@@ -106,7 +106,7 @@ export class GameRunner {
 			io,
 			store,
 			() => engine.onAction({ room }, playerId, validatedAction),
-			(result) => this.applyResult(result, engine.gameId, room, io, store),
+			(result) => { this.applyResult(result, engine.gameId, room, io, store); },
 		);
 	}
 
@@ -167,7 +167,6 @@ export class GameRunner {
 		this.hostReconnectTimers.set(room.code, handle);
 	}
 
-	// host socket rejoined after a disconnect-pause
 	onHostReconnect(room: Room, io: IO, store: RoomRegistry): void {
 		this.cancelHostReconnectTimer(room.code);
 
@@ -295,7 +294,7 @@ export class GameRunner {
 				io,
 				store,
 				() => engine.onTimerExpired({ room }),
-				(result) => this.applyResult(result, engine.gameId, room, io, store),
+				(result) => { this.applyResult(result, engine.gameId, room, io, store); },
 			);
 		}, delay);
 

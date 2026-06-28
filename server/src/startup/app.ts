@@ -1,6 +1,5 @@
 import express, { type Application } from "express";
 import cors from "cors";
-import { env } from "../env";
 import type { RoomRegistry } from "../room/registry";
 import type { GameRunner } from "../engine/GameRunner";
 

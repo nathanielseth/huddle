@@ -68,7 +68,7 @@ function handleIntentionalLeave(
 		return;
 	}
 	removePlayer(room, socket.id);
-	socket.leave(room.code);
+	void socket.leave(room.code);
 	broadcast(io, room);
 }
 
@@ -91,7 +91,7 @@ function handleDisconnect(
 			runner.onHostDisconnect(room, io, store);
 		} else {
 			console.log(
-				`[room] host disconnected from ${room.code} (${reason}) — starting ${HOST_GRACE_MS / 1_000}s grace period`,
+				`[room] host disconnected from ${room.code} (${reason}) — starting ${String(HOST_GRACE_MS / 1_000)}s grace period`,
 			);
 			io.to(room.code).emit(
 				"room_error",
@@ -136,7 +136,9 @@ export function registerHandlers(
 
 		if (store.size >= MAX_ROOMS) {
 			socket.emit("room_error", "Server is full right now. Try again later.");
-			console.log(`[room] create_room rejected — at capacity (${MAX_ROOMS})`);
+			console.log(
+				`[room] create_room rejected — at capacity (${String(MAX_ROOMS)})`,
+			);
 			return;
 		}
 
@@ -145,9 +147,9 @@ export function registerHandlers(
 		const room = createRoom(code, playerId, socket.id, gameId);
 		store.save(room);
 		store.trackSocket(socket.id, code);
-		socket.join(code);
+		void socket.join(code);
 		console.log(
-			`[room] created ${code} — host ${socket.id} (${store.size}/${MAX_ROOMS} rooms)`,
+			`[room] created ${code} — host ${socket.id} (${String(store.size)}/${String(MAX_ROOMS)} rooms)`,
 		);
 		broadcast(io, room);
 	});
@@ -179,7 +181,7 @@ export function registerHandlers(
 		}
 		const outcome = addPlayer(room, playerId, socket.id, name);
 		store.trackSocket(socket.id, code, playerId);
-		socket.join(code);
+		void socket.join(code);
 		touchRoom(room);
 		console.log(`[room] ${name} ${outcome} ${code}`);
 		broadcast(io, room);
@@ -214,7 +216,7 @@ export function registerHandlers(
 			store.untrackSocket(room.hostSocketId);
 			room.hostSocketId = socket.id;
 			store.trackSocket(socket.id, code);
-			socket.join(code);
+			void socket.join(code);
 			touchRoom(room);
 			console.log(`[room] host rejoined ${code}`);
 
@@ -225,9 +227,8 @@ export function registerHandlers(
 				broadcast(io, room);
 			}
 
-			// Phase may have just changed to in_game via onHostReconnect — check after.
 			if (room.phase === "in_game") {
-				runner.resendSecret(room, playerId, io);
+				void runner.resendSecret(room, playerId, io);
 			}
 			return;
 		}
@@ -241,12 +242,12 @@ export function registerHandlers(
 			return;
 		}
 		store.trackSocket(socket.id, code, playerId);
-		socket.join(code);
+		void socket.join(code);
 		touchRoom(room);
 		console.log(`[room] player ${playerId} rejoined ${code}`);
 		broadcast(io, room);
 		if (room.phase === "in_game") {
-			runner.resendSecret(room, playerId, io);
+			void runner.resendSecret(room, playerId, io);
 		}
 	});
 
@@ -315,10 +316,10 @@ export function registerHandlers(
 		runner.resumeGame(room, io, store);
 	});
 
-	socket.on("leave_room", () =>
-		handleIntentionalLeave(io, socket, store, runner),
-	);
-	socket.on("disconnect", (reason) =>
-		handleDisconnect(io, socket, store, reason, runner),
-	);
+	socket.on("leave_room", () => {
+		handleIntentionalLeave(io, socket, store, runner);
+	});
+	socket.on("disconnect", (reason) => {
+		handleDisconnect(io, socket, store, reason, runner);
+	});
 }
