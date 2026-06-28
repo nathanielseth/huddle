@@ -382,15 +382,15 @@ export function applyAction(
 
 	switch (action.type) {
 		case "fold":
-			return applyFold(state, player);
+			{ applyFold(state, player); return; }
 		case "check":
-			return applyCheck(state, player);
+			{ applyCheck(state, player); return; }
 		case "call":
-			return applyCall(state, player);
+			{ applyCall(state, player); return; }
 		case "raise":
-			return applyRaise(state, player, action.amount);
+			{ applyRaise(state, player, action.amount); return; }
 		case "all_in":
-			return applyAllIn(state, player);
+			{ applyAllIn(state, player); return; }
 	}
 }
 

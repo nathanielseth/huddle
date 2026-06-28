@@ -46,6 +46,7 @@ import {
 import { resolveShowdown, toHandResult, computeScoreDeltas } from "./evaluator";
 import { PokerLogger } from "./logger";
 import { PokerActionSchema } from "./schemas";
+import { defined } from "../lib/assert";
 
 import {
 	generateAIPlayer,
@@ -55,8 +56,6 @@ import {
 	NameDispenser,
 } from "./ai/index";
 
-// constants
-
 const BETTING_PHASES = new Set<string>(["pre_flop", "flop", "turn", "river"]);
 
 const AI_SEAT_ID_PREFIX = "ai::";
@@ -65,9 +64,8 @@ function seedAIPlayers(state: PokerServerState, humanCount: number): void {
 	const aiCount = Math.min(C.AI_SEAT_COUNT, C.MAX_PLAYERS - humanCount);
 
 	for (let i = 0; i < aiCount; i++) {
-		const playerId = `${AI_SEAT_ID_PREFIX}${i}`;
+		const playerId = `${AI_SEAT_ID_PREFIX}${String(i)}`;
 
-		// generateaiplayer picks personality first then resolves a name from that archetype's themed pool via the session-scoped dispenser
 		const { displayName, personality } = generateAIPlayer(
 			playerId,
 			state.nameDispenser,
@@ -100,8 +98,6 @@ function seedAIPlayers(state: PokerServerState, humanCount: number): void {
 	}
 }
 
-// phase map
-
 function nextBettingPhase(
 	current: BettingPhase,
 ): "flop" | "turn" | "river" | "showdown" {
@@ -117,8 +113,6 @@ function nextBettingPhase(
 	}
 }
 
-// public state builder
-
 function buildPublicPlayer(
 	player: PokerServerPlayer,
 	revealCards: boolean,
@@ -133,7 +127,6 @@ function buildPublicPlayer(
 		isDealer: player.isDealer,
 		canRaise: player.canRaise,
 		displayName: player.displayName,
-		// privacy invariant: holecards only revealed during showdown/hand_end for non-folded players, otherwise [null, null]
 		holeCards:
 			revealCards && player.holeCards !== null
 				? [player.holeCards[0], player.holeCards[1]]
@@ -142,8 +135,6 @@ function buildPublicPlayer(
 }
 
 function getPublicPokerState(state: PokerServerState): PokerState {
-	// cards are revealed when the result is being displayed
-	// hand_end keeps them visible so players can review who won and with what
 	const revealCards = state.phase === "showdown" || state.phase === "hand_end";
 
 	const players: Record<string, PokerPlayerView> = {};
@@ -181,8 +172,6 @@ function getPublicPokerState(state: PokerServerState): PokerState {
 	};
 }
 
-// result factory
-
 function makeResult(
 	state: PokerServerState,
 	timer: GameTimer | null,
@@ -194,19 +183,12 @@ function makeResult(
 		serverPayload: state,
 		publicPayload: getPublicPokerState(state),
 		timer,
-		// exactoptionalpropertytypes: only spread keys whose values are defined
 		...(scoreDeltas !== undefined && { scoreDeltas }),
 		...(privatePayloads !== undefined && { privatePayloads }),
 		...(roomPhase !== undefined && { roomPhase }),
 	};
 }
 
-function turnTimer(): GameTimer {
-	return { startsAt: Date.now(), duration: C.TURN_DURATION_MS };
-}
-
-// returns the correct timer for whoever is now set as currentplayerindex
-// TODO: fix ai timer
 function timerForNextPlayer(state: PokerServerState): GameTimer {
 	const playerId = state.seatOrder[state.currentPlayerIndex];
 	const player = playerId ? state.players.get(playerId) : undefined;
@@ -220,57 +202,70 @@ function timerForNextPlayer(state: PokerServerState): GameTimer {
 	return { startsAt: Date.now(), duration: C.TURN_DURATION_MS };
 }
 
-// deal setup
-
-// fully sets up a new hand: resets state, advances button, shuffles, deals hole cards to every active player, posts blinds, finds first actor
 function dealNewHand(state: PokerServerState): Map<string, PokerSecret> | null {
 	state.handNumber++;
 
-	// marks zero-stack players 'out', resets hand-scoped fields for the rest
 	resetPlayersForNewHand(state);
 
-	// game ends when only one (or zero) players can still play
 	const stillIn = [...state.players.values()].filter((p) => p.status !== "out");
 	if (stillIn.length <= 1) return null;
 
-	// rotate dealer button (skips 'out' seats permanently)
 	advanceDealerButton(state);
 
-	// mark the new dealer
-	const dealerId = state.seatOrder[state.dealerIndex]!;
-	state.players.get(dealerId)!.isDealer = true;
+	const dealerId = defined(
+		state.seatOrder[state.dealerIndex],
+		`seatOrder[${String(state.dealerIndex)}] missing — no dealer seat`,
+	);
+	defined(
+		state.players.get(dealerId),
+		`player ${dealerId} missing when marking dealer`,
+	).isDealer = true;
 
-	// fresh deck for this hand
 	state.deck = freshShuffledDeck();
 
-	// deal 2 hole cards to every active seat; build secret payloads
 	const secrets = new Map<string, PokerSecret>();
 	for (const playerId of state.seatOrder) {
-		const player = state.players.get(playerId)!;
+		const player = defined(
+			state.players.get(playerId),
+			`player ${playerId} missing during deal`,
+		);
 		if (player.status === "out") continue;
 
 		const dealt = dealN(state.deck, 2);
-		const holeCards: [Card, Card] = [dealt[0]!, dealt[1]!];
+		const holeCards: [Card, Card] = [
+			defined(dealt[0], "dealN returned fewer than 2 cards"),
+			defined(dealt[1], "dealN returned fewer than 2 cards"),
+		];
 		player.holeCards = holeCards;
 		secrets.set(playerId, { holeCards });
 	}
 
-	// initialize range models for every active player at hand start
 	initializeRangeModels(state);
 
-	const sbId = state.seatOrder[getSmallBlindIndex(state)]!;
-	const bbId = state.seatOrder[getBigBlindIndex(state)]!;
+	const sbId = defined(
+		state.seatOrder[getSmallBlindIndex(state)],
+		"no small blind seat",
+	);
+	const bbId = defined(
+		state.seatOrder[getBigBlindIndex(state)],
+		"no big blind seat",
+	);
 
-	// post forced blinds — may push short-stacked players all-in
 	postBlinds(state, C);
 
-	// emit after posting so .currentbet reflects the actual amount posted
 	state.logger.log("blinds_posted", state.handNumber, {
-		sb: { playerId: sbId, posted: state.players.get(sbId)!.currentBet },
-		bb: { playerId: bbId, posted: state.players.get(bbId)!.currentBet },
+		sb: {
+			playerId: sbId,
+			posted: defined(state.players.get(sbId), `SB player ${sbId} missing`)
+				.currentBet,
+		},
+		bb: {
+			playerId: bbId,
+			posted: defined(state.players.get(bbId), `BB player ${bbId} missing`)
+				.currentBet,
+		},
 	});
 
-	// reset hand-level display fields
 	state.phase = "pre_flop";
 	state.lastAction = null;
 	state.currentPlayerIndex = getPreFlopStartIndex(state);
@@ -297,14 +292,11 @@ function dealNewHand(state: PokerServerState): Map<string, PokerSecret> | null {
 	return secrets;
 }
 
-// runout & showdown helpers
-
 function shouldAutoRunout(state: PokerServerState): boolean {
 	return countInHandPlayers(state) >= 2 && countActivePlayers(state) === 0;
 }
 
 function dealNextRunoutStreet(state: PokerServerState): EngineResult {
-	// all 5 community cards are on the board, evaluate and show results
 	if (state.phase === "river") {
 		const { scoreDeltas } = enterShowdown(state);
 		return makeResult(
@@ -314,10 +306,9 @@ function dealNextRunoutStreet(state: PokerServerState): EngineResult {
 		);
 	}
 
-	// deal the next street (flop/turn/river) and pause for display
-	dealCommunityCards(state); // reads current phase
-	state.phase = nextBettingPhase(state.phase as BettingPhase); // advance phase
-	state.currentPlayerIndex = -1; // no one acts
+	dealCommunityCards(state);
+	state.phase = nextBettingPhase(state.phase as BettingPhase);
+	state.currentPlayerIndex = -1;
 
 	state.logger.log("runout_street", state.handNumber, {
 		newPhase: state.phase,
@@ -344,7 +335,6 @@ function enterShowdown(state: PokerServerState): {
 	return { scoreDeltas: computeScoreDeltas(awards, state.players) };
 }
 
-// awards the pot directly to the last remaining non-folded player without going through the showdown phase
 function enterHandEnd(state: PokerServerState): {
 	scoreDeltas: Record<string, number>;
 } {
@@ -359,14 +349,9 @@ function enterHandEnd(state: PokerServerState): {
 	return { scoreDeltas: computeScoreDeltas(awards, state.players) };
 }
 
-// street advance
-
-// called when the current betting round is definitively over
-// deals the next street or routes to showdown, handling all sub-cases
-function advanceStreet(state: PokerServerState, room: Room): EngineResult {
+function advanceStreet(state: PokerServerState): EngineResult {
 	const upcoming = nextBettingPhase(state.phase as BettingPhase);
 
-	// river just ended → showdown
 	if (upcoming === "showdown") {
 		const { scoreDeltas } = enterShowdown(state);
 		return makeResult(
@@ -376,12 +361,10 @@ function advanceStreet(state: PokerServerState, room: Room): EngineResult {
 		);
 	}
 
-	// deal the next street's community cards before updating phase — dealcommunitycards reads state.phase to know what to deal
 	dealCommunityCards(state);
 	state.phase = upcoming;
 	resetForNewStreet(state, C);
 
-	// totalcontributed accumulates all chips across all streets and is never reset between streets — correct pot total at any point in the hand
 	const potTotal = [...state.players.values()].reduce(
 		(s, p) => s + p.totalContributed,
 		0,
@@ -407,9 +390,6 @@ function advanceStreet(state: PokerServerState, room: Room): EngineResult {
 	return makeResult(state, timerForNextPlayer(state));
 }
 
-// lastaction capture
-
-// builds the lastaction for display
 function captureLastAction(
 	state: PokerServerState,
 	playerId: string,
@@ -418,7 +398,10 @@ function captureLastAction(
 	let amount: number | undefined;
 
 	if (action.type === "call") {
-		const player = state.players.get(playerId)!;
+		const player = defined(
+			state.players.get(playerId),
+			`player ${playerId} missing in captureLastAction`,
+		);
 		amount = Math.min(
 			state.betting.betToCall - player.currentBet,
 			player.stack,
@@ -426,8 +409,11 @@ function captureLastAction(
 	} else if (action.type === "raise") {
 		amount = action.amount;
 	} else if (action.type === "all_in") {
-		const player = state.players.get(playerId)!;
-		amount = player.stack + player.currentBet; // their total commitment
+		const player = defined(
+			state.players.get(playerId),
+			`player ${playerId} missing in captureLastAction`,
+		);
+		amount = player.stack + player.currentBet;
 	}
 
 	return amount !== undefined
@@ -435,10 +421,7 @@ function captureLastAction(
 		: { playerId, type: action.type };
 }
 
-// post-action sequence
-
-function afterAction(state: PokerServerState, room: Room): EngineResult {
-	// 1. only one player didn't fold
+function afterAction(state: PokerServerState, _room: Room): EngineResult {
 	if (getNonFoldedPlayerIds(state).length === 1) {
 		const { scoreDeltas } = enterHandEnd(state);
 		return makeResult(
@@ -448,29 +431,23 @@ function afterAction(state: PokerServerState, room: Room): EngineResult {
 		);
 	}
 
-	// 2. all remaining players are all-in, begin cinematic street-by-street runout
 	if (shouldAutoRunout(state)) {
 		return dealNextRunoutStreet(state);
 	}
 
-	// 3. betting round is over (everyone acted and matched bettocall)
 	if (isBettingRoundOver(state)) {
-		return advanceStreet(state, room);
+		return advanceStreet(state);
 	}
 
-	// 4. next player's turn — use timerfornextplayer so ai seats get their think-time window instead of the full 30s human timer
 	state.currentPlayerIndex = getNextPlayerIndex(state);
 	return makeResult(state, timerForNextPlayer(state));
 }
-
-// engine export
 
 export const pokerEngine: GameEngine & GameEngineWithSecrets = {
 	gameId: "poker",
 
 	actionSchema: PokerActionSchema,
 
-	// returns a blank slate. onstart populates everything from room context
 	getInitialState(): PokerServerState {
 		return {
 			phase: "waiting",
@@ -497,19 +474,20 @@ export const pokerEngine: GameEngine & GameEngineWithSecrets = {
 		};
 	},
 
-	// assign seats from room roster, deal the first hand, distribute secrets
 	onStart(ctx: GameContext): EngineResult {
 		const { room } = ctx;
 		const state = room.gamePayload as PokerServerState;
 
 		state.logger = new PokerLogger(room.code);
 
-		// seats are fixed at game start — join order determines position
 		const roomPlayers = [...room.players.values()];
 		state.seatOrder = roomPlayers.map((p) => p.playerId);
 
 		for (let i = 0; i < roomPlayers.length; i++) {
-			const rp = roomPlayers[i]!;
+			const rp = defined(
+				roomPlayers[i],
+				`roomPlayers[${String(i)}] missing in onStart`,
+			);
 			state.players.set(rp.playerId, {
 				playerId: rp.playerId,
 				seatIndex: i,
@@ -558,14 +536,11 @@ export const pokerEngine: GameEngine & GameEngineWithSecrets = {
 
 		if (!BETTING_PHASES.has(state.phase)) return noOp();
 
-		// ai players act via ontimerexpired, never via external messages
-		// reject any action claiming to come from an ai seat id
 		if (playerId.startsWith(AI_SEAT_ID_PREFIX)) return noOp();
 
 		const action = raw as PokerServerAction;
 		if (!validateAction(state, playerId, action)) return noOp();
 
-		// capture bettocall before applyaction mutates it
 		const prevBetToCall = state.betting.betToCall;
 		state.lastAction = captureLastAction(state, playerId, action);
 		applyAction(state, playerId, action);
@@ -577,7 +552,10 @@ export const pokerEngine: GameEngine & GameEngineWithSecrets = {
 			...(la.type === "call" && { callAmount: la.amount }),
 			...(la.type === "raise" && { raiseTo: la.amount }),
 			...(la.type === "all_in" && { totalAmount: la.amount }),
-			remainingStack: state.players.get(playerId)!.stack,
+			remainingStack: defined(
+				state.players.get(playerId),
+				`player ${playerId} missing after action`,
+			).stack,
 			phase: state.phase,
 			prevBetToCall,
 		});
@@ -585,27 +563,23 @@ export const pokerEngine: GameEngine & GameEngineWithSecrets = {
 		return afterAction(state, room);
 	},
 
-	// ontimerexpired
-	// each phase has one clear responsibility when its timer fires
 	onTimerExpired(ctx: GameContext): EngineResult {
 		const { room } = ctx;
 		const state = room.gamePayload as PokerServerState;
 
-		// betting phase
 		if (BETTING_PHASES.has(state.phase)) {
-			// if all remaining players are all-in, this timer is a runout delay
 			if (shouldAutoRunout(state)) {
 				return dealNextRunoutStreet(state);
 			}
 
-			// normal: auto-act the player who timed out
-			// fold if there's a bet to call; check if free
 			const playerId = state.seatOrder[state.currentPlayerIndex];
 			if (!playerId) return makeResult(state, null);
 
-			const player = state.players.get(playerId)!;
+			const player = defined(
+				state.players.get(playerId),
+				`player ${playerId} missing in onTimerExpired`,
+			);
 
-			// ai seat: compute decision from equity math, not auto-fold/check
 			if (player.isAI && player.aiPersonality) {
 				const action = makeAIAction(state, playerId);
 				const prevBetToCall = state.betting.betToCall;
@@ -632,7 +606,6 @@ export const pokerEngine: GameEngine & GameEngineWithSecrets = {
 				return afterAction(state, room);
 			}
 
-			// human timeout: auto-act passively
 			const autoAction: PokerServerAction =
 				player.currentBet < state.betting.betToCall
 					? { type: "fold" }
@@ -657,9 +630,6 @@ export const pokerEngine: GameEngine & GameEngineWithSecrets = {
 			return afterAction(state, room);
 		}
 
-		// showdown: display window elapsed -> hand_end
-		// the result was already resolved when entering showdown (stacks updated, handresult set)
-		// this timer just controls how long cards stay revealed
 		if (state.phase === "showdown") {
 			state.phase = "hand_end";
 			return makeResult(state, {
@@ -668,9 +638,6 @@ export const pokerEngine: GameEngine & GameEngineWithSecrets = {
 			});
 		}
 
-		// hand end: check game over, else inter-hand gap
-		// check stacks directly — busted players still have status 'allin' here
-		// resetplayersfornewhand (called in dealnewhand) will mark them 'out'
 		if (state.phase === "hand_end") {
 			const playersWithChips = [...state.players.values()].filter(
 				(p) => p.stack > 0,
@@ -689,7 +656,6 @@ export const pokerEngine: GameEngine & GameEngineWithSecrets = {
 				return makeResult(state, null, undefined, undefined, "ended");
 			}
 
-			// at least 2 players remain — brief waiting gap before next deal
 			state.phase = "waiting";
 			return makeResult(state, {
 				startsAt: Date.now(),
@@ -697,13 +663,9 @@ export const pokerEngine: GameEngine & GameEngineWithSecrets = {
 			});
 		}
 
-		// waiting: deal next hand
-		// board and handresult from last hand are still in state for display
-		// dealnewhand clears them when it resets for the new hand
 		if (state.phase === "waiting") {
 			const secrets = dealNewHand(state);
 
-			// shouldn't happen (caught in hand_end), but guard defensively
 			if (!secrets) {
 				state.phase = "finished";
 				return makeResult(state, null, undefined, undefined, "ended");
@@ -720,7 +682,6 @@ export const pokerEngine: GameEngine & GameEngineWithSecrets = {
 			);
 		}
 
-		// finished / unknown
 		return makeResult(state, null);
 	},
 
@@ -730,7 +691,6 @@ export const pokerEngine: GameEngine & GameEngineWithSecrets = {
 
 		if (!player?.holeCards) return null;
 
-		// during showdown/hand_end, cards are in publicpayload, no secret needed
 		if (state.phase === "showdown" || state.phase === "hand_end") return null;
 
 		return { holeCards: player.holeCards };

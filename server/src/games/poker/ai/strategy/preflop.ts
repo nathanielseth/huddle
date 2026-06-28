@@ -255,7 +255,6 @@ function handleVs3Bet(
 	const { positionFactor, canRaise, canCall } = ctx;
 
 	const valueFourBetPct = Math.max(3, personality.threeBetRangePct * 0.65);
-	const stackDepthBB = ctx.stack / ctx.bigBlind;
 	const bluff4BetBonus = Math.min(
 		2,
 		personality.aggression * personality.bluffFrequency * 10,

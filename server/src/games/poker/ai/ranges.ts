@@ -4,7 +4,14 @@ import { PREFLOP_EQUITY_DATA } from "./equity/table";
 
 // integer card code for rank r [0-12, A=12] and suit s [0-3]
 function cc(r: number, s: number): number {
-	return getCardCode(`${RANK_CHARS[r]}${SUIT_CHARS[s]}`);
+	const rank = RANK_CHARS[r];
+	const suit = SUIT_CHARS[s];
+	if (rank === undefined || suit === undefined) {
+		throw new RangeError(
+			`cc: out-of-bounds rank=${String(r)} suit=${String(s)}`,
+		);
+	}
+	return getCardCode(`${rank}${suit}`);
 }
 
 const CARD_TO_SUIT = new Map<number, number>();
@@ -37,9 +44,12 @@ function buildHandTypes(): HandType[] {
 		const combos: [number, number][] = [];
 		for (let s1 = 0; s1 < 4; s1++)
 			for (let s2 = s1 + 1; s2 < 4; s2++) combos.push([cc(r, s1), cc(r, s2)]);
+		const rank = RANK_CHARS[r];
+		if (rank === undefined)
+			throw new RangeError(`buildHandTypes: bad rank ${String(r)}`);
 		types.push({
 			index: idx++,
-			name: `${RANK_CHARS[r]}${RANK_CHARS[r]}`,
+			name: `${rank}${rank}`,
 			r1: r,
 			r2: r,
 			suited: false,
@@ -53,9 +63,16 @@ function buildHandTypes(): HandType[] {
 		for (let r2 = r1 - 1; r2 >= 0; r2--) {
 			const combos: [number, number][] = [];
 			for (let s = 0; s < 4; s++) combos.push([cc(r1, s), cc(r2, s)]);
+			const rank1 = RANK_CHARS[r1];
+			const rank2 = RANK_CHARS[r2];
+			if (rank1 === undefined || rank2 === undefined) {
+				throw new RangeError(
+					`buildHandTypes: bad ranks ${String(r1)},${String(r2)}`,
+				);
+			}
 			types.push({
 				index: idx++,
-				name: `${RANK_CHARS[r1]}${RANK_CHARS[r2]}s`,
+				name: `${rank1}${rank2}s`,
 				r1,
 				r2,
 				suited: true,
@@ -71,9 +88,16 @@ function buildHandTypes(): HandType[] {
 			for (let s1 = 0; s1 < 4; s1++)
 				for (let s2 = 0; s2 < 4; s2++)
 					if (s1 !== s2) combos.push([cc(r1, s1), cc(r2, s2)]);
+			const rank1 = RANK_CHARS[r1];
+			const rank2 = RANK_CHARS[r2];
+			if (rank1 === undefined || rank2 === undefined) {
+				throw new RangeError(
+					`buildHandTypes: bad ranks ${String(r1)},${String(r2)}`,
+				);
+			}
 			types.push({
 				index: idx++,
-				name: `${RANK_CHARS[r1]}${RANK_CHARS[r2]}o`,
+				name: `${rank1}${rank2}o`,
 				r1,
 				r2,
 				suited: false,
@@ -231,7 +255,6 @@ export function computeBoardTexture(
 	const ranks = boardCodes.map((c) => CARD_TO_RANK.get(c) ?? 0);
 	const suits = boardCodes.map((c) => CARD_TO_SUIT.get(c) ?? 0);
 
-	// Suit concentration — defensive assignment against strict noUncheckedIndexedAccess
 	const suitCounts = [0, 0, 0, 0];
 	for (const s of suits) {
 		suitCounts[s] = (suitCounts[s] ?? 0) + 1;
@@ -239,10 +262,8 @@ export function computeBoardTexture(
 	const maxSuit = Math.max(...suitCounts);
 	const monotone = maxSuit === n && n >= 3;
 
-	// 0 when all suits distinct, 1 when monotone
 	const flushness = (maxSuit - 1) / Math.max(1, n - 1);
 
-	// Rank connectivity — fraction of sorted adjacent pairs within gap ≤ 2
 	const sortedRanks = [...ranks].sort((a, b) => a - b);
 	let connected = 0;
 	for (let i = 0; i < n - 1; i++) {
@@ -251,21 +272,17 @@ export function computeBoardTexture(
 	const connectivity = n > 1 ? connected / (n - 1) : 0;
 	const paired = new Set(ranks).size < n;
 
-	// Wetness: connectivity weighted slightly higher (straight draws more common than flush draws)
 	const wetness = Math.min(1, flushness * 0.5 + connectivity * 0.7);
 
 	return { wetness, paired, monotone };
 }
 
-// fraction of range to remove when opponent bets. scales with bet size
 const CULL_BASE = 0.3;
 const CULL_SCALE = 0.22;
 const CULL_MAX = 0.65;
 
-// fraction removed from top of range when opponent checks
 const CHECK_CULL_PCT = 0.2;
 
-// culls a percentage of the range by board-relative strength
 function _cull(
 	result: Float32Array,
 	scored: readonly { index: number; score: number }[],
@@ -300,7 +317,6 @@ function _cull(
 	}
 }
 
-// board-relative postflop range filter
 export function narrowPostflopRange(
 	current: RangeWeights,
 	action: string,
@@ -312,7 +328,6 @@ export function narrowPostflopRange(
 	const result = new Float32Array(current);
 	const boardSet = new Set<number>(boardCodes);
 
-	// score all in-range hand types on this board, strongest first
 	const scored: { index: number; score: number }[] = [];
 	for (const ht of ALL_HAND_TYPES) {
 		if ((result[ht.index] ?? 0) <= 0) continue;
@@ -325,7 +340,6 @@ export function narrowPostflopRange(
 
 	if (action === "raise" || action === "all_in") {
 		const { wetness } = computeBoardTexture(boardCodes);
-		// wet/connected boards retain draws in betting range, reduce cull aggression
 		const adjustedBase = CULL_BASE * (1 - wetness * 0.5);
 		const clamped = Math.max(0.2, Math.min(betFraction, 3));
 		const cullPct = Math.min(CULL_MAX, adjustedBase + clamped * CULL_SCALE);
@@ -333,7 +347,6 @@ export function narrowPostflopRange(
 	} else if (action === "check") {
 		_cull(result, scored, CHECK_CULL_PCT, false);
 	} else if (action === "call") {
-		// vs larger bets strong hands raise, not call
 		const clamped = Math.max(0.2, Math.min(betFraction, 2.0));
 		_cull(result, scored, 0.1 + clamped * 0.08, false);
 	}
@@ -344,11 +357,9 @@ export function narrowPostflopRange(
 export interface WeightedCombo {
 	c0: number;
 	c1: number;
-	weight: number; // normalized: sum across all combos = 1
+	weight: number;
 }
 
-// converts RangeWeights into normalized list of specific two-card combos,
-// excluding any combo blocked by hero's hand + board
 function buildWeightedCombos(
 	range: RangeWeights,
 	blocked: ReadonlySet<number>,
@@ -379,7 +390,6 @@ export interface ComboAlias {
 	readonly alias: Int32Array;
 }
 
-// builds a ComboAlias from a range, pre-filtered against blocked cards
 export function buildComboAlias(
 	range: RangeWeights,
 	blocked: ReadonlySet<number>,
@@ -403,8 +413,10 @@ export function buildComboAlias(
 	}
 
 	while (small.length > 0 && large.length > 0) {
-		const s = small.pop()!;
-		const l = large.pop()!;
+		const s = small.pop();
+		const l = large.pop();
+		// both are guaranteed non-undefined
+		if (s === undefined || l === undefined) break;
 		prob[s] = scaled[s] ?? 0;
 		alias[s] = l;
 		scaled[l] = (scaled[l] ?? 0) + (scaled[s] ?? 0) - 1;

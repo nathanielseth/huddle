@@ -13,11 +13,6 @@ export function computePotOdds(callAmount: number, pot: number): number {
 	return callAmount / (pot + callAmount);
 }
 
-// net EV of calling: equity × (pot + callAmount) − callAmount
-function callEV(equity: number, callAmount: number, pot: number): number {
-	return equity * (pot + callAmount) - callAmount;
-}
-
 // net EV of a bluff attempt: foldEquity × pot − (1 − foldEquity) × bluffCost
 // second gate
 export function bluffEV(
@@ -82,7 +77,7 @@ export function sampleBetFraction(
 		roll -= w[i]!;
 		if (roll <= 0) return BET_FRACTIONS[i]!;
 	}
-	return BET_FRACTIONS[2]!;
+	return BET_FRACTIONS[2];
 }
 
 // converts fraction-of-pot into concrete raise-to chip total: raiseTo = betLevel + effectivePot × fraction

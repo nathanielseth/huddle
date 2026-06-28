@@ -1,6 +1,5 @@
 import { getCardCode } from "@pokertools/evaluator";
 import type { BettingPhase } from "../../../../../shared/games/poker";
-import type { GameTimer } from "../../../../../shared/core/room";
 import type { PokerServerState, PokerServerAction } from "../types";
 import { validateAction, countInHandPlayers } from "../betting";
 import {
@@ -10,7 +9,7 @@ import {
 } from "./equity/monteCarlo";
 import { computePotOdds, stackToPotRatio } from "./ev";
 import { selectAction } from "./strategy/decisions";
-import type { AIDecisionContext, AIPersonality } from "./types";
+import type { AIDecisionContext } from "./types";
 import { POKER_CONSTANTS as C } from "../constants";
 import {
 	uniformRange,

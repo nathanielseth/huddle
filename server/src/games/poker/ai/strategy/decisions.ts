@@ -335,7 +335,7 @@ function applyBucketAdjustments(
 }
 
 function topTwoMargin(scores: ActionScores): number {
-	const sorted = (Object.values(scores) as number[])
+	const sorted = (Object.values(scores))
 		.filter((s) => s !== -Infinity)
 		.sort((a, b) => b - a);
 	return sorted.length < 2 ? Infinity : sorted[0]! - sorted[1]!;

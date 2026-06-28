@@ -1,4 +1,4 @@
-import type { Card, Rank, Suit } from "../../../../shared/games/poker";
+import type { Card } from "../../../../shared/games/poker";
 import { shuffle } from "../lib/random";
 import { RANK_CHARS, SUIT_CHARS } from "./lib/cards";
 
@@ -7,7 +7,7 @@ function buildDeck(): Card[] {
 	const deck: Card[] = [];
 	for (const rank of RANK_CHARS) {
 		for (const suit of SUIT_CHARS) {
-			deck.push(`${rank}${suit}` as Card);
+			deck.push(`${rank}${suit}`);
 		}
 	}
 	return deck;
