@@ -30,7 +30,7 @@ function InGame() {
 
 	function handleQuit() {
 		leaveRoom();
-		navigate("/");
+		void navigate("/");
 	}
 
 	if (!entry) {
@@ -67,7 +67,7 @@ export function Room() {
 	const phase = useGameStore((s) => s.phase);
 
 	useEffect(() => {
-		if (!roomCode) navigate("/", { replace: true });
+		if (!roomCode) void navigate("/", { replace: true });
 	}, [roomCode, navigate]);
 
 	useEffect(() => {
@@ -76,7 +76,7 @@ export function Room() {
 			if (e.key === "Escape") useGameStore.getState().pauseGame();
 		};
 		window.addEventListener("keydown", onKeyDown);
-		return () => window.removeEventListener("keydown", onKeyDown);
+		return () => { window.removeEventListener("keydown", onKeyDown); };
 	}, [phase]);
 
 	if (!roomCode) return <Navigate to="/" replace />;

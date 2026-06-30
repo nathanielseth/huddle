@@ -12,9 +12,9 @@ export function useIsMobile(): boolean {
 
 	useEffect(() => {
 		const mql = window.matchMedia(QUERY);
-		const handler = (e: MediaQueryListEvent) => setIsMobile(e.matches);
+		const handler = (e: MediaQueryListEvent) => { setIsMobile(e.matches); };
 		mql.addEventListener("change", handler);
-		return () => mql.removeEventListener("change", handler);
+		return () => { mql.removeEventListener("change", handler); };
 	}, []);
 
 	return isMobile;

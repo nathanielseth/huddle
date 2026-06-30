@@ -18,7 +18,7 @@ export function PackTabs({ packs, selectedPackId, onSelect }: PackTabsProps) {
 			{/* ALL tab */}
 			<button
 				type="button"
-				onClick={() => onSelect("all")}
+				onClick={() => { onSelect("all"); }}
 				className={cn(
 					"relative flex items-center pr-7 pb-3 cursor-pointer transition-colors duration-200",
 					selectedPackId === "all"
@@ -45,7 +45,7 @@ export function PackTabs({ packs, selectedPackId, onSelect }: PackTabsProps) {
 					<button
 						key={pack.id}
 						type="button"
-						onClick={() => onSelect(pack.id)}
+						onClick={() => { onSelect(pack.id); }}
 						className={cn(
 							"relative flex flex-col items-start pr-7 pb-3 cursor-pointer transition-colors duration-200",
 							isSelected ? "text-white" : "text-white/30 hover:text-white/55",

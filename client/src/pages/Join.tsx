@@ -23,7 +23,7 @@ export function Join() {
 
 	function triggerShake() {
 		setShake(true);
-		setTimeout(() => setShake(false), 400);
+		setTimeout(() => { setShake(false); }, 400);
 	}
 
 	function handleJoin() {
@@ -116,7 +116,7 @@ export function Join() {
 										animate={{ opacity: 1, scale: 1 }}
 										exit={{ opacity: 0, scale: 0.7 }}
 										transition={{ duration: 0.12 }}
-										onClick={() => setName("")}
+										onClick={() => { setName(""); }}
 										className="absolute right-3 top-1/2 -translate-y-1/2 text-white/30 hover:text-white/70 transition-colors cursor-pointer"
 										tabIndex={-1}
 										aria-label="Clear name"
@@ -151,7 +151,7 @@ export function Join() {
 
 				<button
 					type="button"
-					onClick={() => navigate("/")}
+					onClick={() => void navigate("/")}
 					className="text-xs text-white/30 hover:text-white/60 transition-colors mx-auto cursor-pointer"
 				>
 					Back to home

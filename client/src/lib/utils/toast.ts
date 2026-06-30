@@ -125,9 +125,9 @@ export const toast = {
 	error: (msg: string, opts?: ToastOptions) => add("error", msg, opts),
 	warning: (msg: string, opts?: ToastOptions) => add("warning", msg, opts),
 	info: (msg: string, opts?: ToastOptions) => add("info", msg, opts),
-	dismiss: (id: string) => toastStore.getState()._dismiss(id),
+	dismiss: (id: string) => { toastStore.getState()._dismiss(id); },
 	update: (
 		id: string,
 		patch: Partial<Pick<Toast, "message" | "variant" | "action">>,
-	) => toastStore.getState()._update(id, patch),
+	) => { toastStore.getState()._update(id, patch); },
 } as const;

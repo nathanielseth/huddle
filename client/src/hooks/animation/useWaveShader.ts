@@ -86,7 +86,7 @@ function initWebGL(gl: WebGL2RenderingContext): GLResources {
 	const vert = compileShader(gl, gl.VERTEX_SHADER, VERT);
 	const frag = compileShader(gl, gl.FRAGMENT_SHADER, FRAG);
 
-	const prog = gl.createProgram()!;
+	const prog = gl.createProgram();
 	gl.attachShader(prog, vert);
 	gl.attachShader(prog, frag);
 	gl.linkProgram(prog);
@@ -100,10 +100,10 @@ function initWebGL(gl: WebGL2RenderingContext): GLResources {
 	gl.detachShader(prog, frag);
 
 	// use vertex array objects
-	const vao = gl.createVertexArray()!;
+	const vao = gl.createVertexArray();
 	gl.bindVertexArray(vao);
 
-	const buf = gl.createBuffer()!;
+	const buf = gl.createBuffer();
 	gl.bindBuffer(gl.ARRAY_BUFFER, buf);
 	gl.bufferData(
 		gl.ARRAY_BUFFER,
@@ -162,7 +162,7 @@ function rafTick(
 	}
 
 	state.raf = requestAnimationFrame(() =>
-		rafTick(glStateRef, paramsRef, start),
+		{ rafTick(glStateRef, paramsRef, start); },
 	);
 }
 
@@ -173,7 +173,7 @@ function startLoop(
 	const s = glStateRef.current;
 	if (!s) return;
 	cancelAnimationFrame(s.raf);
-	s.raf = requestAnimationFrame(() => rafTick(glStateRef, paramsRef, s.start));
+	s.raf = requestAnimationFrame(() => { rafTick(glStateRef, paramsRef, s.start); });
 }
 
 function stopLoop(glStateRef: React.RefObject<GLState | null>) {
@@ -252,8 +252,8 @@ export function useWaveShader(canvasRef: RefObject<HTMLCanvasElement | null>) {
 	}, [canvasRef]); // refobject identity is stable across renders
 
 	return {
-		startLoop: () => startLoop(glState, params),
-		stopLoop: () => stopLoop(glState),
-		updateParams: (next: Partial<WaveParams>) => updateParams(params, next),
+		startLoop: () => { startLoop(glState, params); },
+		stopLoop: () => { stopLoop(glState); },
+		updateParams: (next: Partial<WaveParams>) => { updateParams(params, next); },
 	} as const;
 }

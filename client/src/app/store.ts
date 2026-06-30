@@ -97,7 +97,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
 	pauseReason: null,
 	hostReconnectDeadline: null,
 
-	setPlayerName: (name) => set({ playerName: name }),
+	setPlayerName: (name) => { set({ playerName: name }); },
 
 	connect: () => {
 		if (socket.connected) return;
@@ -134,7 +134,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
 		set(ROOM_RESET);
 	},
 
-	clearError: () => set({ error: null }),
+	clearError: () => { set({ error: null }); },
 
 	startGame: () => {
 		if (get().status !== "connected") return;
@@ -185,13 +185,13 @@ export const useGameStore = create<GameStore>((set, get) => ({
 		});
 	},
 
-	_setStatus: (status) => set({ status }),
+	_setStatus: (status) => { set({ status }); },
 
 	_setError: (message) =>
-		set((state) => ({
+		{ set((state) => ({
 			error: message,
 			role: state.roomCode ? state.role : null,
-		})),
+		})); },
 
 	_closeRoom: () => {
 		clearRejoinTimeout();
@@ -234,5 +234,5 @@ export const useGameStore = create<GameStore>((set, get) => ({
 		});
 	},
 
-	_setSecret: (payload) => set({ secret: payload }),
+	_setSecret: (payload) => { set({ secret: payload }); },
 }));

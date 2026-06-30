@@ -28,13 +28,13 @@ export function RoomLobby() {
 
 	function handleLeave() {
 		leaveRoom();
-		navigate("/");
+		void navigate("/");
 	}
 
 	function handleCopy() {
-		navigator.clipboard.writeText(roomCode);
+		void navigator.clipboard.writeText(roomCode);
 		setCopied(true);
-		setTimeout(() => setCopied(false), 2000);
+		setTimeout(() => { setCopied(false); }, 2000);
 	}
 
 	return (

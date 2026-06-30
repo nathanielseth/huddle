@@ -78,7 +78,7 @@ function useFocusTrap() {
 		}
 
 		el.addEventListener("keydown", onKeyDown);
-		return () => el.removeEventListener("keydown", onKeyDown);
+		return () => { el.removeEventListener("keydown", onKeyDown); };
 	};
 }
 
@@ -145,7 +145,7 @@ function ModalDialog({ entry, reducedMotion }: ModalDialogProps) {
 		}
 		document.addEventListener("keydown", onKey, { capture: true });
 		return () =>
-			document.removeEventListener("keydown", onKey, { capture: true });
+			{ document.removeEventListener("keydown", onKey, { capture: true }); };
 	}, [entry.id, entry.variant]);
 
 	return (
@@ -180,7 +180,7 @@ function ModalDialog({ entry, reducedMotion }: ModalDialogProps) {
 						: { opacity: 0, scale: 0.97, transition: { duration: 0.14 } }
 				}
 				transition={reducedMotion ? { duration: 0.15 } : SPRING}
-				onPointerDown={(e) => e.stopPropagation()}
+				onPointerDown={(e) => { e.stopPropagation(); }}
 			>
 				{/* body */}
 				<div className="flex flex-col items-center gap-5 px-6 pb-6 pt-7 text-center">
@@ -222,7 +222,7 @@ function ModalDialog({ entry, reducedMotion }: ModalDialogProps) {
 							ref={
 								entry.variant === "destructive" ? initialFocusRef : undefined
 							}
-							onClick={() => resolve(false)}
+							onClick={() => { resolve(false); }}
 							className="flex-1 cursor-pointer border-r border-border py-3.5 text-sm font-medium text-white/50 transition-colors hover:bg-white/5 hover:text-white/80 active:bg-white/10"
 						>
 							{entry.cancelLabel}
@@ -232,7 +232,7 @@ function ModalDialog({ entry, reducedMotion }: ModalDialogProps) {
 						type="button"
 						// alert + confirm: confirm button gets initial focus
 						ref={entry.variant !== "destructive" ? initialFocusRef : undefined}
-						onClick={() => resolve(true)}
+						onClick={() => { resolve(true); }}
 						className={`flex-1 cursor-pointer py-3.5 text-sm font-semibold transition-colors ${cfg.confirmCls}`}
 					>
 						{entry.confirmLabel}

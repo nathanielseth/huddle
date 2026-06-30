@@ -19,7 +19,7 @@ export function useCountdown(timer: GameTimer | null): number {
 			}
 		}, 250);
 
-		return () => clearInterval(id);
+		return () => { clearInterval(id); };
 	}, [startsAt, duration]);
 
 	if (startsAt === undefined || duration === undefined) {

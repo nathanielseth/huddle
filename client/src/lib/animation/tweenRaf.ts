@@ -20,5 +20,5 @@ export function tweenRaf(
 	};
 
 	rafId = requestAnimationFrame(tick);
-	return () => cancelAnimationFrame(rafId);
+	return () => { cancelAnimationFrame(rafId); };
 }

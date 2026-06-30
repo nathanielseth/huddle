@@ -7,7 +7,7 @@ export function useReducedMotion(): boolean {
 		(cb) => {
 			const mq = window.matchMedia(MQ);
 			mq.addEventListener("change", cb);
-			return () => mq.removeEventListener("change", cb);
+			return () => { mq.removeEventListener("change", cb); };
 		},
 		() => window.matchMedia(MQ).matches,
 		() => false,

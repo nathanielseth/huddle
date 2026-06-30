@@ -85,6 +85,10 @@ export function Home() {
 		createRoom(selected.id);
 	}
 
+	const onCreateRoom = () => {
+		void handleCreateRoom();
+	};
+
 	return (
 		<div className="flex flex-col min-h-screen">
 			<main className="flex flex-col flex-1 gap-10 px-6 py-14 mx-auto w-full max-w-3xl pb-52">
@@ -99,12 +103,12 @@ export function Home() {
 					</p>
 				</header>
 
-				<JoinBar onFocus={() => setSelected(null)} />
+				<JoinBar onFocus={() => { setSelected(null); }} />
 
 				{isMobile && !showHosting && (
 					<button
 						type="button"
-						onClick={() => setShowHosting(true)}
+						onClick={() => { setShowHosting(true); }}
 						className="self-center text-sm font-semibold text-white/40 hover:text-white/70 transition-colors cursor-pointer"
 					>
 						Host a game instead →
@@ -231,7 +235,7 @@ export function Home() {
 							</div>
 							<button
 								type="button"
-								onClick={handleCreateRoom}
+								onClick={onCreateRoom}
 								className="shrink-0 h-11 px-8 text-sm font-bold tracking-widest text-white uppercase transition-opacity rounded-lg cursor-pointer bg-huddle hover:opacity-85 active:opacity-70"
 							>
 								Create Room →

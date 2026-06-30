@@ -61,7 +61,7 @@ export function PlayerList({ players, playerId, onKick }: Props) {
 							{onKick && index !== 0 && (
 								<button
 									type="button"
-									onClick={() => onKick(player.id)}
+									onClick={() => { onKick(player.id); }}
 									aria-label={`Kick ${player.name}`}
 									className="shrink-0 flex items-center justify-center w-6 h-6 rounded-md opacity-0 group-hover:opacity-100 text-white/50 hover:text-red-400 hover:bg-red-400/10 transition-all cursor-pointer"
 								>

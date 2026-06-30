@@ -40,23 +40,26 @@ type ModalStore = ModalState & ModalActions;
 
 export const modalStore = createStore<ModalStore>((set, get) => ({
 	stack: [],
+
 	_push(entry) {
 		set((s) => ({ stack: [...s.stack, entry] }));
 	},
+
 	_resolve(id, value) {
 		set((s) => {
 			const entry = s.stack.find((e) => e.id === id);
 			if (entry) {
-				Promise.resolve().then(() => entry.resolve(value));
+				void Promise.resolve().then(() => { entry.resolve(value); });
 			}
 			return { stack: s.stack.filter((e) => e.id !== id) };
 		});
 	},
+
 	_flush() {
 		const { stack } = get();
 		set({ stack: [] });
 		for (const entry of stack) {
-			Promise.resolve().then(() => entry.resolve(false));
+			void Promise.resolve().then(() => { entry.resolve(false); });
 		}
 	},
 }));

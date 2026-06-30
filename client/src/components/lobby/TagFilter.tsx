@@ -64,7 +64,7 @@ export function TagFilter({ tags, selectedTag, onSelect }: TagFilterProps) {
 						animate={{ opacity: 1, scale: 1 }}
 						exit={{ opacity: 0, scale: 0.8 }}
 						transition={{ duration: 0.12 }}
-						onClick={() => scroll("left")}
+						onClick={() => { scroll("left"); }}
 						className="absolute left-0 z-10 flex items-center justify-center w-6 h-6 rounded-full bg-surface border border-border text-white/40 hover:text-white/80 hover:border-white/20 transition-colors cursor-pointer shrink-0"
 						aria-label="Scroll left"
 					>
@@ -113,7 +113,7 @@ export function TagFilter({ tags, selectedTag, onSelect }: TagFilterProps) {
 						animate={{ opacity: 1, scale: 1 }}
 						exit={{ opacity: 0, scale: 0.8 }}
 						transition={{ duration: 0.12 }}
-						onClick={() => scroll("right")}
+						onClick={() => { scroll("right"); }}
 						className="absolute right-0 z-10 flex items-center justify-center w-6 h-6 rounded-full bg-surface border border-border text-white/40 hover:text-white/80 hover:border-white/20 transition-colors cursor-pointer shrink-0"
 						aria-label="Scroll right"
 					>

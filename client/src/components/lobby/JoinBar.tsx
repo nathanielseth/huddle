@@ -75,7 +75,7 @@ export function JoinBar({ onFocus }: JoinBarProps) {
 
 	function shake(field: "code" | "name" | "both") {
 		dispatch({ type: "SHAKE", field });
-		setTimeout(() => dispatch({ type: "CLEAR_SHAKE" }), 400);
+		setTimeout(() => { dispatch({ type: "CLEAR_SHAKE" }); }, 400);
 	}
 
 	function cancelPending() {

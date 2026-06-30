@@ -59,14 +59,14 @@ export function useSocketInit(): void {
 				duration: 0,
 				action: {
 					label: "Refresh",
-					onClick: () => window.location.reload(),
+					onClick: () => { window.location.reload(); },
 				},
 			});
 		};
 
-		const onGameState = (state: GameState) => getStore()._syncState(state);
+		const onGameState = (state: GameState) => { getStore()._syncState(state); };
 		const onRoomError = (msg: string) => toast.error(msg);
-		const onRoomClosed = () => getStore()._closeRoom();
+		const onRoomClosed = () => { getStore()._closeRoom(); };
 		const onRoomAbandoned = (msg: string) => {
 			getStore()._abandonRoom(msg);
 			toast.error(msg, { duration: 6000 });
@@ -75,8 +75,8 @@ export function useSocketInit(): void {
 			toast.error("You were removed from the room by the host.");
 			getStore()._closeRoom();
 		};
-		const onRejoinFailed = () => getStore()._closeRoom();
-		const onPlayerSecret = (payload: unknown) => getStore()._setSecret(payload);
+		const onRejoinFailed = () => { getStore()._closeRoom(); };
+		const onPlayerSecret = (payload: unknown) => { getStore()._setSecret(payload); };
 
 		socket.on("connect", onConnect);
 		socket.on("disconnect", onDisconnect);
