@@ -1,0 +1,342 @@
+export type FaceturnsPhase =
+	| "drafting"
+	| "mulligan"
+	| "rps"
+	| "active_turn"
+	| "move_chain_window"
+	| "challenge_window"
+	| "block_window" // for ambush and future blockable-burst cards
+	| "block_declared"
+	| "block_challenge_window"
+	| "finished";
+
+// card classes
+
+export type CrewClass = "striker" | "blocker" | "collector" | "turner";
+export type MoveType = "burst" | "slow" | "active";
+export type ClassAction = "strike" | "block" | "collect" | "unturn";
+
+// game mode
+
+export type GameMode = "duel" | "ffa" | "teams";
+
+// card definitions (public shape)
+
+export interface BossCardDef {
+	readonly id: string;
+	readonly name: string;
+	readonly flavorText: string;
+	readonly maxHp: number;
+}
+
+export interface CrewCardDef {
+	readonly id: string;
+	readonly name: string;
+	readonly class: CrewClass;
+	readonly cost: number;
+	readonly flavorText: string;
+}
+
+export interface MoveCardDef {
+	readonly id: string;
+	readonly name: string;
+	readonly baseCost: number;
+	readonly flavorText: string;
+	// null while the move's type hasn't been assigned yet (draft selection)
+	readonly moveType: MoveType | null;
+	readonly effectSummary: string;
+}
+
+// board state (per player, public view)
+
+export type CrewSlotStatus = "face_down" | "face_up" | "empty";
+
+export interface CrewSlotView {
+	readonly slotIndex: number;
+	readonly status: CrewSlotStatus;
+	readonly crewId: string | null;
+	readonly crewClass: CrewClass | null;
+	readonly isTurned: boolean;
+}
+
+export interface BossView {
+	readonly id: string;
+	readonly name: string;
+	readonly hp: number;
+	readonly maxHp: number;
+	// damage absorbed before hp, separate pool
+	readonly shield: number;
+	// frontline immunity countdown, ticks down each round end
+	readonly shieldTurnsRemaining: number | null;
+	// once per game, prevents boss command reuse
+	readonly commandUsed: boolean;
+	readonly passiveEffects: string[];
+}
+
+export interface ActiveMoveSlotView {
+	readonly slotIndex: number;
+	readonly moveId: string | null;
+	readonly moveName: string | null;
+}
+
+export interface FaceturnsPlayerView {
+	readonly playerId: string;
+	// hand size exposed, card contents are private
+	readonly handSize: number;
+	readonly deckSize: number;
+	readonly discardSize: number;
+	readonly cash: number;
+	readonly boss: BossView;
+	readonly crewSlots: readonly CrewSlotView[];
+	readonly activeMoveSlots: readonly ActiveMoveSlotView[];
+	readonly hasBluffedSuccessfully: boolean;
+	readonly hasCalledBluffSuccessfully: boolean;
+	readonly totalCardsDiscarded: number;
+	readonly totalMovesPlayed: number;
+	readonly hasShieldedBossThisGame: boolean;
+	// total incoming poison damage (all sources), applied at round end
+	readonly poisonStacks: number;
+	// cash granted at the start of each turn this player takes
+	readonly cashGainPerTurn: number;
+	readonly isEliminated: boolean;
+	readonly teamIndex: number;
+}
+
+// pending action (the thing being challenged / reacted to)
+
+export type PendingActionType =
+	| "class_action_strike"
+	| "class_action_collect"
+	| "class_action_unturn"
+	| "class_action_block"
+	| "card_strike"; // burst-move blockable strike (ambush)
+
+export interface PendingAction {
+	readonly type: PendingActionType;
+	readonly actorId: string;
+	readonly targetCrewSlot: number | null;
+	readonly targetAllySlot: number | null;
+	// only set when the pending action is a move (not a class action)
+	readonly moveId: string | null;
+	// cost already deducted from actor; refunded if action is cancelled
+	readonly cashCost: number;
+	readonly targetPlayerId: string | null;
+}
+
+// move chain
+
+export interface MoveChainEntry {
+	readonly moveId: string;
+	readonly actorId: string;
+	readonly targetCrewSlot: number | null;
+	readonly targetAllySlot: number | null;
+	readonly targetPlayerId: string | null;
+}
+
+export interface MoveChainView {
+	readonly participants: readonly [string, string];
+	readonly chain: readonly MoveChainEntry[];
+	readonly responderId: string;
+}
+
+// turn info
+
+export interface TurnInfo {
+	readonly turnNumber: number;
+	readonly activePlayerId: string;
+	readonly classActionUsedThisTurn: boolean;
+}
+
+// rps
+
+export type RpsChoice = "rock" | "paper" | "scissors";
+
+export interface RpsState {
+	readonly player1Choice: RpsChoice | null;
+	readonly player2Choice: RpsChoice | null;
+	// ties are coinflipped immediately
+	readonly result: "player1" | "player2" | null;
+}
+
+// draft state (public)
+
+export interface DraftPlayerView {
+	readonly playerId: string;
+	readonly selectedCount: number;
+	readonly isDraftLocked: boolean;
+}
+
+export type PendingInteractionView =
+	| {
+			type: "peek_discard";
+			actorId: string;
+	  }
+	| {
+			type: "crew_reactivate";
+			actorId: string;
+			eligibleSlots: number[];
+	  }
+	| {
+			type: "poison_target_pick";
+			actorId: string;
+			eligibleTargetIds: string[];
+			damagePerRound: number;
+	  }
+	| {
+			type: "choose_crew_to_turn";
+			actorId: string;
+			targetPlayerId: string;
+			chooserPlayerId: string;
+			eligibleSlots: number[];
+			isStrike: boolean;
+	  }
+	| {
+			type: "choose_discard_count";
+			actorId: string;
+			maxCount: number;
+			targetPlayerId: string;
+			damagePerCard: number;
+	  }
+	| {
+			type: "choose_from_discard";
+			actorId: string;
+			discardPileSnapshot: readonly string[];
+	  }
+	| {
+			type: "dig_deep_pick";
+			actorId: string;
+	  }
+	| {
+			type: "handles_unturn_offer";
+			actorId: string;
+			eligibleSlots: number[];
+	  }
+	| {
+			type: "switch_up_pick";
+			actorId: string;
+			faceUpSlots: number[];
+			faceDownSlots: number[];
+	  }
+	| {
+			type: "tactical_support_unturn_offer";
+			actorId: string;
+			targetPlayerId: string;
+			eligibleSlots: number[];
+	  }
+	| {
+			type: "bear_bones_bonus_strike";
+			actorId: string;
+			eligibleTargetIds: string[];
+	  }
+	| {
+			type: "too_big_unturn_offer";
+			actorId: string;
+	  }
+	| {
+			type: "void_legs_choice";
+			actorId: string;
+			hasCardsToDiscard: boolean;
+	  }
+	| {
+			type: "background_check_guess";
+			actorId: string;
+			targetPlayerId: string;
+			eligibleSlots: number[];
+	  }
+	| {
+			type: "watcher_unturn_offer";
+			actorId: string;
+			eligibleSlots: number[];
+	  }
+	| {
+			type: "lighthouse_disable_pick";
+			actorId: string;
+			eligibleTargets: readonly { playerId: string; slot: number }[];
+	  }
+	| {
+			type: "tag_out_pick";
+			actorId: string;
+			teammateId: string;
+			ownEligibleSlots: number[];
+			teammateEligibleSlots: number[];
+	  }
+	| {
+			type: "truth_serum_reveal";
+			actorId: string;
+			targetPlayerId: string;
+			eligibleSlots: number[];
+	  };
+
+// full public game state
+
+export interface FaceturnsState {
+	readonly phase: FaceturnsPhase;
+	readonly players: Readonly<Record<string, FaceturnsPlayerView>>;
+	// ordered list of rps representatives; kept for state serialisation and turn order setup
+	readonly playerOrder: readonly [string, string];
+	readonly mode: GameMode;
+	// in ffa/duel each player is a solo team
+	readonly teams: readonly (readonly string[])[];
+	// turn order with eliminated players filtered out
+	readonly turnOrder: readonly string[];
+	readonly eliminatedPlayers: readonly string[];
+	readonly challengeEligiblePlayerIds: readonly string[];
+	readonly turn: TurnInfo | null;
+	readonly pendingAction: PendingAction | null;
+	readonly lastResolution: ResolutionResult | null;
+	// null for ffa mode (no rps)
+	readonly rps: RpsState | null;
+	readonly draft: Readonly<Record<string, DraftPlayerView>> | null;
+	readonly pendingInteraction: PendingInteractionView | null;
+	readonly moveChain: MoveChainView | null;
+	readonly roundNumber: number;
+	readonly winnerId: string | null;
+	readonly winCondition: WinCondition | null;
+}
+
+// resolution (shown after challenge resolves)
+
+export type WinCondition =
+	| "all_crew_turned"
+	| "boss_hp_zero"
+	| "void_assembly"
+	| "round_limit"
+	| "draw";
+
+export type ResolutionResult =
+	| {
+			readonly type:
+				| "challenge_success"
+				| "challenge_fail"
+				| "action_resolved"
+				| "action_negated";
+			readonly challengerId: string | null;
+			readonly actorId: string;
+			readonly crewTurnedPlayerId: string | null;
+			readonly crewTurnedSlot: number | null;
+	  }
+	| {
+			readonly type: "crew_class_revealed";
+			readonly actorId: string;
+			readonly targetPlayerId: string;
+			readonly revealedSlot: number;
+			readonly revealedClass: CrewClass;
+	  };
+
+// private state
+
+export interface FaceturnsSecret {
+	readonly hand: readonly string[];
+	// slot index → crew id; hidden from opponents until crew turns face-up
+	readonly crewAssignments: Readonly<Record<number, string>>;
+	// temporary per-turn cost overrides from discount effects
+	readonly costOverrides: Readonly<Record<string, number>>;
+	// draft picks visible only to this player
+	readonly draftSelections: {
+		readonly bossId: string | null;
+		readonly crewIds: readonly string[];
+		readonly moveIds: readonly string[];
+	} | null;
+	// the two cards revealed when resolving peek effects
+	readonly peekRevealedCards: readonly [string, string] | null;
+}
