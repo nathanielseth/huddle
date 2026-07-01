@@ -4,7 +4,9 @@
 	"type": "module",
 	"scripts": {
 		"dev": "tsx watch --env-file=.env src/index.ts",
-		"build": "tsc"
+		"build": "tsc",
+		"test": "vitest run",
+		"test:watch": "vitest"
 	},
 	"dependencies": {
 		"@pokertools/evaluator": "^1.0.1",
@@ -18,7 +20,8 @@
 		"@types/express": "^5.0.6",
 		"@types/node": "^26.0.0",
 		"tsx": "^4.21.0",
-		"typescript": "^6.0.3"
+		"typescript": "^6.0.3",
+		"vitest": "^4.1.9"
 	},
 	"overrides": {
 		"engine.io": {
