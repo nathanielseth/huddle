@@ -1,4 +1,3 @@
-import { randomBytes } from "crypto";
 import type {
 	GameEngineWithSecrets,
 	GameContext,
@@ -32,8 +31,7 @@ import { scoreRound } from "./scoring";
 import { QUESTION_BANK } from "./questions";
 import { parseBelievableLiesAction } from "./schemas";
 import type { Room } from "../../room/registry";
-import { shuffle, shortId } from "../lib/random";
-import { pickRandom } from "../lib/random";
+import { shuffle, shortId, pickRandom } from "../lib/random";
 import { invariant } from "../lib/assert";
 
 function log(
@@ -225,7 +223,7 @@ function buildAnswerPool(
 }
 
 function buildQuestionQueue(): BelievableLiesQuestion[] {
-	const totalNeeded = (Object.values(QUESTIONS_PER_ROUND) as number[]).reduce(
+	const totalNeeded = Object.values(QUESTIONS_PER_ROUND).reduce(
 		(sum, n) => sum + n,
 		0,
 	);
@@ -330,7 +328,7 @@ function enterPicking(state: BelievableLiesServerState): void {
 
 function enterResult(
 	state: BelievableLiesServerState,
-	room: Room,
+	_room: Room,
 ): { scoreDeltas: Record<string, number> } {
 	const question = state.currentQuestion;
 	invariant(question, "enterResult called with no currentQuestion");

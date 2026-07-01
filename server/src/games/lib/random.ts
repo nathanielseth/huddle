@@ -15,6 +15,10 @@ export function pickRandom<T>(arr: readonly T[]): T {
 	return arr[Math.floor(Math.random() * arr.length)]!;
 }
 
+export function randomIntBetween(lo: number, hi: number): number {
+	return Math.floor(Math.random() * (hi - lo + 1)) + lo;
+}
+
 export function shortId(): string {
 	return randomBytes(3).toString("hex");
 }

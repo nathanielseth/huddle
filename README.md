@@ -28,6 +28,8 @@
 **Pack 2** · *in progress*
 
 - 🃏 **Poker Night** — classic texas hold'em
+- 🦸 **Flip Heroes** — bluffing strategy card game
+- 💡 **Blank Slate** — clue-matching word game
 
 ## Project Structure
 
