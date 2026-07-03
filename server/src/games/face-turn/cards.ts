@@ -1,7 +1,7 @@
 import type { CrewClass, MoveType } from "../../../../shared/games/face-turn";
 
 export type EffectPrimitive =
-	// DAMAGE
+	// damage
 	| {
 			type: "deal_damage";
 			target: "enemy_boss";
@@ -9,433 +9,346 @@ export type EffectPrimitive =
 			unblockable?: boolean;
 			cannotBeMultiplied?: boolean;
 	  }
+	// counts all face-up ally crew at resolution, includes self
 	| {
-			/** counts all face-up ally crew at resolution (includes self) */
 			type: "deal_damage_per_face_up_ally";
 			target: "enemy_boss";
 			amountPerAlly: number;
 	  }
+	// percent of target boss's current hp
 	| {
-			/** percent of target boss's current hp */
 			type: "deal_damage_percent_current_hp";
 			target: "enemy_boss";
 			percent: number;
 			cannotBeMultiplied?: boolean;
 	  }
+	// bypasses shield only; still respects immunity and reduction
 	| {
-			/** bypasses shield only; still respects immunity and reduction */
 			type: "deal_damage_ignore_shield";
 			amount: number;
 	  }
+	// player picks how many cards to discard, no maximum
+	// damage = discarded count * damagePerCard
 	| {
-			/**
-			 * player picks how many cards to discard; no maximum.
-			 * damage = discarded count * damagePerCard.
-			 */
 			type: "deal_damage_per_discarded_variable";
 			damagePerCard: number;
 	  }
 
-	// STRIKES
+	// strikes
+	// attacker chooses which crew to turn, unless defender has void arms,
+	// then defender chooses. enforced in strike resolver.
+	// unblockable bypasses block entirely (whisper, unfinished business)
 	| {
-			/**
-			 * attacker chooses which crew to turn, unless defender has
-			 * void arms — then defender chooses. enforced in strike resolver.
-			 */
 			type: "strike_enemy_crew";
-			/** bypasses block entirely (whisper, unfinished business) */
 			unblockable?: boolean;
 	  }
+	// unblockable strike with a cash gate; fizzles if cash insufficient
 	| {
-			/** unblockable strike with a cash gate; fizzles if cash insufficient */
 			type: "strike_enemy_crew_unblockable_with_cash_cost";
 			cashCost: number;
 	  }
+	// burst move that opens a block window, not a challenge window
+	// no challenge phase. if not blocked, strike resolves normally.
+	// todo: insert a "block_window" phase after paying cost
 	| {
-			/**
-			 * burst move that opens a block window, not a challenge window.
-			 * no challenge phase. if not blocked, strike resolves normally.
-			 * todo: insert a "block_window" phase after paying cost.
-			 */
 			type: "strike_enemy_crew_blockable";
 	  }
 
-	// CREW FACE-UP / FACE-DOWN MANIPULATION
+	// crew face-up / face-down manipulation
 	| { type: "turn_enemy_crew"; targetSlot?: number }
 	| { type: "turn_ally_crew"; targetSlot?: number }
+	// used by terminal: turn all other ally crew face-up
 	| {
-			/** used by terminal: turn all other ally crew face-up */
 			type: "turn_all_other_ally_crew";
 	  }
 	| { type: "unturn_ally_crew"; targetSlot?: number }
+	// mandatory; targets the slot hider is not in
+	// only fires when the other ally slot is face-up
 	| {
-			/**
-			 * mandatory; targets the slot hider is not in.
-			 * only fires when the other ally slot is face-up.
-			 */
 			type: "unturn_other_ally_crew";
 	  }
+	// pull counter: unturn an ally crew, then immediately turn it
+	// face-up to retrigger its turned effect
 	| {
-			/**
-			 * pull counter: unturn an ally crew, then immediately turn it
-			 * face-up to retrigger its turned effect.
-			 */
 			type: "unturn_then_retrigger_ally";
 	  }
+	// switch up: turn one ally crew face-down and a different one
+	// face-up. requires at least one face-up and one face-down crew
 	| {
-			/**
-			 * switch up: turn one ally crew face-down and a different one
-			 * face-up. requires at least one face-up and one face-down crew.
-			 */
 			type: "unturn_one_turn_different_ally";
 	  }
+	// handles: if the other ally is face-up, prompts the player to
+	// optionally unturn one face-up ally crew. only fires when the
+	// condition 'another_ally_is_turned' is true. opens a real
+	// handles_unturn_offer interaction
 	| {
-			/**
-			 * handles: if the other ally is face-up, prompts the player to
-			 * optionally unturn one face-up ally crew. only fires when the
-			 * condition 'another_ally_is_turned' is true. opens a real
-			 * handles_unturn_offer interaction.
-			 */
 			type: "offer_optional_ally_unturn_choice";
 	  }
+	// tag out: swap one of your crew with a teammate's. teams mode
+	// only, fizzles in duel/ffa. preserves face-up state; does not
+	// trigger turned effects
 	| {
-			/**
-			 * tag out: swap one of your crew with a teammate's.
-			 * teams mode only, fizzles in duel/ffa. preserves face-up state;
-			 * does not trigger turned effects.
-			 */
 			type: "swap_crew_with_teammate";
 	  }
 
-	// CARD DRAW / DISCARD / RETURN
+	// card draw / discard / return
 	| { type: "draw_cards"; amount: number }
 	| { type: "discard_cards_from_hand"; amount: number }
 	| { type: "discard_all_enemy_hand" }
 	| { type: "discard_all_actives_all_players" }
+	// fizzles entirely if hand is empty; used by triangle of trust
 	| {
-			/** fizzles entirely if hand is empty; used by triangle of trust */
 			type: "discard_one_draw_three";
 	  }
+	// whisper: discard amount depends on whether the actor has
+	// successfully called a bluff this game
 	| {
-			/**
-			 * whisper: discard amount depends on whether the actor has
-			 * successfully called a bluff this game.
-			 */
 			type: "discard_variable_by_bluff_flag";
 			baseAmount: number;
 			reducedAmount: number;
 	  }
+	// fresh start: checks hand length after this card is removed.
+	// if hand was empty, draws bonusAmount instead of baseAmount
 	| {
-			/**
-			 * fresh start: checks hand length after this card is removed.
-			 * if hand was empty, draws bonusAmount instead of baseAmount.
-			 */
 			type: "draw_cards_or_more_if_hand_was_empty";
 			baseAmount: number;
 			bonusAmount: number;
 	  }
+	// take it back: return 1 card from discard pile to hand
 	| {
-			/** take it back: return 1 card from discard pile to hand */
 			type: "return_one_from_discard_to_hand";
 	  }
+	// full moon: return discards to hand until at hand_limit; cards at normal cost
 	| {
-			/** full moon: return discards to hand until at hand_limit; cards at normal cost */
 			type: "return_discards_to_hand_until_full";
 	  }
+	// wolfman: search deck for a specific card, add to hand at 0 cost,
+	// shuffle. fizzles if already in hand or not in deck
 	| {
-			/**
-			 * wolfman: search deck for a specific card, add to hand at 0 cost,
-			 * shuffle. fizzles if already in hand or not in deck.
-			 */
 			type: "search_deck_for_card_add_to_hand";
 			cardId: string;
 	  }
+	// dig deep: look at top N cards, draw 1, shuffle rest
 	| {
-			/** dig deep: look at top N cards, draw 1, shuffle rest */
 			type: "look_at_top_deck_draw_one";
 			lookCount: number;
 	  }
 
-	// CASH GAIN / LOSS
+	// cash gain / loss
 	| { type: "gain_cash"; amount: number }
 	| { type: "steal_cash"; amount: number }
+	// mass layoff: set both actor and target cash to 0, then draw
 	| {
-			/** mass layoff: set both actor and target cash to 0, then draw */
 			type: "set_both_cash_zero_then_draw";
 			drawAmount: number;
 	  }
 
-	// BOSS HP / SHIELD / IMMUNITY
+	// boss hp / shield / immunity
 	| { type: "heal_boss"; amount: number }
 	| { type: "shield_boss"; amount: number }
 	| { type: "remove_all_shields"; target: "enemy_boss" | "ally_boss" }
+	// immunity uses the shared bossImmunityTurns counter, an approximation
+	// rather than a true per-actor timer
 	| {
-			/**
-			 * immunity uses the shared bossImmunityTurns counter
-			 * (approximation, not a per-actor timer). see KNOWN_GAPS.md.
-			 */
 			type: "immunity_until_next_turn";
 	  }
+	// all-in: set ally boss hp to exactly 1, then gain cash and draw.
+	// hp is set before draw
 	| {
-			/**
-			 * all-in: set ally boss hp to exactly 1, then gain cash and draw.
-			 * hp is set before draw.
-			 */
 			type: "set_ally_boss_hp_gain_cash_draw";
 			hpAmount: number;
 			cashGain: number;
 			drawAmount: number;
 	  }
 
-	// READ / PEEK
+	// read / peek
+	// peek at opponent's hand, then gain cash. implemented as a one-shot
+	// reveal via ctx.state.watcherReveal, not a pending_interaction
 	| {
-			/**
-			 * the watcher command: peek at opponent's hand, then gain cash.
-			 * implemented as a one-shot reveal via ctx.state.watcherReveal,
-			 * not a pending_interaction (no player response needed).
-			 */
 			type: "peek_enemy_hand_then_gain_cash";
 			cashGain: number;
 	  }
+	// peek 2 random cards from opponent's hand, discard 1 (actor chooses)
 	| {
-			/** peek 2 random cards from opponent's hand, discard 1 (actor chooses) */
 			type: "peek_two_random_enemy_cards_discard_one";
 	  }
+	// truth serum: force opponent to reveal class of one face-down crew
 	| {
-			/** truth serum: force opponent to reveal class of one face-down crew */
 			type: "reveal_enemy_crew_class";
 	  }
 
-	// BOSS COMMANDS
+	// boss commands
+	// declare the class of a face-down enemy crew; if correct, turn it face-up
 	| {
-			/**
-			 * the razor command: declare the class of a face-down enemy crew;
-			 * if correct, turn it face-up. handled in use_boss_command.
-			 */
 			type: "command_guess_crew_class_turn_if_correct";
 	  }
+	// replace a face-up ally crew with a crew card from hand; new crew
+	// enters face-down, no turned effects
 	| {
-			/**
-			 * the dealer command: replace a face-up ally crew with a crew card from hand;
-			 * new crew enters face-down (no turned effects). handled in index.ts.
-			 */
 			type: "command_replace_crew_from_hand";
 	  }
 
-	// ── negate / reflect ──
+	// negate / reflect
 	| {
-			/**
-			 * nope!: handled in resolveMoveChainFull, pops itself and the
-			 * entry below it.
-			 */
 			type: "negate_enemy_slow_move";
 	  }
+	// reflect base damage of a slow move back at its caster. reverse card
+	// itself is a slow move and can be nope!'d.
+	// todo: pop reverse card, reflect base damage to original caster,
+	// discard both. fizzle if no damage
 	| {
-			/**
-			 * reverse card: reflect base damage of a slow move back at its caster.
-			 * reverse card itself is a slow move and can be nope!'d.
-			 * todo: in resolveMoveChainFull, pop reverse card, reflect base damage
-			 * to original caster, discard both. fizzle if no damage.
-			 */
 			type: "reflect_slow_move_base_damage";
 	  }
 
-	// PASSIVES
+	// passives
 	| {
-			/**
-			 * stored as incomingPoison on victim; applied in triggerRoundEndPassives.
-			 */
 			type: "passive_poison_per_round";
 			damagePerRound: number;
 	  }
+	// per turn, not per round
 	| {
-			/**
-			 * accumulates into cashGainPerTurn; per turn, not per round.
-			 */
 			type: "passive_cash_per_turn";
 			amount: number;
 	  }
 	| { type: "passive_draw_per_turn"; amount: number }
 	| {
-			/** blood money: whenever an opponent plays a move or performs a strike */
 			type: "passive_cash_on_enemy_move_or_strike";
 			amount: number;
 	  }
 	| { type: "passive_heal_on_move_played"; amount: number }
 	| { type: "passive_shield_per_turn"; amount: number }
+	// void legs: interactive discard choice, not automatic
 	| {
-			/** void legs: interactive discard choice, not automatic */
 			type: "passive_optional_discard_for_damage_per_turn";
 			discardCost: number;
 			damage: number;
 	  }
+	// on winning a challenge (opponent challenged and was wrong), may unturn
+	// one face-up ally crew
 	| {
-			/**
-			 * the watcher passive: on winning a challenge (opponent challenged
-			 * and was wrong), may unturn one face-up ally crew.
-			 */
 			type: "passive_watcher_unturn_on_challenge_win";
 	  }
+	// mama mercy: event-based trigger, not per-round accumulation
 	| {
-			/**
-			 * mama mercy: event-based trigger, not per-round accumulation.
-			 */
 			type: "passive_shield_on_enemy_striker_turned";
 			amount: number;
 	  }
+	// currently applies to all damage sources; scoping to moves only is a
+	// known approximation
 	| {
-			/**
-			 * silencer: currently applies to all damage sources; scoping to
-			 * moves only is a known approximation.
-			 */
 			type: "passive_negate_damage_percent";
 			percent: number;
 	  }
 	| {
-			/** the razor passive: multiplier applied in applyDamage */
 			type: "passive_damage_multiplier";
 			multiplier: number;
 	  }
 	| {
-			/** lighthouse passive: block class action cost reduction (min 0) */
 			type: "passive_block_cost_reduction";
 			reduction: number;
 	  }
 	| {
-			/** blackmail: sets crewSkillsDisabled for all living players */
 			type: "passive_disable_all_crew_skills";
 	  }
+	// void arms: when opponent would pick which of your face-down crew to
+	// turn, you choose instead. flips the default
 	| {
-			/**
-			 * void arms: when opponent would pick which of your face-down
-			 * crew to turn, you choose instead. flips the default.
-			 */
 			type: "passive_defender_chooses_crew_to_turn";
 	  }
+	// background check: before opponent's challenge resolves, they must
+	// guess class of a face-down crew. if wrong, one of their crew turns
 	| {
-			/**
-			 * background check: before opponent's challenge resolves, they must
-			 * guess class of a face-down crew. if wrong, one of their crew turns.
-			 */
 			type: "passive_background_check";
 	  }
+	// life insurance: first time ally boss would reach 0 hp, stay at 1
+	// instead, then discard this active
 	| {
-			/**
-			 * life insurance: first time ally boss would reach 0 hp, stay at 1
-			 * instead, then discard this active.
-			 */
 			type: "passive_life_insurance";
 	  }
+	// false flag: when you would turn a crew face-up from failing a
+	// challenge, prevent that effect and discard this active instead.
+	// challenger still gets credit
 	| {
-			/**
-			 * false flag: when you would turn a crew face-up from failing a
-			 * challenge, prevent that effect and discard this active instead.
-			 * challenger still gets credit.
-			 */
 			type: "passive_false_flag";
 	  }
+	// boss cannot be targeted by a strike (class-action or card-driven) or
+	// by face turn while hp is above 50. if active, the entire strike
+	// attempt fizzles, no crew turn, no execute. does not affect any other
+	// damage source
 	| {
-			/**
-			 * terminal passive: having all ally crew face-up does not cause
-			 * loss while boss hp > 50. if hp drops ≤ 50, elimination at next
-			 * check.
-			 */
-			type: "passive_prevent_loss_if_hp_above_50";
+			type: "passive_block_strikes_above_half_hp";
 	  }
+	// doctor norman: one-time trigger on exactly the 6th discard.
+	// fires immediately
 	| {
-			/**
-			 * doctor norman: one-time trigger on exactly the 6th discard.
-			 * fires immediately.
-			 */
 			type: "passive_full_heal_on_sixth_discard_once";
 	  }
+	// vanessa de vera: first time hand becomes empty each turn, draw.
+	// per-turn flag resets at startTurn
 	| {
-			/**
-			 * vanessa de vera: first time hand becomes empty each turn, draw.
-			 * per-turn flag resets at startTurn.
-			 */
 			type: "passive_draw_on_hand_empty_once_per_turn";
 			amount: number;
 	  }
+	// too big passive: once per game, when you successfully call a bluff,
+	// may turn this crew face-down
 	| {
-			/**
-			 * too big passive: once per game, when you successfully call a
-			 * bluff, may turn this crew face-down.
-			 */
 			type: "passive_unturn_self_on_first_successful_challenge_call";
 	  }
+	// bear bones: whenever you successfully challenge, may strike one
+	// face-down enemy crew
 	| {
-			/**
-			 * bear bones: whenever you successfully challenge, may strike one
-			 * face-down enemy crew.
-			 */
 			type: "passive_optional_strike_on_successful_challenge";
 	  }
 
-	// WIN CONS
+	// win cons
+	// deleb-i: win immediately if all three void piece active cards are in
+	// the active zone
 	| {
-			/**
-			 * deleb-i: win immediately if all three void piece active cards
-			 * are in the active zone.
-			 */
 			type: "win_if_void_pieces_assembled";
 			requiredPieceIds: readonly string[];
 	  }
 
-	// CLASS MULTI-TYPE GRANTS
+	// class multi-type grants
 	| { type: "become_also_striker_and_collector" }
 	| { type: "become_also_striker_and_turner" }
 
-	// NEW REQUIRED PRIMITIVES
+	// new required primitives
+	// lighthouse turned: disable target crew passive until that crew
+	// turns face-down. works on ally or enemy; clears on unturn
 	| {
-			/**
-			 * lighthouse turned: disable target crew passive until that crew
-			 * turns face-down. works on ally or enemy; clears on unturn.
-			 */
 			type: "disable_target_crew_passive";
 			targetSlot?: number;
 	  }
 	| {
-			/** big voucher: reduce all move costs for actor by reduction (min 0) */
 			type: "passive_reduce_all_move_costs";
 			reduction: number;
 	  }
+	// tactical support: target ally gains cash, then actor may optionally
+	// unturn one of that ally's face-up crew
 	| {
-			/**
-			 * tactical support: target ally gains cash, then actor may
-			 * optionally unturn one of that ally's face-up crew.
-			 */
 			type: "give_ally_cash_then_optional_unturn";
 			cashAmount: number;
 	  }
+	// neeto's clock: discard cards, then retrigger a face-up ally crew's
+	// turned effect
 	| {
-			/**
-			 * neeto's clock: discard cards, then retrigger a face-up ally
-			 * crew's turned effect.
-			 */
 			type: "discard_then_reactivate_ally_turned_effect";
 			discardCost: number;
 	  }
+	// wheel of fortune: both actor and target discard hands, then redraw
+	// same count independently
 	| {
-			/**
-			 * wheel of fortune: both actor and target discard hands, then
-			 * redraw same count independently.
-			 */
 			type: "mutual_discard_hand_then_redraw_same_count";
 	  }
+	// prank call: first bluff class action each round grants cash.
+	// round-scoped — resets via prankCallBonusUsedThisRound
 	| {
-			/**
-			 * prank call: first bluff class action each round grants cash.
-			 * round-scoped — resets via prankCallBonusUsedThisRound.
-			 */
 			type: "passive_bonus_cash_on_first_bluff_per_round";
 			amount: number;
 	  }
+	// supply drop: whenever any collector class action resolves on the
+	// team, every team member gains cash
 	| {
-			/**
-			 * supply drop: whenever any collector class action resolves on
-			 * the team, every team member gains cash.
-			 */
 			type: "passive_team_cash_on_ally_collect";
 			amount: number;
 	  };
@@ -516,7 +429,8 @@ export const BOSSES: readonly BossCard[] = [
 		id: "the-watcher",
 		name: "The Watcher",
 		effectText: {
-			faceTurn: "Pay 7 Cash to turn a Crew face up.",
+			faceTurn:
+				"Pay 7 Cash: unblockable, unchallengeable strike against target enemy Crew. If they have no face-down Crew, executes their Boss instead.",
 			command: "Look at target opponent's hand, then gain 2 Cash.",
 			passive:
 				"Whenever you win a challenge, you may turn one face-up ally Crew face-down.",
@@ -534,7 +448,8 @@ export const BOSSES: readonly BossCard[] = [
 		id: "the-dealer",
 		name: "The Dealer",
 		effectText: {
-			faceTurn: "Pay 7 Cash to turn a Crew face up.",
+			faceTurn:
+				"Pay 7 Cash: unblockable, unchallengeable strike against target enemy Crew. If they have no face-down Crew, executes their Boss instead.",
 			command:
 				"Replace one face-up ally Crew with a Crew from your hand. The new Crew enters face-down.",
 			passive: "Draw 1 card at the start of your turn.",
@@ -543,16 +458,14 @@ export const BOSSES: readonly BossCard[] = [
 		maxHp: 100,
 		faceTurnCost: 7,
 		commandEffects: [{ type: "command_replace_crew_from_hand" }],
-		passiveEffects: [
-			// accumulated via recomputePassives, applied in startTurn
-			{ type: "passive_draw_per_turn", amount: 1 },
-		],
+		passiveEffects: [{ type: "passive_draw_per_turn", amount: 1 }],
 	},
 	{
 		id: "the-razor",
 		name: "The Razor",
 		effectText: {
-			faceTurn: "Pay 7 Cash to turn a Crew face up.",
+			faceTurn:
+				"Pay 7 Cash: unblockable, unchallengeable strike against target enemy Crew. If they have no face-down Crew, executes their Boss instead.",
 			command:
 				"Declare the class of one face-down enemy Crew. If correct, turn it face-up.",
 			passive: "You deal 50% more damage.",
@@ -561,17 +474,13 @@ export const BOSSES: readonly BossCard[] = [
 		maxHp: 100,
 		faceTurnCost: 7,
 		commandEffects: [{ type: "command_guess_crew_class_turn_if_correct" }],
-		passiveEffects: [
-			// multiplier 1.5 applied in applyDamage
-			{ type: "passive_damage_multiplier", multiplier: 1.5 },
-		],
+		passiveEffects: [{ type: "passive_damage_multiplier", multiplier: 1.5 }],
 	},
 ];
 
 // crew
 
 export const CREW: readonly CrewCard[] = [
-
 	// strikers (class action cost: 3 cash)
 	{
 		id: "pektus",
@@ -588,7 +497,8 @@ export const CREW: readonly CrewCard[] = [
 		name: "Shrike",
 		class: "striker",
 		cost: 3,
-		effectText: "Turned: Pay 4 Cash to strike target enemy Crew (unblockable).",
+		effectText:
+			"Turned: Pay 4 Cash to strike target enemy Crew (unblockable). If they have no face-down Crew, this executes their Boss instead.",
 		flavorText: "",
 		turnedEffects: [
 			// cash cost deducted before strike; fizzles if <4 cash
@@ -605,10 +515,7 @@ export const CREW: readonly CrewCard[] = [
 			"Passive: At the end of each round, deal 10 damage to target enemy Boss.",
 		flavorText: "",
 		turnedEffects: [],
-		passiveEffects: [
-			// applied in triggerRoundEndPassives
-			{ type: "passive_poison_per_round", damagePerRound: 10 },
-		],
+		passiveEffects: [{ type: "passive_poison_per_round", damagePerRound: 10 }],
 	},
 	{
 		id: "monkey-man",
@@ -677,7 +584,7 @@ export const CREW: readonly CrewCard[] = [
 		class: "striker",
 		cost: 3,
 		effectText:
-			"Turned: Discard 5 cards from your hand, then strike target enemy Crew (unblockable). If you have successfully called a bluff this game, discard 1 card instead.",
+			"Turned: Discard 5 cards from your hand, then strike target enemy Crew (unblockable; executes their Boss if they have no face-down Crew). If you have successfully called a bluff this game, discard 1 card instead.",
 		flavorText: "",
 		turnedEffects: [
 			{
@@ -943,12 +850,13 @@ export const CREW: readonly CrewCard[] = [
 		class: "turner",
 		cost: 4,
 		effectText:
-			"Passive: Having all ally Crew face-up does not cause you to lose while your Boss HP is above 50.",
+			"Passive: Your Boss cannot be Striked (by Strike or Face Turn) while its HP is above 50.",
 		flavorText: "",
 		turnedEffects: [],
 		passiveEffects: [
-			// hp gate enforced in checkWinConditions: skip elimination if bossHp > 50
-			{ type: "passive_prevent_loss_if_hp_above_50" },
+			// full gate on strike/execute attempts; negates the whole action
+			// attempt, not a damage-pipeline primitive
+			{ type: "passive_block_strikes_above_half_hp" },
 		],
 	},
 	{
@@ -957,10 +865,10 @@ export const CREW: readonly CrewCard[] = [
 		class: "turner",
 		cost: 4,
 		effectText:
-			"Turned: If you have turned an ally Crew face-up this game, strike target enemy Crew.",
+			"Turned: If you have turned an ally Crew face-up this game, strike target enemy Crew (executes their Boss if they have no face-down Crew).",
 		flavorText: "",
 		turnedEffects: [
-			// permanent "this game" flag set in turnCrewAtSlot, survives unturns
+			// permanent "this game" flag, survives unturns
 			when(
 				{ when: "has_turned_ally_crew_this_game" },
 				{ type: "strike_enemy_crew" },
@@ -998,7 +906,7 @@ export const CREW: readonly CrewCard[] = [
 // moves
 // active: occupy one of 3 active slots, persistent until discarded
 // burst: play and resolve immediately, then discard
-// slow: enter the move chain (lifo). both players may respond with burst or another slow
+// slow: enter the move chain (lifo), both players may respond with burst or another slow
 
 export const MOVES: readonly MoveCard[] = [
 	// active moves
@@ -1011,10 +919,7 @@ export const MOVES: readonly MoveCard[] = [
 		effectText:
 			"At the end of each round, deal 10 damage to target enemy Boss.",
 		flavorText: "",
-		effects: [
-			// stored as incomingPoison; applied in triggerRoundEndPassives
-			{ type: "passive_poison_per_round", damagePerRound: 10 },
-		],
+		effects: [{ type: "passive_poison_per_round", damagePerRound: 10 }],
 	},
 	{
 		id: "side-hustle",
@@ -1134,10 +1039,7 @@ export const MOVES: readonly MoveCard[] = [
 		moveType: "active",
 		effectText: "All Crew Passives are disabled.",
 		flavorText: "",
-		effects: [
-			// sets crewSkillsDisabled = true for all living players
-			{ type: "passive_disable_all_crew_skills" },
-		],
+		effects: [{ type: "passive_disable_all_crew_skills" }],
 	},
 	{
 		id: "supply-drop",
@@ -1158,7 +1060,7 @@ export const MOVES: readonly MoveCard[] = [
 			"Whenever target ally Boss would be reduced to 0 HP for the first time, it survives with 1 HP instead. Then discard this Move.",
 		flavorText: "",
 		effects: [
-			// targets own boss (no choice per q10); self-removes from active zone
+			// targets own boss, no choice; self-removes from active zone
 			{ type: "passive_life_insurance" },
 		],
 	},
@@ -1219,17 +1121,15 @@ export const MOVES: readonly MoveCard[] = [
 		effectText:
 			"Deal 30 damage to target enemy Boss. If you have successfully called a bluff this game, this costs 0 Cash instead.",
 		flavorText: "",
-		effects: [
-			// cost reduction to 0 is applied via effectiveCost() based on hasCalledBluffSuccessfully
-			{ type: "deal_damage", target: "enemy_boss", amount: 30 },
-		],
+		effects: [{ type: "deal_damage", target: "enemy_boss", amount: 30 }],
 	},
 	{
 		id: "ambush",
 		name: "Ambush",
 		baseCost: 3,
 		moveType: "burst",
-		effectText: "Strike target enemy Crew. This strike can be blocked.",
+		effectText:
+			"Strike target enemy Crew — or execute their Boss if they have no face-down Crew. This strike can be blocked.",
 		flavorText: "",
 		effects: [
 			// opens a block window (not a challenge window) after play
@@ -1328,7 +1228,7 @@ export const MOVES: readonly MoveCard[] = [
 			when(
 				{ when: "ally_striker_is_turned" },
 				{ type: "deal_damage", target: "enemy_boss", amount: 15 },
-				true, // negated: fires when condition is false
+				true,
 			),
 		],
 	},
@@ -1485,10 +1385,7 @@ export const MOVES: readonly MoveCard[] = [
 		effectText:
 			"Turn one face-up ally Crew face-down, then turn it face-up again.",
 		flavorText: "",
-		effects: [
-			// retriggers the crew's turned effect
-			{ type: "unturn_then_retrigger_ally" },
-		],
+		effects: [{ type: "unturn_then_retrigger_ally" }],
 	},
 	{
 		id: "cash-out",
@@ -1555,10 +1452,9 @@ export const MOVES: readonly MoveCard[] = [
 		baseCost: 3,
 		moveType: "slow",
 		effectText:
-			"If you or an ally has a face-up Striker, strike target enemy Crew (unblockable).",
+			"If you or an ally has a face-up Striker, strike target enemy Crew (unblockable; executes their Boss if they have no face-down Crew).",
 		flavorText: "",
 		effects: [
-			// checks if the actor or any teammate has a face-up striker
 			when(
 				{ when: "ally_striker_is_turned" },
 				{ type: "strike_enemy_crew", unblockable: true },
@@ -1575,7 +1471,6 @@ export const MOVES: readonly MoveCard[] = [
 		flavorText: "",
 		effects: [
 			// damage is conditional on successfully turning a crew
-			// turn_ally_crew handler returns false (fizzle) when there's no face-down ally crew, which skips the deal_damage entry
 			{ type: "turn_ally_crew" },
 			{ type: "deal_damage", target: "enemy_boss", amount: 30 },
 		],
@@ -1587,10 +1482,7 @@ export const MOVES: readonly MoveCard[] = [
 		moveType: "slow",
 		effectText: "Stop an enemy Slow Move.",
 		flavorText: "",
-		effects: [
-			// handled in resolveMoveChainFull: pops itself and the entry below it
-			{ type: "negate_enemy_slow_move" },
-		],
+		effects: [{ type: "negate_enemy_slow_move" }],
 	},
 	{
 		id: "read-the-room",
@@ -1664,8 +1556,6 @@ export const BOSS_MAP = new Map(BOSSES.map((b) => [b.id, b]));
 export const CREW_MAP = new Map(CREW.map((c) => [c.id, c]));
 export const MOVE_MAP = new Map(MOVES.map((m) => [m.id, m]));
 
-// getters
-
 export function getBoss(id: string): BossCard {
 	const card = BOSS_MAP.get(id);
 	if (!card) throw new Error(`[face-turn] unknown boss: "${id}"`);
@@ -1684,21 +1574,19 @@ export function getMove(id: string): MoveCard {
 	return card;
 }
 
-// ── target scope derivation ──────────────────────────────────────────────
+// target scope derivation
 
 export type MoveTargetScope = "enemy" | "ally" | "none";
 
-/**
- * derive a move's target scope from its own effect primitives, so
- * targetPlayerId validation in index.ts doesn't need a hardcoded per-card
- * id list. a move is "ally" scope if any of its effects can be pointed at
- * an ally (self or teammate); "enemy" scope if any effect requires an
- * enemy target; "none" if it has no meaningful targetPlayerId use.
- *
- * a move should never mix enemy-targeting and ally-targeting primitives.
- * if one were added by mistake, this function treats "enemy" as taking
- * priority, because enemy-only validation is the stricter default.
- */
+// derives a move's target scope from its effect primitives, so the
+// targetPlayerId validation can be done generically without a per-card id
+// list. a move is "ally" scope if any effect targets an ally (self or
+// teammate); "enemy" scope if any effect requires an enemy target; "none"
+// otherwise.
+//
+// a move should never mix enemy-targeting and ally-targeting primitives.
+// if one were added by mistake, this function treats "enemy" as taking
+// priority, because enemy-only validation is the stricter default.
 export function getMoveTargetScope(move: MoveCard): MoveTargetScope {
 	const ENEMY_SCOPED_TYPES = new Set<EffectPrimitive["type"]>([
 		"deal_damage",
@@ -1851,7 +1739,6 @@ export const CARD_IDS = {
 	},
 } as const;
 
-// void piece ids for deleb-i check.
 export const VOID_PIECE_IDS = [
 	CARD_IDS.MOVE.VOID_ARMS,
 	CARD_IDS.MOVE.VOID_LEGS,

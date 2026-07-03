@@ -71,14 +71,12 @@ function resolveTarget(ctx: EffectContext): FaceturnServerPlayer | null {
 	return enemies[0] ?? null;
 }
 
-/**
- * resolves the ally-boss target for heal/shield/hp-set effects.
- * falls back to the actor's own boss when no targetPlayerId is supplied,
- * or when the supplied id is invalid, eliminated, or an enemy.
- * this makes every ally-targeted primitive safe to call from duel/ffa
- * contexts (where no explicit target is chosen), matching the "default to
- * self" ui contract.
- */
+// resolves the ally-boss target for heal/shield/hp-set effects.
+// falls back to the actor's own boss when no targetPlayerId is given, or
+// when the given id is invalid, eliminated, or an enemy.
+// this keeps every ally-targeted primitive safe to call from duel/ffa,
+// where no explicit target is ever chosen, matching the "default to self"
+// ui contract.
 function resolveAllyTarget(ctx: EffectContext): FaceturnServerPlayer {
 	if (!ctx.targetPlayerId) return ctx.actor;
 	if (ctx.targetPlayerId === ctx.actor.playerId) return ctx.actor;
@@ -95,13 +93,11 @@ export function isConditionalEffect(e: CardEffect): e is ConditionalEffect {
 	return "condition" in e && "effect" in e;
 }
 
-/**
- * finds the numeric amount field on the first primitive of a given type
- * inside a card's effect list (unwrapping conditionals).
- * used when a passive's magnitude needs to be read back from the card
- * database rather than duplicated as a magic number at the trigger site
- * (e.g. mama mercy's shield amount).
- */
+// finds the numeric amount field on the first primitive of a given type
+// inside a card's effect list, unwrapping conditionals. used when a
+// passive's magnitude needs to be read back from the card database rather
+// than duplicated as a magic number at the trigger site, e.g. mama mercy's
+// shield amount
 function findEffectAmount(
 	effects: readonly CardEffect[],
 	type: EffectPrimitive["type"],
@@ -116,9 +112,30 @@ function findEffectAmount(
 	return 0;
 }
 
+// scans every living player's active moves for a live
+// passive_disable_all_crew_skills source (Blackmail). crewSkillsDisabled is
+// global — any player's Blackmail disables everyone's crew passives — so
+// recomputePassives must resolve this up front, from the raw move list,
+// rather than from the derived flag it is still in the middle of computing.
+function hasActiveCrewSkillsDisableSource(
+	player: FaceturnServerPlayer,
+	state: FaceturnServerState,
+): boolean {
+	for (const p of state.players.values()) {
+		for (const moveId of p.activeMoves) {
+			if (!moveId) continue;
+			const hasDisable = getMove(moveId).effects.some((e) => {
+				const eff = isConditionalEffect(e) ? e.effect : e;
+				return eff.type === "passive_disable_all_crew_skills";
+			});
+			if (hasDisable) return true;
+		}
+	}
+	return false;
+}
+
 // conditions
 
-// shared by win_if_void_pieces_assembled and the void_pieces_assembled condition
 function checkVoidPiecesAssembled(actor: FaceturnServerPlayer): boolean {
 	return VOID_PIECE_IDS.every((id) => actor.activeMoves.includes(id));
 }
@@ -179,7 +196,7 @@ function evaluateConditionForRecompute(
 			return checkVoidPiecesAssembled(player);
 		// for recompute we can't know the exact runtime context (which slot
 		// is self, who the allies are), so we assume the condition *could*
-		// be true and let the real evaluation happen at trigger time.
+		// be true and let the real evaluation happen at trigger time
 		case "another_ally_is_turned":
 		case "ally_striker_is_turned":
 		case "has_turned_ally_crew_this_game":
@@ -191,9 +208,8 @@ function evaluateConditionForRecompute(
 	}
 }
 
-// respects class overrides from lotus, cristatella, and
-// lighthouse-disabled slots (though a lighthouse-disabled crew still
-// counts as its class for bluff-calling — see playerHasClass).
+// respects class overrides from lotus and cristatella. a
+// lighthouse-disabled crew still counts as its class for bluff-calling
 export function resolveCrewClass(
 	player: FaceturnServerPlayer,
 	slot: 0 | 1,
@@ -213,20 +229,6 @@ function clampHp(hp: number, max: number): number {
 	return Math.max(0, Math.min(max, hp));
 }
 
-/**
- * life insurance triggers on the protected ally (target) but the card
- * itself lives in the caster's active zone — which may be a teammate, not
- * the target. finds whichever living player's lifeInsuranceTargets map
- * currently protects `target`, discards that slot from that player's
- * active zone/discard pile, and clears the map entry. always recomputes
- * passives on `target` afterward, since hasLifeInsurance is derived and
- * its source (the caster's card) has just been consumed.
- *
- * if somehow no matching entry is found (shouldn't happen — applyDamage
- * only calls this when target.hasLifeInsurance is true, which is only
- * ever set by recomputePassives finding a matching entry), this is a
- * no-op beyond the recompute, which is still safe to run.
- */
 function consumeLifeInsuranceProtecting(
 	state: FaceturnServerState,
 	target: FaceturnServerPlayer,
@@ -248,14 +250,13 @@ function consumeLifeInsuranceProtecting(
 			return;
 		}
 	}
-	// defensive fallback — see doc comment above.
+	// defensive fallback
 	recomputePassives(target, state);
 }
 
 // damage pipeline: multiplier → reduction% → immunity (full negate) →
-// shield absorb → life insurance (one-shot 1hp floor, consumes itself) →
-// survivor floor (terminal, persistent while hp > 50). unblockable
-// bypasses shield, immunity, reduction; cannotBeMultiplied skips the
+// shield absorb → life insurance (one-shot 1hp floor, consumes itself).
+// unblockable bypasses shield, immunity, reduction; cannotBeMultiplied skips the
 // actor's damageMultiplier.
 function applyDamage(
 	state: FaceturnServerState,
@@ -292,16 +293,11 @@ function applyDamage(
 		return rawAmount;
 	}
 
-	if (target.survivorModeActive && target.bossHp - dmg < 1) {
-		target.bossHp = 1;
-		return rawAmount;
-	}
-
 	target.bossHp = clampHp(target.bossHp - dmg, target.bossMaxHp);
 	return dmg;
 }
 
-// piercing strike — bypasses shield but still respects immunity and
+// piercing strike: bypasses shield but still respects immunity and
 // reduction%
 function applyDamageIgnoreShield(
 	state: FaceturnServerState,
@@ -320,11 +316,6 @@ function applyDamageIgnoreShield(
 	if (target.hasLifeInsurance && target.bossHp - dmg <= 0) {
 		target.bossHp = 1;
 		consumeLifeInsuranceProtecting(state, target);
-		return rawAmount;
-	}
-
-	if (target.survivorModeActive && target.bossHp - dmg < 1) {
-		target.bossHp = 1;
 		return rawAmount;
 	}
 
@@ -359,10 +350,8 @@ export function discardFromHand(
 	return toDiscard;
 }
 
-/**
- * doctor norman: the first time totalCardsDiscarded reaches exactly 6, heal
- * to full and never fire again.
- */
+// doctor norman: the first time totalCardsDiscarded reaches exactly 6, heal
+// to full and never fire again.
 function maybeTriggerDoctorNorman(player: FaceturnServerPlayer): void {
 	if (player.totalCardsDiscarded !== 6) return;
 	if (player.doctorNormanTriggered) return;
@@ -377,12 +366,8 @@ function maybeTriggerDoctorNorman(player: FaceturnServerPlayer): void {
 	player.doctorNormanTriggered = true;
 }
 
-/**
- * vanessa de vera: the first time a player's hand becomes empty in a given
- * turn (from any depletion event), draw 4. exported so game.ts's startTurn
- * and index.ts's play_move handler (which remove cards from hand outside
- * this file) can call this after their own hand mutations.
- */
+// vanessa de vera: the first time a player's hand becomes empty in a given
+// turn, draw 4.
 export function checkVanessaDrawTrigger(
 	player: FaceturnServerPlayer,
 	_state: FaceturnServerState,
@@ -458,79 +443,92 @@ export function playerHasClass(
 	});
 }
 
-/**
- * turns a crew on the target player, resolving slot ambiguity.
- * - no unturned crew: fallback to turning a turned crew.
- * - one unturned crew: auto-turns it, returns the slot.
- * - two unturned crew: opens a choose_crew_to_turn interaction, returns null.
- *   chooserPlayerId on that interaction is the attacker by default, or the
- *   target itself when target.hasVoidArms is active (void arms: "you make
- *   that choice instead").
- *
- * isStrike scopes blood money's "performs a strike" trigger to genuine
- * strikes only (performStrike) — challenge-resolution crew turns
- * (resolveChallenge, game.ts) share this same slot-resolution logic but are
- * not strikes per blood money's card text, so those callers pass false.
- */
-export function openChooseCrewToTurnOrAuto(
+// unified strike / execute resolution
+
+export type StrikeOrExecuteOutcome =
+	| { outcome: "crew_turned"; slot: 0 | 1 }
+	| { outcome: "pending" }
+	| { outcome: "executed"; survivedViaLifeInsurance: boolean }
+	| { outcome: "negated"; negatedBy: "terminal" | "immunity" };
+
+// single source of truth: used by both the strike resolver and the
+// declare-time gate, so they can never disagree.
+export function isStrikeBlockedByTerminal(
+	target: FaceturnServerPlayer,
+): boolean {
+	return target.hasTerminalStrikeBlock && target.bossHp > 50;
+}
+
+// turns a face-down enemy crew slot face-up, or, if none are left, attempts to execute their boss
+export function resolveStrikeOrExecute(
 	state: FaceturnServerState,
 	target: FaceturnServerPlayer,
 	actorId: string | null,
 	isStrike: boolean,
-): 0 | 1 | null {
+	preSelectedSlot?: 0 | 1,
+): StrikeOrExecuteOutcome {
+	if (isStrikeBlockedByTerminal(target)) {
+		return { outcome: "negated", negatedBy: "terminal" };
+	}
+
 	const unturnedSlots = ([0, 1] as const).filter(
 		(i) => target.crewIds[i] !== null && !target.crewTurned[i],
 	);
 
-	const finishTurn = (slot: 0 | 1, strikerId: string | null): void => {
+	const resolvedPreSelected =
+		preSelectedSlot !== undefined && unturnedSlots.includes(preSelectedSlot)
+			? preSelectedSlot
+			: null;
+
+	let result: StrikeOrExecuteOutcome;
+
+	if (resolvedPreSelected !== null) {
+		turnCrewAtSlot(target, resolvedPreSelected);
+		recomputePassives(target, state);
+		triggerCrewTurnedEffects(state, target, resolvedPreSelected);
+		result = { outcome: "crew_turned", slot: resolvedPreSelected };
+	} else if (unturnedSlots.length === 1) {
+		const slot = unturnedSlots[0]!;
 		turnCrewAtSlot(target, slot);
 		recomputePassives(target, state);
 		triggerCrewTurnedEffects(state, target, slot);
-		if (isStrike && strikerId) {
-			const striker = state.players.get(strikerId);
-			if (striker) applyBloodMoneyOnStrike(state, striker);
-		}
-	};
+		result = { outcome: "crew_turned", slot };
+	} else if (unturnedSlots.length > 1) {
+		const resolvedActorId = actorId ?? target.playerId;
+		const chooserPlayerId = target.hasVoidArms
+			? target.playerId
+			: resolvedActorId;
 
-	if (unturnedSlots.length === 0) {
-		const slot = firstTurnedSlot(target);
-		if (slot !== null) finishTurn(slot, actorId);
-		return slot;
+		state.pendingInteraction = {
+			type: "choose_crew_to_turn",
+			targetPlayerId: target.playerId,
+			actorId: resolvedActorId,
+			chooserPlayerId,
+			eligibleSlots: unturnedSlots,
+			isStrike,
+		};
+		return { outcome: "pending" }; // blood money deferred to interaction resolution
+	} else if (target.bossImmunityTurns > 0) {
+		return { outcome: "negated", negatedBy: "immunity" }; // no blood money
+	} else if (target.hasLifeInsurance) {
+		target.bossHp = 1;
+		consumeLifeInsuranceProtecting(state, target);
+		result = { outcome: "executed", survivedViaLifeInsurance: true };
+	} else {
+		target.bossHp = 0;
+		result = { outcome: "executed", survivedViaLifeInsurance: false };
 	}
 
-	if (unturnedSlots.length === 1) {
-		const slot = unturnedSlots[0]!;
-		finishTurn(slot, actorId);
-		return slot;
+	if (isStrike && actorId) {
+		const striker = state.players.get(actorId);
+		if (striker) applyBloodMoneyOnStrike(state, striker);
 	}
-
-	const resolvedActorId = actorId ?? target.playerId;
-	const chooserPlayerId = target.hasVoidArms
-		? target.playerId
-		: resolvedActorId;
-
-	state.pendingInteraction = {
-		type: "choose_crew_to_turn",
-		targetPlayerId: target.playerId,
-		actorId: resolvedActorId,
-		chooserPlayerId,
-		eligibleSlots: unturnedSlots,
-		isStrike,
-	};
-	return null;
+	return result;
 }
 
-/**
- * blood money: every enemy of the striking player who has this passive
- * active gains 1 cash whenever the striker performs a strike — covers both
- * the declared strike class action (via game.ts's executePendingAction,
- * which calls performStrike directly) and every card-driven strike (shrike,
- * ambush, suplex, unfinished business). exported so index.ts's
- * choose_crew_to_turn resolution handler (both the live-action and
- * timer-expiry paths) can apply this atomically with the deferred crew-turn
- * when a strike's slot choice was ambiguous and had to go through a pending
- * interaction rather than resolving inline.
- */
+// gives cash to every enemy with the blood money passive whenever the
+// striker performs a strike, covering class-action strikes and
+// card-driven strikes.
 export function applyBloodMoneyOnStrike(
 	state: FaceturnServerState,
 	striker: FaceturnServerPlayer,
@@ -542,18 +540,9 @@ export function applyBloodMoneyOnStrike(
 	}
 }
 
-/**
- * supply drop: whenever a collector class action resolves (anywhere, by
- * anyone — including the collecting player's own opponents' teammates,
- * though in practice "your team" only ever matters for the collector's
- * own team or a supply drop holder who happens to be on the same team as
- * the collector), every living player with this passive whose team
- * includes the collector grants cash to their whole team.
- *
- * exported so game.ts's executePendingAction (class_action_collect case)
- * can call it once the collect has actually resolved — mirrors
- * applyBloodMoneyOnStrike's call-site division of labor.
- */
+// grants cash to the team whenever any collector class action resolves
+// somewhere, for every living player with the supply drop passive who
+// shares a team with the collector.
 export function applySupplyDropOnCollect(
 	state: FaceturnServerState,
 	collector: FaceturnServerPlayer,
@@ -571,37 +560,30 @@ export function applySupplyDropOnCollect(
 	}
 }
 
-/**
- * resolves and performs a strike: turns a face-down enemy crew slot face-up
- * and fires its turned effects, via openChooseCrewToTurnOrAuto so slot
- * ambiguity (2 face-down crew, no pre-selected slot) opens the correct
- * pending interaction instead of silently auto-picking — strikes are a
- * player choice when ambiguous, same as challenge-driven crew turns, except
- * void arms additionally redirects who gets to choose.
- *
- * if ctx.targetCrewSlot is explicitly provided (e.g. a card payload that
- * pre-selected a slot, or a future card with random/forced targeting),
- * that's honored directly without consulting openChooseCrewToTurnOrAuto.
- *
- * shared by every primitive that ultimately performs a strike
- * (strike_enemy_crew, shrike, whisper, suplex, unfinished business) and by
- * game.ts's executePendingAction for the declared strike class action.
- */
-export function performStrike(ctx: EffectContext): void {
+// resolves a strike via the unified resolver, returning the outcome so
+// callers can build a lastResolution.
+export function performStrike(
+	ctx: EffectContext,
+): StrikeOrExecuteOutcome | null {
 	const target = resolveTarget(ctx);
-	if (!target) return;
+	if (!target) return null;
 
-	if (ctx.targetCrewSlot !== undefined) {
-		const slot = ctx.targetCrewSlot as 0 | 1;
-		if (!target.crewIds[slot] || target.crewTurned[slot]) return; // invalid pre-selected slot, fizzle
-		turnCrewAtSlot(target, slot);
-		recomputePassives(target, ctx.state);
-		triggerCrewTurnedEffects(ctx.state, target, slot);
-		applyBloodMoneyOnStrike(ctx.state, ctx.actor);
-		return;
-	}
+	return resolveStrikeOrExecute(
+		ctx.state,
+		target,
+		ctx.actor.playerId,
+		true,
+		ctx.targetCrewSlot as 0 | 1 | undefined,
+	);
+}
 
-	openChooseCrewToTurnOrAuto(ctx.state, target, ctx.actor.playerId, true);
+// centralised helper so every place that constructs a ResolutionResult
+// answers "did this action execute someone's boss?" identically.
+export function executedPlayerIdFrom(
+	outcome: StrikeOrExecuteOutcome | null | undefined,
+	targetPlayerId: string,
+): string | null {
+	return outcome?.outcome === "executed" ? targetPlayerId : null;
 }
 
 // passive recompute
@@ -610,7 +592,7 @@ function recomputePassiveSwitch(
 	effect: EffectPrimitive,
 	player: FaceturnServerPlayer,
 	state: FaceturnServerState,
-): "survivor" | null {
+): void {
 	switch (effect.type) {
 		case "passive_cash_per_turn":
 			player.cashGainPerTurn += effect.amount;
@@ -642,8 +624,9 @@ function recomputePassiveSwitch(
 		case "passive_reduce_all_move_costs":
 			player.moveBaseCostReduction += effect.reduction;
 			break;
-		case "passive_prevent_loss_if_hp_above_50":
-			return "survivor";
+		case "passive_block_strikes_above_half_hp":
+			player.hasTerminalStrikeBlock = true;
+			break;
 		case "passive_disable_all_crew_skills":
 			player.crewSkillsDisabled = true;
 			for (const p of getLivingPlayers(state)) {
@@ -677,8 +660,7 @@ function recomputePassiveSwitch(
 			break;
 		// event-triggered / once-per-game / interaction-driven passives
 		// don't accumulate a derived stat — their presence is checked live
-		// at the trigger site (e.g. triggerCrewTurnedEffects for mama mercy,
-		// discardFromHand for doctor norman). nothing to do here.
+		// at the trigger site. nothing to do here.
 		case "passive_poison_per_round":
 		case "passive_shield_on_enemy_striker_turned":
 		case "passive_full_heal_on_sixth_discard_once":
@@ -687,7 +669,6 @@ function recomputePassiveSwitch(
 		case "passive_optional_strike_on_successful_challenge":
 			break;
 	}
-	return null;
 }
 
 // all passive stats are derived — reset then re-accumulate from every source
@@ -714,9 +695,9 @@ export function recomputePassives(
 	player.voidLegsDiscardCost = 0;
 	player.voidLegsDamage = 0;
 	player.hasBackgroundCheck = false;
-	player.survivorModeActive = false;
 	player.hasPrankCall = false;
 	player.prankCallBonusAmount = 0;
+	player.hasTerminalStrikeBlock = false;
 
 	// clean up inbound poison from eliminated or inactive sources
 	const playersWithActivePoisonSource = new Set<string>();
@@ -747,12 +728,18 @@ export function recomputePassives(
 		}
 	}
 
+	// resolve crewSkillsDisabled before building passiveSources: crew
+	// passives must be filtered by the fully-resolved value, not by a flag
+	// a later entry in this same pass (e.g. Blackmail) hasn't set yet.
+	const crewSkillsDisabledNow = hasActiveCrewSkillsDisableSource(player, state);
+	player.crewSkillsDisabled = crewSkillsDisabledNow;
+
 	const passiveSources: readonly (readonly CardEffect[])[] = [
 		...(player.bossId ? [getBoss(player.bossId).passiveEffects] : []),
 		...player.crewIds.flatMap((crewId, i) => {
 			const slot = i as 0 | 1;
 			if (!crewId || !player.crewTurned[slot]) return [];
-			if (player.crewSkillsDisabled) return [];
+			if (crewSkillsDisabledNow) return [];
 			// lighthouse: skip this slot's passive contribution entirely while
 			// disabled, even though the crew is otherwise face-up and legal.
 			if (player.disabledPassiveSlots.has(slot)) return [];
@@ -763,8 +750,6 @@ export function recomputePassives(
 			return [getMove(moveId).effects];
 		}),
 	];
-
-	let derivedSurvivor = false;
 
 	for (const source of passiveSources) {
 		for (const cardEffect of source) {
@@ -777,40 +762,28 @@ export function recomputePassives(
 				);
 				const shouldRun = ce.negated ? !passes : passes;
 				if (!shouldRun) continue;
-				const result = recomputePassiveSwitch(ce.effect, player, state);
-				if (result === "survivor") derivedSurvivor = true;
+				recomputePassiveSwitch(ce.effect, player, state);
 				continue;
 			}
 			const effect = cardEffect;
-			// passive_poison_per_round is applied at round end via incomingPoison,
-			// never as a "derived stat" — skip it here same as before.
+			// passive_poison_per_round is applied at round end via
+			// incomingPoison, never as a derived stat — skip it here.
 			if (effect.type === "passive_poison_per_round") continue;
-			const result = recomputePassiveSwitch(effect, player, state);
-			if (result === "survivor") derivedSurvivor = true;
+			recomputePassiveSwitch(effect, player, state);
 		}
 	}
 
-	if (derivedSurvivor) {
-		player.survivorModeActive = true;
-	}
-
 	// life insurance: derived from OTHER players' lifeInsuranceTargets maps,
-	// not from player's own activeMoves — the caster and the protected ally
-	// can differ (teams mode). check self, then every living teammate.
+	// not from the player's own activeMoves — the caster and the protected
+	// ally can differ (teams mode). check self, then every living teammate.
 	const insuranceCandidates = [player, ...getTeammates(state, player.playerId)];
 	player.hasLifeInsurance = insuranceCandidates.some((candidate) =>
 		[...candidate.lifeInsuranceTargets.values()].includes(player.playerId),
 	);
 }
 
-/**
- * applies n poison from `source` onto `victim`'s incomingPoison map,
- * stacking additively with any existing poison from the same source.
- * shared by: the direct-apply path in the passive_poison_per_round handler
- * (single-enemy auto-resolve, or a pre-specified ctx.targetPlayerId), and
- * index.ts's poison_target_pick resolution (live + timeout), which both
- * need to apply the chosen amount once the player's target choice is known.
- */
+// applies n poison from `source` onto `victim`'s incomingPoison map,
+// stacking additively with any existing poison from the same source.
 export function applyPoisonToVictim(
 	state: FaceturnServerState,
 	source: FaceturnServerPlayer,
@@ -908,8 +881,8 @@ const handlers: Partial<Record<EffectPrimitive["type"], Handler>> = {
 	},
 
 	strike_enemy_crew_blockable() {
-		// ambush. needs a new block-window phase in index.ts (not a challenge
-		// window) before the strike can resolve.
+		// ambush: needs a block-window phase (not a challenge window)
+		// before the strike can resolve
 	},
 
 	// crew turn manipulation
@@ -1267,24 +1240,14 @@ const handlers: Partial<Record<EffectPrimitive["type"], Handler>> = {
 	},
 
 	// boss commands
-	command_guess_crew_class_turn_if_correct() {
-		// handled in index.ts's use_boss_command branch (the razor).
-	},
-	command_replace_crew_from_hand() {
-		// handled in index.ts's use_boss_command branch (the dealer).
-	},
+	command_guess_crew_class_turn_if_correct() {},
+	command_replace_crew_from_hand() {},
 
-	// negate / reflect (not this file's scope — game.ts move chain)
-	negate_enemy_slow_move() {
-		// nope!: resolved inside resolveMoveChainFull in game.ts.
-	},
-	reflect_slow_move_base_damage() {
-		// reverse card: resolved inside resolveMoveChainFull in game.ts, which
-		// delegates the actual damage application to
-		// resolveReflectedSlowMoveDamage (this file).
-	},
+	// negate / reflect (resolved in the move chain)
+	negate_enemy_slow_move() {},
+	reflect_slow_move_base_damage() {},
 
-	// passives: accumulation-only effects no-op here
+	// passives
 	passive_poison_per_round(effect, ctx) {
 		if (effect.type !== "passive_poison_per_round") return;
 
@@ -1318,117 +1281,43 @@ const handlers: Partial<Record<EffectPrimitive["type"], Handler>> = {
 			damagePerRound: effect.damagePerRound,
 		} satisfies PendingInteraction;
 	},
-	passive_cash_per_turn() {
-		// accumulated → cashGainPerTurn. applied in startTurn() (game.ts).
-	},
-	passive_draw_per_turn() {
-		// accumulated → drawPerTurn. applied in startTurn() (game.ts).
-	},
-	passive_cash_on_enemy_move_or_strike() {
-		// accumulated → cashOnEnemyMoveOrStrike. move-trigger half wired in
-		// executeMove() (game.ts). strike-trigger half wired in
-		// applyBloodMoneyOnStrike (this file), called from performStrike and
-		// from openChooseCrewToTurnOrAuto's isStrike-gated finishTurn.
-	},
-	passive_heal_on_move_played() {
-		// accumulated → healOnMovePlayed. applied in executeMove() (game.ts).
-	},
-	passive_shield_per_turn() {
-		// accumulated → shieldPerTurn. applied in startTurn() (game.ts).
-	},
-	passive_optional_discard_for_damage_per_turn() {
-		// void legs: at startTurn, opens a "void_legs_choice" pending
-		// interaction (game.ts/index.ts). resolution: resolveVoidLegsChoice
-		// (this file).
-	},
-	passive_damage_multiplier() {
-		// accumulated → damageMultiplier (multiplicatively). consumed inside
-		// applyDamage's multiplier step.
-	},
-	passive_negate_damage_percent() {
-		// accumulated → damageReductionPercent (max across sources, not
-		// summed). consumed inside applyDamage's reduction step.
-	},
-	passive_block_cost_reduction() {
-		// accumulated → blockCostReduction. applied in getClassActionCost()
-		// (game.ts).
-	},
-	passive_reduce_all_move_costs() {
-		// accumulated → moveBaseCostReduction. applied in getMoveCost()
-		// (game.ts).
-	},
-	passive_disable_all_crew_skills() {
-		// accumulated/applied globally in recomputePassives already.
-	},
-	passive_defender_chooses_crew_to_turn() {
-		// accumulated → hasVoidArms (recomputePassives). consumed inside
-		// openChooseCrewToTurnOrAuto (this file).
-	},
-	passive_background_check() {
-		// modifies challenge resolution timing — index.ts's challenge_window
-		// handler, before calling resolveChallenge. not a recompute stat.
-	},
-	passive_bonus_cash_on_first_bluff_per_round() {
-		// accumulated → hasPrankCall / prankCallBonusAmount. consumed in
-		// index.ts's declare_class_action handler, at the point
-		// computeActorWasBluffing's result is known — see game.ts.
-	},
-	passive_team_cash_on_ally_collect() {
-		// accumulated → hasSupplyDrop / supplyDropCashAmount. consumed by
-		// applySupplyDropOnCollect, called from executePendingAction's
-		// class_action_collect case (game.ts), same division of labor as
-		// applyBloodMoneyOnStrike (this file) being called from performStrike
-		// and game.ts call sites.
-	},
+	passive_cash_per_turn() {},
+	passive_draw_per_turn() {},
+	passive_cash_on_enemy_move_or_strike() {},
+	passive_heal_on_move_played() {},
+	passive_shield_per_turn() {},
+	passive_optional_discard_for_damage_per_turn() {},
+	passive_damage_multiplier() {},
+	passive_negate_damage_percent() {},
+	passive_block_cost_reduction() {},
+	passive_reduce_all_move_costs() {},
+	passive_disable_all_crew_skills() {},
+	passive_defender_chooses_crew_to_turn() {},
+	passive_background_check() {},
+	passive_bonus_cash_on_first_bluff_per_round() {},
+	passive_team_cash_on_ally_collect() {},
 	passive_life_insurance(_effect, ctx) {
 		// life insurance active-move target lock-in. the cast-time target
 		// (self or teammate) is stored in lifeInsuranceTargets, keyed by the
-		// slot this card just landed in. requires executeMove (game.ts) to
-		// assign the active-move slot before calling resolveEffects for active moves
+		// slot this card just landed in.
 		if (!ctx.moveId) return;
 		const slot = ctx.actor.activeMoves.indexOf(ctx.moveId) as 0 | 1 | 2 | -1;
 		if (slot === -1) return; // defensive
 		const protectedAlly = resolveAllyTarget(ctx);
 		ctx.actor.lifeInsuranceTargets.set(slot, protectedAlly.playerId);
 	},
-	passive_false_flag() {
-		// accumulated → hasFalseFlag. consumed in index.ts's resolveChallenge
-		// call site.
-	},
-	passive_prevent_loss_if_hp_above_50() {
-		// accumulated → survivorModeActive (recomputePassives). gated in
-		// game.ts's checkWinConditions.
-	},
-	passive_full_heal_on_sixth_discard_once() {
-		// fully owned by this file — see discardFromHand/maybeTriggerDoctorNorman
-		// above. no-op here since the trigger fires inline at the discard call
-		// site, not via resolveEffects dispatch.
-	},
-	passive_draw_on_hand_empty_once_per_turn() {
-		// fully owned by this file — see checkVanessaDrawTrigger above.
-	},
-	passive_watcher_unturn_on_challenge_win() {
-		// accumulated → hasWatcherPassive. consumed in game.ts's
-		// resolveChallenge, !actorWasBluffing branch — opens
-		// "watcher_unturn_offer". resolution: resolveTacticalSupportUnturn
-		// (this file), reused since "optionally unturn one slot from a list
-		// of eligible slots" is exactly tactical support's own resolution
-		// logic — see index.ts's watcher_unturn_offer branches.
-	},
-	passive_unturn_self_on_first_successful_challenge_call() {
-		// too big: triggered in resolveChallenge (game.ts) when
-		// hasCalledBluffSuccessfully is set — opens "too_big_unturn_offer".
-		// resolution: resolveTooBigUnturnOffer (this file).
-	},
-	passive_optional_strike_on_successful_challenge() {
-		// bear bones: same trigger site as too big, opens
-		// "bear_bones_bonus_strike". resolution: resolveBearBonesBonusStrike
-		// (this file).
-	},
+	passive_false_flag() {},
+	passive_block_strikes_above_half_hp() {},
+	passive_full_heal_on_sixth_discard_once() {},
+	passive_draw_on_hand_empty_once_per_turn() {},
+	passive_watcher_unturn_on_challenge_win() {},
+	passive_unturn_self_on_first_successful_challenge_call() {},
+	passive_optional_strike_on_successful_challenge() {},
 
 	// win conditions
 	win_if_void_pieces_assembled(_effect, ctx) {
-		if (!checkVoidPiecesAssembled(ctx.actor)) return; // fizzle, still discarded
+		// fizzle if not assembled, but the card is still discarded
+		if (!checkVoidPiecesAssembled(ctx.actor)) return;
 		ctx.state.winnerId = ctx.actor.playerId;
 		ctx.state.winCondition = "void_assembly";
 		ctx.state.phase = "finished";
@@ -1629,15 +1518,9 @@ export function resolveTacticalSupportUnturn(
 	recomputePassives(target, state);
 }
 
-/**
- * handles' optional unturn-offer resolution. structurally identical to
- * resolveTacticalSupportUnturn, but the actor chooses from their own
- * face-up slots rather than a target ally's — kept as a separate named
- * function so index.ts's dispatch stays self-documenting about which card
- * is firing, matching the existing pattern where watcher_unturn_offer also
- * reuses the tactical-support shape but is still routed through its own
- * named branch in index.ts.
- */
+// kept as a separate named function so the dispatch stays
+// self-documenting about which card is firing, matching the pattern for
+// tactical support.
 export function resolveHandlesUnturnOffer(
 	state: FaceturnServerState,
 	actor: FaceturnServerPlayer,
@@ -1705,12 +1588,8 @@ export function resolveLighthouseDisablePick(
 	recomputePassives(target, state);
 }
 
-/**
- * gathers every currently face-up crew slot across every living player —
- * lighthouse's full eligible-target pool. exported so index.ts's timeout
- * handler can rebuild the same list a second time without duplicating the
- * scan logic (the interaction itself only carries a snapshot).
- */
+// gathers every currently face-up crew slot across every living player,
+// for lighthouse's eligible-target pool.
 export function gatherFaceUpCrewSlots(
 	state: FaceturnServerState,
 ): { playerId: string; slot: 0 | 1 }[] {
@@ -1725,13 +1604,11 @@ export function gatherFaceUpCrewSlots(
 	return result;
 }
 
-/**
- * truth serum's resolution. a face-down crew can never have
- * crewClassOverrides active yet (overrides are only granted inside
- * turnedEffects, which only run once a crew turns face-up), so the crew's
- * base getCrew(id).class is always the correct and complete answer here;
- * resolveCrewClass's broader override-aware logic isn't needed.
- */
+// truth serum's resolution. a face-down crew can never have
+// crewClassOverrides active yet (overrides are only granted inside
+// turnedEffects, which only run once a crew turns face-up), so the crew's
+// base getCrew(id).class is always the correct and complete answer here;
+// resolveCrewClass's broader override-aware logic isn't needed.
 export function resolveTruthSerumReveal(
 	state: FaceturnServerState,
 	target: FaceturnServerPlayer,
@@ -1746,16 +1623,14 @@ export function resolveTruthSerumReveal(
 	return { revealedSlot: slot, revealedClass };
 }
 
-/**
- * too big's once-per-game optional self-unturn. chains into bear bones:
- * both passives trigger off the same event (challenger won a challenge) and
- * the engine only supports one pendingInteraction at a time. too big
- * resolves first (simpler yes/no, closer to "self"); if the same player
- * also has bear bones face-up, this function opens bear_bones_bonus_strike
- * immediately after, rather than silently dropping it. this ordering is a
- * deliberate choice, not a limitation — if a player ever has both, too
- * big's offer always comes first.
- */
+// too big's once-per-game optional self-unturn. chains into bear bones:
+// both passives trigger off the same event and the engine only supports
+// one pendingInteraction at a time. too big resolves first (simpler
+// yes/no, closer to "self"); if the same player also has bear bones
+// face-up, this function opens bear_bones_bonus_strike immediately after,
+// rather than silently dropping it. this ordering is a deliberate choice,
+// not a limitation — if a player ever has both, too big's offer always
+// comes first.
 export function resolveTooBigUnturnOffer(
 	state: FaceturnServerState,
 	actor: FaceturnServerPlayer,
@@ -1778,12 +1653,8 @@ export function resolveTooBigUnturnOffer(
 	maybeOpenBearBonesOffer(state, actor, defeatedPlayerId);
 }
 
-/**
- * opens bear bones' bonus-strike offer if the actor has it face-up and
- * isn't skill-disabled. split out so resolveChallenge (game.ts) can call it
- * directly when the actor has bear bones but not too big (too big's offer
- * would never run for them, so there'd be nothing to chain off of).
- */
+// opens bear bones' bonus-strike offer if the actor has it face-up and
+// isn't skill-disabled.
 export function maybeOpenBearBonesOffer(
 	state: FaceturnServerState,
 	actor: FaceturnServerPlayer,
@@ -1810,27 +1681,26 @@ export function resolveBearBonesBonusStrike(
 	confirmed: boolean,
 	targetPlayerId: string | null,
 	targetSlot: number | null,
-): void {
-	if (!confirmed) return;
-	if (!targetPlayerId) return;
+): StrikeOrExecuteOutcome | null {
+	if (!confirmed) return null;
+	if (!targetPlayerId) return null;
 	const target = state.players.get(targetPlayerId);
-	if (!target || state.eliminatedPlayers.has(targetPlayerId)) return;
+	if (!target || state.eliminatedPlayers.has(targetPlayerId)) return null;
 	const slot =
 		targetSlot !== null ? (targetSlot as 0 | 1) : firstUnturnedSlot(target);
-	if (slot === null) return;
-	if (!target.crewIds[slot]) return;
+	if (slot === null) return null;
+	if (!target.crewIds[slot]) return null;
 	turnCrewAtSlot(target, slot);
 	recomputePassives(target, state);
 	triggerCrewTurnedEffects(state, target, slot);
 	// per blood money's scoping rule: a bonus strike is still a strike.
 	applyBloodMoneyOnStrike(state, actor);
+	return { outcome: "crew_turned", slot };
 }
 
-/**
- * background check resolution: the challenger guesses a class for one of the
- * challenged player's face-down crew slots. wrong guess auto-turns one of
- * the guesser's own crew.
- */
+// background check resolution: the challenger guesses a class for one of
+// the challenged player's face-down crew slots. wrong guess auto-turns
+// one of the guesser's own crew.
 export function resolveBackgroundCheckGuess(
 	state: FaceturnServerState,
 	challenger: FaceturnServerPlayer,
@@ -1855,7 +1725,8 @@ export function resolveBackgroundCheckGuess(
 }
 
 // mama mercy's on‑turn shield trigger fires here; everything else routes
-// through the crew's own turnedEffects/passiveEffects arrays via resolveEffects.
+// through the crew's own turnedEffects/passiveEffects arrays via
+// resolveEffects.
 export function triggerCrewTurnedEffects(
 	state: FaceturnServerState,
 	player: FaceturnServerPlayer,
@@ -2002,17 +1873,16 @@ export function resolveEffects(
 	}
 }
 
-/**
- * reverse card's resolution. finds the targeted slow move's base deal_damage
- * primitive (if any), applies it back at the move's own caster through that
- * caster's own defenses — reduction%, immunity, shield all apply normally,
- * since this is not unblockable; only the original caster's damageMultiplier
- * is skipped (cannotBeMultiplied: true), matching "reflect its base damage."
- *
- * only the first deal_damage primitive on the move is reflected. every
- * current slow move with damage (backstab, kamikaze) has at most one
- * deal_damage entry.
- */
+// reverse card's resolution. finds the targeted slow move's base
+// deal_damage primitive (if any), applies it back at the move's own
+// caster through that caster's own defenses — reduction%, immunity,
+// shield all apply normally, since this is not unblockable; only the
+// original caster's damageMultiplier is skipped (cannotBeMultiplied:
+// true), matching "reflect its base damage."
+//
+// only the first deal_damage primitive on the move is reflected. every
+// current slow move with damage (backstab, kamikaze) has at most one
+// deal_damage entry.
 export function resolveReflectedSlowMoveDamage(
 	state: FaceturnServerState,
 	reflectedMoveId: string,

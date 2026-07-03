@@ -11,7 +11,7 @@ import type {
 
 export interface GameConfig {
 	mode: GameMode;
-	// present only for teams mode — two fixed arrays of player ids
+	// only present in teams mode: two fixed arrays of player ids
 	teams?: [string[], string[]];
 }
 
@@ -23,22 +23,21 @@ export interface FaceturnServerPlayer {
 	bossHp: number;
 	bossMaxHp: number;
 	bossShield: number;
-	// frontline immunity — turns of immunity remaining
-	// decremented once per round end; exact in duels, an approximation in ffa/teams
+	// decremented once per round end, exact in duels, an approximation in ffa/teams
+	// also negates face turn and strike execute attempts
 	bossImmunityTurns: number;
 	bossCommandUsed: boolean;
 
-	// always exactly two crew slots
 	crewIds: [string | null, string | null];
 	crewTurned: [boolean, boolean];
-	// extra classes from lotus, cristatella etc — keyed by slot index
+	// bonus crew classes from effects like lotus and cristatella
 	crewClassOverrides: Map<number, Set<CrewClass>>;
 
 	hand: string[];
 	deck: string[];
 	discardPile: string[];
 
-	// active move zone — max 3 slots (constant)
+	// max 3 slots, enforced by game logic
 	activeMoves: Array<string | null>;
 
 	cash: number;
@@ -48,26 +47,17 @@ export interface FaceturnServerPlayer {
 	totalCardsDiscarded: number;
 	totalMovesPlayed: number;
 	hasShieldedBossThisGame: boolean;
-	// set permanently true the first time any crew turns face-up, regardless
-	// of later unturns — powers suplex's "this game" condition
-	// never cleared, same pattern as hasBluffedSuccessfully
+	// set permanently true once any crew turns face-up, powers suplex's "this game" condition, never cleared
 	hasTurnedAllyCrewThisGame: boolean;
 
-	// inbound poison — maps source player id → damage per round; stacks additively
+	// stacking per-round damage from each source player
 	incomingPoison: Map<string, number>;
 
-	// derived passive stats
-	//
-	// never mutated directly — recomputePassives calculates them from all
-	// active sources (turned crew, active moves, boss) to prevent desyncs
-
-	// side hustle: cash granted at start of each turn the player takes
+	// derived passive stats, recomputed by recomputePassives from all active sources, never mutated directly
 	cashGainPerTurn: number;
-	// dataminer, the dealer (passive), command center: cards drawn at start of turn
+	// cards drawn at start of own turn (dataminer, the dealer passive, command center)
 	drawPerTurn: number;
-	// blood money — cash gained whenever any opponent plays a move or
-	// performs a strike (declared class action or card-driven)
-	// both halves wired separately in game.ts and effects.ts
+	// cash gained whenever any opponent plays a move or performs a strike (class action or card-driven)
 	cashOnEnemyMoveOrStrike: number;
 	healOnMovePlayed: number;
 	crewSkillsDisabled: boolean;
@@ -75,62 +65,55 @@ export interface FaceturnServerPlayer {
 	damageReductionPercent: number;
 
 	hasWatcherPassive: boolean;
-	// lighthouse: subtractive reduction applied to block class-action cost (min 0)
+	// subtractive block cost reduction (lighthouse), min 0
 	blockCostReduction: number;
-	// void torso: shield granted to this player's boss at start of every turn
+	// shield granted to this player's boss at start of every turn (void torso)
 	shieldPerTurn: number;
-	// big voucher: permanent-while-active cost reduction applied to all moves
-	// this player plays (minimum 0) — distinct from per-card costOverrides
+	// global cost reduction for all moves (big voucher), distinct from per-card costOverrides, min 0
 	moveBaseCostReduction: number;
-	survivorModeActive: boolean;
+	// action-level gate: while bossHp > 50, strikes and face turn cannot target this boss
+	// the attempt fizzles entirely, distinct from damage reduction
+	hasTerminalStrikeBlock: boolean;
 
-	// void arms: when true, this player chooses which of their own face-down
-	// crew gets turned — instead of the attacker choosing (engine default)
+	// when true, this player chooses which of their face-down crew gets turned instead of the attacker
 	hasVoidArms: boolean;
-	// supply drop: when true, every collector action by this player or a
-	// teammate grants supplyDropCashAmount cash to every team member
+	// every collector action by this player or a teammate grants supplyDropCashAmount to each team member
 	// trigger-based, not per-turn accumulation
 	hasSupplyDrop: boolean;
 	supplyDropCashAmount: number;
-	// derived — true when at least one living ally's active-zone life
-	// insurance has this player locked-in as the protected target
-	// recomputePassives scans all living teammates' lifeInsuranceTargets
+	// true when any teammate's life insurance active move has this player as the protected target
+	// executes also count as lethal damage for this purpose
 	hasLifeInsurance: boolean;
-	// maps this player's active-move slot index (0–2) to the protected ally's
-	// playerId, locked at cast time; only life insurance writes to this map
+	// maps active-move slot index to protected ally's playerId, locked at cast time
 	// cleared when the slot's life insurance is consumed or discarded
 	lifeInsuranceTargets: Map<0 | 1 | 2, string>;
-	// false flag operation: when true, a failed challenge (bluff called
-	// correctly) prevents the crew-turning penalty and discards the false
-	// flag active move instead
+	// failed challenge discards the false flag active move instead of turning crew
 	hasFalseFlag: boolean;
-	// doctor norman: one-shot flag set when totalCardsDiscarded hits 6 exactly
+	// set when totalCardsDiscarded hits 6 exactly (doctor norman)
 	doctorNormanTriggered: boolean;
-	// vanessa de vera: per-turn flag reset in startTurn — prevents re-triggering
+	// per-turn flag reset in startTurn (vanessa de vera)
 	vanessaDrawUsedThisTurn: boolean;
-	// too big: once-per-game flag for the optional self-unturn offer
+	// once-per-game flag for the self-unturn offer (too big)
 	tooBigUnturnUsed: boolean;
-	// lighthouse: set of this player's own crew slot indices whose passive is
-	// currently disabled — cleared when that crew unturns
+	// crew slots with disabled passives, cleared on unturn (lighthouse)
 	disabledPassiveSlots: Set<0 | 1>;
-	// prank call: per-round flag reset alongside other round-end resets
+	// per-round flag reset alongside other round-end resets (prank call)
 	prankCallBonusUsedThisRound: boolean;
 
-	// void legs: when true, a discard-for-damage offer opens at start of turn
+	// discard-for-damage offer at start of turn (void legs)
 	hasVoidLegsChoice: boolean;
 	voidLegsDiscardCost: number;
 	voidLegsDamage: number;
-	// background check: when true, an opponent who challenges this player's
-	// class action must guess a face-down crew's class first
+	// opponent who challenges this player's class action must guess a face-down crew's class first
 	hasBackgroundCheck: boolean;
 
 	hasPrankCall: boolean;
 	prankCallBonusAmount: number;
 
-	// turn-scoped (reset each turn)
+	// turn-scoped, reset each turn
 	playedMoveThisTurn: boolean;
 	classActionUsedThisTurn: boolean;
-	costOverrides: Map<string, number>; // move id → overridden cost (per turn)
+	costOverrides: Map<string, number>; // per-turn cost overrides by move id
 
 	draftSelections: DraftSelections | null;
 	isDraftLocked: boolean;
@@ -142,21 +125,17 @@ export interface DraftSelections {
 	moveIds: string[];
 }
 
-// move chain — active only during move_chain_window
-// only the two participants (caster and original target) can add entries
-// burst moves resolve immediately; only slow moves stack
+// move chain, active only during move_chain_window
+// only the caster and original target may push entries
+// burst moves resolve instantly, only slow moves stack
 export interface ServerMoveChain {
-	// the two players who may act in this chain
 	participants: [string, string];
-	// lifo stack of slow moves — bottom is first played, top is most recent
+	// lifo stack: index 0 is first played, last element most recent
 	stack: MoveChainEntry[];
-	// the player whose turn it is to respond — starts as the original target,
-	// flips whenever a slow move is pushed
+	// whose turn to respond; starts as original target, flips on each slow move push
 	responderId: string;
-	// stack depth at the moment responderId last changed — when the current
-	// responder passes and the stack hasn't grown past this, they added no
-	// slow move, so the chain resolves immediately without asking the other
-	// participant
+	// stack length when responderId last flipped; if current responder passes
+	// and stack length hasn't increased since, chain resolves immediately
 	stackDepthAtLastSlow: number;
 }
 
@@ -168,9 +147,7 @@ export interface FaceturnServerState {
 	// in ffa/duel each player is their own solo team; in teams, indices 0 and 1
 	teams: string[][];
 
-	// ordered list of player ids for turn rotation
 	turnOrder: string[];
-
 	// kept for rps serialisation and to identify the two rps representatives
 	playerOrder: [string, string];
 
@@ -191,28 +168,25 @@ export interface FaceturnServerState {
 
 	lastResolution: ResolutionResult | null;
 
-	// the watcher's command — a one-shot private reveal of an enemy's full
-	// hand, delivered only to forPlayerId via getPlayerSecret
-	// cleared after the next state build; must not leak to opponents
+	// one-shot private reveal of an enemy's hand, only visible to forPlayerId
+	// cleared after next state build, must never leak to opponents
 	watcherReveal: { forPlayerId: string; hand: readonly string[] } | null;
 
 	rpsChoices: Map<string, RpsChoice>;
-	// never 'tie' — ties coinflip to a winner immediately, so a first mover
-	// always exists
+	// never 'tie': ties resolved by coinflip immediately, so a first mover always exists
 	rpsResult: "player1" | "player2" | null;
 
-	// winnerId is null for draws
+	// null for draws
 	winnerId: string | null;
 	winCondition: WinCondition | null;
 
-	// public state cache — invalidated on every mutation to avoid stale broadcasts
+	// public state cache, invalidated on every mutation
 	_publicStateCacheValid: boolean;
 	_cachedPublicState: unknown;
 }
 
 export type PendingInteraction =
 	| {
-			// look at 2 revealed enemy cards, pick which to discard
 			type: "peek_discard";
 			actorId: string;
 			revealedCards: [string, string];
@@ -231,22 +205,28 @@ export type PendingInteraction =
 			damagePerRound: number;
 	  }
 	| {
-			// challenge/bluff consequence and strike resolution — when a player
-			// has 2+ unturned crew, someone must pick which slot to turn
-			// chooserPlayerId is the attacker by default, or the defender if
-			// they have void arms; isStrike gates blood money (only true for
-			// genuine strikes, not challenge-resolution turns)
+			// after challenge, bluff, or strike resolution when target has multiple unturned crew:
+			// chooserPlayerId defaults to attacker, or defender with void arms
+			// isStrike true only for actual strikes (gates blood money)
 			type: "choose_crew_to_turn";
 			targetPlayerId: string;
 			actorId: string;
 			chooserPlayerId: string;
 			eligibleSlots: number[];
 			isStrike: boolean;
+			// true only when this interaction is the challenge-loss penalty
+			// against a losing challenger, opened mid-resolveChallenge while
+			// the original pendingAction (the class action being challenged)
+			// is still awaiting its own execution. absent/false for every
+			// other choose_crew_to_turn caller (face turn, card strikes,
+			// class-action strikes, bear bones, etc). orthogonal to isStrike,
+			// which only governs "was turning this crew caused by a strike"
+			// for via/blood-money purposes.
+			deferredActionPending?: boolean;
 	  }
 	| {
 			// empty the clip: actor picks how many cards (0..maxCount) to discard
-			// damage resolved against targetPlayerId captured when the card was
-			// played — enemy-fallback logic not re-evaluated later
+			// damage target captured at play time; enemy-fallback logic not re-evaluated
 			type: "choose_discard_count";
 			actorId: string;
 			maxCount: number;
@@ -254,90 +234,82 @@ export type PendingInteraction =
 			damagePerCard: number;
 	  }
 	| {
-			// take it back: actor picks one card to return from their discard
-			// pile to hand — snapshot is the full pile (public info already via
-			// discardSize) so the client can render concrete options
+			// take it back: actor picks one card from their discard pile to return to hand
+			// snapshot is the full pile so client can render concrete options
 			type: "choose_from_discard";
 			actorId: string;
 			discardPileSnapshot: readonly string[];
 	  }
 	| {
-			// dig deep: top `lookCount` cards of the actor's deck, revealed
-			// privately to the actor only — not mirrored into PendingInteractionView
+			// dig deep: top cards of the actor's deck, revealed privately only to the actor
+			// not mirrored into PendingInteractionView
 			type: "dig_deep_pick";
 			actorId: string;
 			revealedCards: readonly string[];
 	  }
 	| {
-			// handles: genuine optional unturn of one of the actor's own face-up
-			// crew (both guaranteed face-up when this opens)
+			// handles: genuine optional unturn of one own face-up crew (both guaranteed face-up when this opens)
 			type: "handles_unturn_offer";
 			actorId: string;
 			eligibleSlots: number[];
 	  }
 	| {
-			// switch up: actor turns one face-up ally crew face-down and a
-			// different face-down ally crew face-up — the lists are disjoint
+			// switch up: turn one face-up ally crew face-down and a different face-down ally crew face-up
+			// the two slot lists are disjoint
 			type: "switch_up_pick";
 			actorId: string;
 			faceUpSlots: number[];
 			faceDownSlots: number[];
 	  }
 	| {
-			// tactical support: cash already granted to targetPlayerId; actor
-			// may optionally turn one of that target's face-up crew face-down
+			// tactical support: cash already granted to targetPlayerId; actor may optionally turn one of
+			// that target's face-up crew face-down
 			type: "tactical_support_unturn_offer";
 			actorId: string;
 			targetPlayerId: string;
 			eligibleSlots: number[];
 	  }
 	| {
-			// bear bones: after a successful challenge call, actor may optionally
-			// strike one face-down enemy crew — eligibleTargetIds is always a
-			// single-element array when chained from too big
+			// bear bones: after a successful challenge call, optional strike on one face-down enemy crew
+			// eligibleTargetIds is always a single-element array when chained from too big
 			type: "bear_bones_bonus_strike";
 			actorId: string;
 			eligibleTargetIds: string[];
 	  }
 	| {
-			// too big: once-per-game optional self-unturn offer after a successful
-			// challenge call
+			// too big: once-per-game optional self-unturn offer after a successful challenge call
 			type: "too_big_unturn_offer";
 			actorId: string;
 	  }
 	| {
-			// void legs: at start of turn, actor may discard 1 card to deal 5
-			// damage — only opens if the player has at least 1 card
+			// void legs: at start of turn, discard 1 card for damage; only opens if player has at least 1 card
 			type: "void_legs_choice";
 			actorId: string;
 			hasCardsToDiscard: boolean;
 	  }
 	| {
-			// background check: before a challenge resolves, the challenger must
-			// guess the class of one of the challenged player's face-down crew
+			// background check: before challenge resolves, challenger must guess class of
+			// one of the challenged player's face-down crew
 			type: "background_check_guess";
 			actorId: string;
 			targetPlayerId: string;
 			eligibleSlots: number[];
 	  }
 	| {
-			// the watcher passive: optional unturn offer to the actor who
-			// successfully defended a challenge
+			// the watcher passive: optional unturn offer to the actor who successfully defended a challenge
 			type: "watcher_unturn_offer";
 			actorId: string;
 			eligibleSlots: number[];
 	  }
 	| {
-			// lighthouse: actor picks any face-up crew (ally or enemy) to disable
-			// its passive until that crew turns face-down — first interaction
-			// with cross-player slot selection
+			// lighthouse: pick any face-up crew (ally or enemy) to disable its passive until that crew unturns
+			// first interaction with cross-player slot selection
 			type: "lighthouse_disable_pick";
 			actorId: string;
 			eligibleTargets: readonly { playerId: string; slot: 0 | 1 }[];
 	  }
 	| {
-			// tag out: teams mode only — actor swaps one of their own crew slots
-			// with one of a teammate's crew slots
+			// tag out: teams mode only, swap one own crew slot with a teammate's
 			type: "tag_out_pick";
 			actorId: string;
 			teammateId: string;
@@ -345,8 +317,7 @@ export type PendingInteraction =
 			teammateEligibleSlots: number[];
 	  }
 	| {
-			// truth serum: the target (not the actor) picks which face-down crew
-			// slot to reveal
+			// truth serum: the target (not the actor) picks which face-down crew slot to reveal
 			type: "truth_serum_reveal";
 			actorId: string;
 			targetPlayerId: string;
@@ -370,10 +341,9 @@ export interface ServerPendingAction {
 	declaredClass: ClassAction | null;
 	actorWasBluffing: boolean;
 	targetPlayerId: string | null;
-	// the original action type that opened this chain, preserved through the
-	// challenge_window → block_declared reassignment — used solely to reject
-	// challenge_block for card_strike-originated blocks (ambush has no
-	// declared class) — null for any pendingAction that isn't itself a block
+	// preserved original action type when this pendingAction is a block
+	// used to reject challenge_block for card_strike blocks (ambush has no declared class)
+	// null for any pendingAction that isn't itself a block
 	originalActionType: ServerPendingActionType | null;
 }
 
@@ -389,7 +359,7 @@ export const FACETURN_CONSTANTS = {
 	MULLIGAN_DURATION_MS: 30 * 1_000,
 	ACTIVE_TURN_DURATION_MS: 35 * 1_000,
 	CHALLENGE_WINDOW_MS: 15 * 1_000,
-	MOVE_CHAIN_WINDOW_MS: 15 * 1_000, // per-response timer during a chain
+	MOVE_CHAIN_WINDOW_MS: 15 * 1_000,
 	BLOCK_DECLARED_MS: 15 * 1_000,
 	BLOCK_WINDOW_MS: 15 * 1_000, // target's window to declare a block against a card_strike
 	BLOCK_CHALLENGE_MS: 15 * 1_000,
@@ -399,12 +369,10 @@ export const FACETURN_CONSTANTS = {
 	BLOCK_CASH_COST: 2,
 	COLLECT_CASH_COST: 0,
 	UNTURN_CASH_COST: 4,
-	// command actions (razor's guess, dealer's swap, watcher's peek)
-	BOSS_COMMAND_COST: 6,
-	// face turn: pay 7 cash to turn a crew face up — a different action from
-	// command, both exist on every boss; constant exists to avoid hardcoded 7s
+
 	BOSS_FACE_TURN_COST: 7,
-	COLLECT_CASH_GAIN: 1,
+
+	COLLECT_CASH_GAIN: 2,
 
 	BOSS_DEFAULT_HP: 100,
 	MAX_ACTIVE_MOVE_SLOTS: 3,

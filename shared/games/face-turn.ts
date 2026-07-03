@@ -10,17 +10,11 @@ export type FaceturnsPhase =
 	| "block_challenge_window"
 	| "finished";
 
-// card classes
-
 export type CrewClass = "striker" | "blocker" | "collector" | "turner";
 export type MoveType = "burst" | "slow" | "active";
 export type ClassAction = "strike" | "block" | "collect" | "unturn";
 
-// game mode
-
 export type GameMode = "duel" | "ffa" | "teams";
-
-// card definitions (public shape)
 
 export interface BossCardDef {
 	readonly id: string;
@@ -42,12 +36,11 @@ export interface MoveCardDef {
 	readonly name: string;
 	readonly baseCost: number;
 	readonly flavorText: string;
+	
 	// null while the move's type hasn't been assigned yet (draft selection)
 	readonly moveType: MoveType | null;
 	readonly effectSummary: string;
 }
-
-// board state (per player, public view)
 
 export type CrewSlotStatus = "face_down" | "face_up" | "empty";
 
@@ -64,10 +57,13 @@ export interface BossView {
 	readonly name: string;
 	readonly hp: number;
 	readonly maxHp: number;
+
 	// damage absorbed before hp, separate pool
 	readonly shield: number;
+
 	// frontline immunity countdown, ticks down each round end
 	readonly shieldTurnsRemaining: number | null;
+
 	// once per game, prevents boss command reuse
 	readonly commandUsed: boolean;
 	readonly passiveEffects: string[];
@@ -81,6 +77,7 @@ export interface ActiveMoveSlotView {
 
 export interface FaceturnsPlayerView {
 	readonly playerId: string;
+
 	// hand size exposed, card contents are private
 	readonly handSize: number;
 	readonly deckSize: number;
@@ -94,15 +91,15 @@ export interface FaceturnsPlayerView {
 	readonly totalCardsDiscarded: number;
 	readonly totalMovesPlayed: number;
 	readonly hasShieldedBossThisGame: boolean;
-	// total incoming poison damage (all sources), applied at round end
+
+	// total incoming poison damage from all sources, applied at round end
 	readonly poisonStacks: number;
+
 	// cash granted at the start of each turn this player takes
 	readonly cashGainPerTurn: number;
 	readonly isEliminated: boolean;
 	readonly teamIndex: number;
 }
-
-// pending action (the thing being challenged / reacted to)
 
 export type PendingActionType =
 	| "class_action_strike"
@@ -116,14 +113,14 @@ export interface PendingAction {
 	readonly actorId: string;
 	readonly targetCrewSlot: number | null;
 	readonly targetAllySlot: number | null;
+
 	// only set when the pending action is a move (not a class action)
 	readonly moveId: string | null;
+
 	// cost already deducted from actor; refunded if action is cancelled
 	readonly cashCost: number;
 	readonly targetPlayerId: string | null;
 }
-
-// move chain
 
 export interface MoveChainEntry {
 	readonly moveId: string;
@@ -139,26 +136,20 @@ export interface MoveChainView {
 	readonly responderId: string;
 }
 
-// turn info
-
 export interface TurnInfo {
 	readonly turnNumber: number;
 	readonly activePlayerId: string;
 	readonly classActionUsedThisTurn: boolean;
 }
 
-// rps
-
 export type RpsChoice = "rock" | "paper" | "scissors";
 
 export interface RpsState {
 	readonly player1Choice: RpsChoice | null;
 	readonly player2Choice: RpsChoice | null;
-	// ties are coinflipped immediately
+	// ties are coinflipped immediately, result never "tie"
 	readonly result: "player1" | "player2" | null;
 }
-
-// draft state (public)
 
 export interface DraftPlayerView {
 	readonly playerId: string;
@@ -167,15 +158,8 @@ export interface DraftPlayerView {
 }
 
 export type PendingInteractionView =
-	| {
-			type: "peek_discard";
-			actorId: string;
-	  }
-	| {
-			type: "crew_reactivate";
-			actorId: string;
-			eligibleSlots: number[];
-	  }
+	| { type: "peek_discard"; actorId: string }
+	| { type: "crew_reactivate"; actorId: string; eligibleSlots: number[] }
 	| {
 			type: "poison_target_pick";
 			actorId: string;
@@ -203,14 +187,11 @@ export type PendingInteractionView =
 			discardPileSnapshot: readonly string[];
 	  }
 	| {
+			// top-of-deck reveal is private to the actor, not exposed in public view
 			type: "dig_deep_pick";
 			actorId: string;
 	  }
-	| {
-			type: "handles_unturn_offer";
-			actorId: string;
-			eligibleSlots: number[];
-	  }
+	| { type: "handles_unturn_offer"; actorId: string; eligibleSlots: number[] }
 	| {
 			type: "switch_up_pick";
 			actorId: string;
@@ -228,10 +209,7 @@ export type PendingInteractionView =
 			actorId: string;
 			eligibleTargetIds: string[];
 	  }
-	| {
-			type: "too_big_unturn_offer";
-			actorId: string;
-	  }
+	| { type: "too_big_unturn_offer"; actorId: string }
 	| {
 			type: "void_legs_choice";
 			actorId: string;
@@ -267,16 +245,17 @@ export type PendingInteractionView =
 			eligibleSlots: number[];
 	  };
 
-// full public game state
-
 export interface FaceturnsState {
 	readonly phase: FaceturnsPhase;
 	readonly players: Readonly<Record<string, FaceturnsPlayerView>>;
-	// ordered list of rps representatives; kept for state serialisation and turn order setup
+
+	// rps representative order, needed for state serialisation and turn order setup
 	readonly playerOrder: readonly [string, string];
 	readonly mode: GameMode;
+
 	// in ffa/duel each player is a solo team
 	readonly teams: readonly (readonly string[])[];
+
 	// turn order with eliminated players filtered out
 	readonly turnOrder: readonly string[];
 	readonly eliminatedPlayers: readonly string[];
@@ -284,6 +263,7 @@ export interface FaceturnsState {
 	readonly turn: TurnInfo | null;
 	readonly pendingAction: PendingAction | null;
 	readonly lastResolution: ResolutionResult | null;
+
 	// null for ffa mode (no rps)
 	readonly rps: RpsState | null;
 	readonly draft: Readonly<Record<string, DraftPlayerView>> | null;
@@ -294,10 +274,7 @@ export interface FaceturnsState {
 	readonly winCondition: WinCondition | null;
 }
 
-// resolution (shown after challenge resolves)
-
 export type WinCondition =
-	| "all_crew_turned"
 	| "boss_hp_zero"
 	| "void_assembly"
 	| "round_limit"
@@ -314,6 +291,7 @@ export type ResolutionResult =
 			readonly actorId: string;
 			readonly crewTurnedPlayerId: string | null;
 			readonly crewTurnedSlot: number | null;
+			readonly executedPlayerId: string | null;
 	  }
 	| {
 			readonly type: "crew_class_revealed";
@@ -321,22 +299,34 @@ export type ResolutionResult =
 			readonly targetPlayerId: string;
 			readonly revealedSlot: number;
 			readonly revealedClass: CrewClass;
+	  }
+	| {
+			readonly type: "strike_or_execute_resolved";
+			readonly attackerId: string;
+			readonly targetPlayerId: string;
+			readonly via: "strike" | "face_turn" | "challenge_loss";
+			readonly outcome: "crew_turned" | "executed" | "negated";
+			readonly crewTurnedSlot: number | null;
+			readonly negatedBy: "terminal" | "immunity" | null;
+			readonly survivedViaLifeInsurance: boolean;
 	  };
-
-// private state
 
 export interface FaceturnsSecret {
 	readonly hand: readonly string[];
+
 	// slot index → crew id; hidden from opponents until crew turns face-up
 	readonly crewAssignments: Readonly<Record<number, string>>;
+
 	// temporary per-turn cost overrides from discount effects
 	readonly costOverrides: Readonly<Record<string, number>>;
+
 	// draft picks visible only to this player
 	readonly draftSelections: {
 		readonly bossId: string | null;
 		readonly crewIds: readonly string[];
 		readonly moveIds: readonly string[];
 	} | null;
+
 	// the two cards revealed when resolving peek effects
 	readonly peekRevealedCards: readonly [string, string] | null;
 }

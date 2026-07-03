@@ -53,6 +53,7 @@ import {
 	getEnemies,
 	getTeammates,
 	firstTurnedSlot,
+	firstUnturnedSlot,
 	turnCrewAtSlot,
 	applyBloodMoneyOnStrike,
 	resolveTruthSerumReveal,
@@ -70,7 +71,11 @@ import {
 	resolveLighthouseDisablePick,
 	applyPoisonToVictim,
 	performStrike,
+	resolveStrikeOrExecute,
+	isStrikeBlockedByTerminal,
+	type StrikeOrExecuteOutcome,
 } from "./effects";
+import type { ResolutionResult } from "../../../../shared/games/face-turn";
 import { getCachedPublicState, buildPrivatePayloads } from "./state-builders";
 
 import {
@@ -80,6 +85,69 @@ import {
 	getMoveTargetScope,
 	unwrapEffect,
 } from "./cards";
+
+function buildStrikeResolution(
+	outcome: StrikeOrExecuteOutcome,
+	attackerId: string,
+	targetPlayerId: string,
+	via: "strike" | "face_turn" | "challenge_loss",
+): ResolutionResult {
+	if (outcome.outcome === "pending") {
+		throw new Error(
+			'buildStrikeResolution called with a pending outcome — check outcome.outcome !== "pending" before calling',
+		);
+	}
+
+	if (outcome.outcome === "crew_turned") {
+		return {
+			type: "strike_or_execute_resolved",
+			attackerId,
+			targetPlayerId,
+			via,
+			outcome: "crew_turned",
+			crewTurnedSlot: outcome.slot,
+			negatedBy: null,
+			survivedViaLifeInsurance: false,
+		};
+	}
+
+	if (outcome.outcome === "executed") {
+		return {
+			type: "strike_or_execute_resolved",
+			attackerId,
+			targetPlayerId,
+			via,
+			outcome: "executed",
+			crewTurnedSlot: null,
+			negatedBy: null,
+			survivedViaLifeInsurance: outcome.survivedViaLifeInsurance,
+		};
+	}
+
+	// negated
+	return {
+		type: "strike_or_execute_resolved",
+		attackerId,
+		targetPlayerId,
+		via,
+		outcome: "negated",
+		crewTurnedSlot: null,
+		negatedBy: outcome.negatedBy,
+		survivedViaLifeInsurance: false,
+	};
+}
+
+// Run the original class action after a deferred penalty interaction.
+// Does NOT overwrite lastResolution; the caller already set the correct
+// resolution for the interaction that triggered this deferred action.
+function runDeferredPendingAction(state: FaceturnServerState): void {
+	const outcome = executePendingAction(state);
+	if (outcome && outcome.outcome === "pending") {
+		return; // a new interaction was just opened; don't clear pendingAction/phase under it
+	}
+	state.pendingAction = null;
+	state.phase = "active_turn";
+}
 
 function makeResult(
 	state: FaceturnServerState,
@@ -121,14 +189,9 @@ function afterAction(
 	);
 }
 
-/**
- * Helper that finalises a challenge after optional bonus offers (Too Big,
- * Bear Bones) have resolved. Used by the live-action branches for
- * too_big_unturn_offer and bear_bones_bonus_strike, which run after a
- * challenge has already succeeded. The original challenge resolution
- * already set lastResolution; this helper just clears pendingAction and
- * returns to active_turn.
- */
+// finalises a challenge after optional bonus offers (too big, bear bones)
+// have resolved. the original resolveChallenge already set lastResolution;
+// this helper clears pendingAction and returns to active_turn
 function finalizeResolvedChallenge(
 	state: FaceturnServerState,
 	actorId: string | null,
@@ -140,6 +203,7 @@ function finalizeResolvedChallenge(
 		actorId: actorId ?? "",
 		crewTurnedPlayerId: actorId,
 		crewTurnedSlot: null,
+		executedPlayerId: null,
 	};
 	state.pendingAction = null;
 	state.phase = "active_turn";
@@ -148,7 +212,7 @@ function finalizeResolvedChallenge(
 
 // claim-the-bounty becomes free after a successful bluff call, matching the
 // bounty design intent. card-id special-case rather than an effect scan,
-// since this is the only move with this behavior.
+// since this is the only move with this behavior
 function effectiveCost(player: FaceturnServerPlayer, moveId: string): number {
 	const base = getMoveCost(player, moveId);
 	if (
@@ -388,7 +452,7 @@ export const faceturnsEngine: GameEngine & GameEngineWithSecrets = {
 			});
 		}
 
-		// pending interaction (interrupts normal flow for targeted choices)
+		// pending interaction
 
 		if (state.pendingInteraction !== null) {
 			const interaction = state.pendingInteraction;
@@ -469,7 +533,21 @@ export const faceturnsEngine: GameEngine & GameEngineWithSecrets = {
 					if (striker) applyBloodMoneyOnStrike(state, striker);
 				}
 
+				// Always set the resolution for this crew turn.
+				state.lastResolution = buildStrikeResolution(
+					{ outcome: "crew_turned", slot },
+					interaction.actorId,
+					interaction.targetPlayerId,
+					interaction.isStrike ? "strike" : "challenge_loss",
+				);
+
 				state.pendingInteraction = null;
+
+				// If this was a deferred penalty, run the original class action.
+				if (interaction.deferredActionPending && state.pendingAction) {
+					runDeferredPendingAction(state);
+				}
+
 				return afterAction(state);
 			}
 
@@ -518,8 +596,6 @@ export const faceturnsEngine: GameEngine & GameEngineWithSecrets = {
 				return afterAction(state);
 			}
 
-			// --- new live-resolution branches ---
-
 			if (interaction.type === "background_check_guess") {
 				if (action.type !== "resolve_background_check_guess") return noOp();
 				const target = state.players.get(interaction.targetPlayerId);
@@ -527,7 +603,7 @@ export const faceturnsEngine: GameEngine & GameEngineWithSecrets = {
 
 				resolveBackgroundCheckGuess(
 					state,
-					player, // the challenger (responder == actorId == player here)
+					player,
 					target,
 					action.targetCrewSlot,
 					action.guessClass,
@@ -535,14 +611,53 @@ export const faceturnsEngine: GameEngine & GameEngineWithSecrets = {
 				);
 
 				state.pendingInteraction = null;
+				const originalPending = state.pendingAction!;
 
-				// Now actually resolve the challenge that was waiting on this guess.
-				const { actionProceeds, resolution } = resolveChallenge(
+				const { actionProceeds, resolution, strikeOutcome } = resolveChallenge(
 					state,
 					interaction.actorId,
 				);
 				state.lastResolution = resolution;
-				if (actionProceeds) executePendingAction(state);
+
+				// Overwrite only for crew turns.
+				if (
+					strikeOutcome &&
+					strikeOutcome.outcome !== "pending" &&
+					strikeOutcome.outcome !== "executed"
+				) {
+					const challengeTargetId = actionProceeds
+						? interaction.actorId
+						: originalPending.actorId;
+					const challengeAttackerId = actionProceeds
+						? originalPending.actorId
+						: interaction.actorId;
+					state.lastResolution = buildStrikeResolution(
+						strikeOutcome,
+						challengeAttackerId,
+						challengeTargetId,
+						"challenge_loss",
+					);
+				}
+
+				if (actionProceeds && state.pendingInteraction === null) {
+					const outcome = executePendingAction(state);
+					if (outcome && outcome.outcome !== "pending") {
+						state.lastResolution = buildStrikeResolution(
+							outcome,
+							originalPending.actorId,
+							originalPending.targetPlayerId ?? "",
+							"strike",
+						);
+					}
+					state.pendingAction = null;
+					state.phase = "active_turn";
+					return afterAction(state);
+				}
+
+				if (actionProceeds && state.pendingInteraction !== null) {
+					return afterAction(state);
+				}
+
 				state.pendingAction = null;
 				state.phase = "active_turn";
 				return afterAction(state);
@@ -560,10 +675,6 @@ export const faceturnsEngine: GameEngine & GameEngineWithSecrets = {
 						defeatedPlayerId,
 					);
 				}
-				// If resolveTooBigUnturnOffer opened bear_bones_bonus_strike,
-				// state.pendingInteraction is non-null again here,
-				// do NOT finalize the challenge yet in that case;
-				// wait for that interaction's own resolution branch
 				if (state.pendingInteraction !== null) {
 					return makeResult(state, ctx.room.timer?.duration ?? null, {
 						privatePayloads: buildPrivatePayloads(state),
@@ -576,13 +687,23 @@ export const faceturnsEngine: GameEngine & GameEngineWithSecrets = {
 				if (action.type !== "resolve_bear_bones_bonus_strike") return noOp();
 				const defeatedPlayerId = state.pendingAction?.actorId ?? null;
 				state.pendingInteraction = null;
-				resolveBearBonesBonusStrike(
+				const bonusOutcome = resolveBearBonesBonusStrike(
 					state,
 					player,
 					action.confirmed,
 					action.targetPlayerId ?? interaction.eligibleTargetIds[0] ?? null,
 					action.targetCrewSlot ?? null,
 				);
+				const bonusTargetId =
+					action.targetPlayerId ?? interaction.eligibleTargetIds[0];
+				if (bonusOutcome && bonusTargetId) {
+					state.lastResolution = buildStrikeResolution(
+						bonusOutcome,
+						player.playerId,
+						bonusTargetId,
+						"strike",
+					);
+				}
 				return finalizeResolvedChallenge(state, defeatedPlayerId);
 			}
 
@@ -681,7 +802,6 @@ export const faceturnsEngine: GameEngine & GameEngineWithSecrets = {
 				return afterAction(state);
 			}
 
-			// watcher_unturn_offer live-resolution branch
 			if (interaction.type === "watcher_unturn_offer") {
 				if (action.type !== "resolve_watcher_unturn_offer") return noOp();
 				resolveTacticalSupportUnturn(
@@ -694,7 +814,6 @@ export const faceturnsEngine: GameEngine & GameEngineWithSecrets = {
 				return afterAction(state);
 			}
 
-			// handles_unturn_offer live-resolution branch
 			if (interaction.type === "handles_unturn_offer") {
 				if (action.type !== "resolve_handles_unturn_offer") return noOp();
 				resolveHandlesUnturnOffer(
@@ -724,7 +843,6 @@ export const faceturnsEngine: GameEngine & GameEngineWithSecrets = {
 					const cost = effectiveCost(player, moveId);
 					if (player.cash < cost) return noOp();
 
-					// active moves require a free slot on the board
 					if (
 						move.moveType === "active" &&
 						player.activeMoves.findIndex((s) => s === null) === -1
@@ -747,33 +865,22 @@ export const faceturnsEngine: GameEngine & GameEngineWithSecrets = {
 								);
 							if (!isValidAlly) return noOp();
 						} else {
-							// scope === "none" — this move has no legitimate use for a
-							// targetPlayerId at all; reject rather than silently ignore.
 							return noOp();
 						}
 					}
 
-					// NEW: detect a blockable-strike burst move (Ambush) before the
-					// normal burst/active/slow branching below. Ambush pays cost and
-					// discards immediately like any burst, but instead of resolving
-					// now it opens block_window so the target gets a chance to block.
 					const isBlockableStrike = move.effects.some((e) => {
 						const eff = unwrapEffect(e);
 						return eff.type === "strike_enemy_crew_blockable";
 					});
 
 					if (isBlockableStrike) {
-						if (!action.targetPlayerId) return noOp(); // Ambush requires a declared target
+						if (!action.targetPlayerId) return noOp();
 						const targetIsEnemy = getEnemies(state, playerId).some(
 							(e) => e.playerId === action.targetPlayerId,
 						);
 						if (!targetIsEnemy) return noOp();
 
-						// Pre-validate targetCrewSlot (if supplied) before paying cost
-						// and discarding — previously an invalid slot would still
-						// consume cost/card and open a full block window for a strike
-						// that was always going to fizzle in performStrike. Cheap to
-						// reject up front instead.
 						if (action.targetCrewSlot !== undefined) {
 							const ambushTarget = state.players.get(action.targetPlayerId)!;
 							const slot = action.targetCrewSlot as 0 | 1;
@@ -813,9 +920,6 @@ export const faceturnsEngine: GameEngine & GameEngineWithSecrets = {
 					player.cash -= cost;
 
 					if (move.moveType === "slow") {
-						// slow moves open a chain; responder is the explicit target or,
-						// as a defensive fallback, the first living enemy (should not
-						// trigger in practice because all slow moves have a target)
 						const responderId =
 							action.targetPlayerId ?? getEnemies(state, playerId)[0]?.playerId;
 						if (!responderId) {
@@ -836,7 +940,6 @@ export const faceturnsEngine: GameEngine & GameEngineWithSecrets = {
 						return makeResult(state, C.MOVE_CHAIN_WINDOW_MS);
 					}
 
-					// burst or active resolve immediately
 					executeMove(state, player, moveId, {
 						targetCrewSlot: action.targetCrewSlot,
 						targetAllySlot: action.targetAllySlot,
@@ -855,6 +958,8 @@ export const faceturnsEngine: GameEngine & GameEngineWithSecrets = {
 							(e) => e.playerId === action.targetPlayerId,
 						);
 						if (!targetIsEnemy) return noOp();
+						const strikeTarget = state.players.get(action.targetPlayerId)!;
+						if (isStrikeBlockedByTerminal(strikeTarget)) return noOp();
 					}
 
 					if (action.action === "unturn") {
@@ -867,6 +972,14 @@ export const faceturnsEngine: GameEngine & GameEngineWithSecrets = {
 						}
 					}
 
+					const wouldBeBluffing = computeActorWasBluffing(
+						player,
+						action.action,
+					);
+					if (wouldBeBluffing && firstUnturnedSlot(player) === null) {
+						return noOp();
+					}
+
 					const cost = getClassActionCost(player, action.action);
 					if (player.cash < cost) return noOp();
 
@@ -876,12 +989,8 @@ export const faceturnsEngine: GameEngine & GameEngineWithSecrets = {
 					const targetPlayerId =
 						action.action === "strike" ? (action.targetPlayerId ?? null) : null;
 
-					const actorWasBluffing = computeActorWasBluffing(
-						player,
-						action.action,
-					);
+					const actorWasBluffing = wouldBeBluffing;
 
-					// Prank Call: first successful bluff each round grants cash.
 					if (
 						actorWasBluffing &&
 						player.hasPrankCall &&
@@ -982,7 +1091,6 @@ export const faceturnsEngine: GameEngine & GameEngineWithSecrets = {
 						return afterAction(state);
 					}
 
-					// the-watcher and any other generic-effect boss commands
 					if (action.targetPlayerId) {
 						const targetIsEnemy = getEnemies(state, playerId).some(
 							(e) => e.playerId === action.targetPlayerId,
@@ -1002,18 +1110,42 @@ export const faceturnsEngine: GameEngine & GameEngineWithSecrets = {
 					return afterAction(state);
 				}
 
-				case "use_boss_skill": {
-					const slot = action.targetCrewSlot as 0 | 1;
-					if (!player.crewIds[slot]) return noOp();
-					if (player.crewTurned[slot]) return noOp();
-
+				case "use_face_turn": {
 					const cost = C.BOSS_FACE_TURN_COST;
 					if (player.cash < cost) return noOp();
 
+					const targetId = action.targetPlayerId;
+					const targetPlayer = state.players.get(targetId);
+					if (!targetPlayer || state.eliminatedPlayers.has(targetId))
+						return noOp();
+
+					const targetIsEnemy = getEnemies(state, playerId).some(
+						(e) => e.playerId === targetId,
+					);
+					if (!targetIsEnemy) return noOp();
+
 					player.cash -= cost;
-					turnCrewAtSlot(player, slot);
-					recomputePassives(player, state);
-					triggerCrewTurnedEffects(state, player, slot);
+
+					const outcome = resolveStrikeOrExecute(
+						state,
+						targetPlayer,
+						playerId,
+						true,
+						action.targetCrewSlot as 0 | 1 | undefined,
+					);
+
+					if (outcome.outcome === "negated") {
+						player.cash += cost;
+					}
+
+					if (outcome.outcome !== "pending") {
+						state.lastResolution = buildStrikeResolution(
+							outcome,
+							playerId,
+							targetId,
+							"face_turn",
+						);
+					}
 
 					return afterAction(state);
 				}
@@ -1040,8 +1172,6 @@ export const faceturnsEngine: GameEngine & GameEngineWithSecrets = {
 		}
 
 		// move chain window
-		// only the two participants may act. burst moves resolve instantly,
-		// slow moves stack. the chain resolves lifo once both pass consecutively.
 
 		if (state.phase === "move_chain_window") {
 			const chain = state.moveChain;
@@ -1075,7 +1205,6 @@ export const faceturnsEngine: GameEngine & GameEngineWithSecrets = {
 							);
 						if (!isValidAlly) return noOp();
 					} else {
-						// scope === "none"
 						return noOp();
 					}
 				}
@@ -1120,7 +1249,6 @@ export const faceturnsEngine: GameEngine & GameEngineWithSecrets = {
 							);
 						if (!isValidAlly) return noOp();
 					} else {
-						// scope === "none"
 						return noOp();
 					}
 				}
@@ -1186,12 +1314,49 @@ export const faceturnsEngine: GameEngine & GameEngineWithSecrets = {
 				}
 
 				state.challengeEligiblePlayerIds = [];
-				const { actionProceeds, resolution } = resolveChallenge(
+				const { actionProceeds, resolution, strikeOutcome } = resolveChallenge(
 					state,
 					playerId,
 				);
 				state.lastResolution = resolution;
-				if (actionProceeds) executePendingAction(state);
+
+				// Overwrite only for crew_turned, keep challenge result for executes.
+				if (
+					strikeOutcome &&
+					strikeOutcome.outcome !== "pending" &&
+					strikeOutcome.outcome !== "executed"
+				) {
+					const challengeTargetId = actionProceeds ? playerId : pending.actorId;
+					const challengeAttackerId = actionProceeds
+						? pending.actorId
+						: playerId;
+					state.lastResolution = buildStrikeResolution(
+						strikeOutcome,
+						challengeAttackerId,
+						challengeTargetId,
+						"challenge_loss",
+					);
+				}
+
+				if (actionProceeds && state.pendingInteraction === null) {
+					const outcome = executePendingAction(state);
+					if (outcome && outcome.outcome !== "pending") {
+						state.lastResolution = buildStrikeResolution(
+							outcome,
+							pending.actorId,
+							pending.targetPlayerId ?? "",
+							"strike",
+						);
+					}
+					state.pendingAction = null;
+					state.phase = "active_turn";
+					return afterAction(state);
+				}
+
+				if (actionProceeds && state.pendingInteraction !== null) {
+					return afterAction(state);
+				}
+
 				state.pendingAction = null;
 				state.phase = "active_turn";
 				return afterAction(state);
@@ -1200,6 +1365,13 @@ export const faceturnsEngine: GameEngine & GameEngineWithSecrets = {
 			if (action.type === "block" && pending.type === "class_action_strike") {
 				if (playerId !== pending.targetPlayerId) return noOp();
 				const blocker = state.players.get(playerId)!;
+				const blockerWouldBeBluffing = computeActorWasBluffing(
+					blocker,
+					"block",
+				);
+				if (blockerWouldBeBluffing && firstUnturnedSlot(blocker) === null) {
+					return noOp();
+				}
 				const blockCost = getClassActionCost(blocker, "block");
 				if (blocker.cash < blockCost) return noOp();
 
@@ -1213,7 +1385,7 @@ export const faceturnsEngine: GameEngine & GameEngineWithSecrets = {
 					moveId: null,
 					cashCost: blockCost,
 					declaredClass: "block",
-					actorWasBluffing: computeActorWasBluffing(blocker, "block"),
+					actorWasBluffing: blockerWouldBeBluffing,
 					targetPlayerId: pending.actorId,
 					originalActionType: pending.type,
 				};
@@ -1227,14 +1399,24 @@ export const faceturnsEngine: GameEngine & GameEngineWithSecrets = {
 
 				if (state.challengeEligiblePlayerIds.length === 0) {
 					recordBluffIfUnchallenged(state);
-					executePendingAction(state);
-					state.lastResolution = {
-						type: "action_resolved",
-						challengerId: null,
-						actorId: pending.actorId,
-						crewTurnedPlayerId: null,
-						crewTurnedSlot: null,
-					};
+					const outcome = executePendingAction(state);
+					if (outcome && outcome.outcome !== "pending") {
+						state.lastResolution = buildStrikeResolution(
+							outcome,
+							pending.actorId,
+							pending.targetPlayerId ?? "",
+							"strike",
+						);
+					} else {
+						state.lastResolution = {
+							type: "action_resolved",
+							challengerId: null,
+							actorId: pending.actorId,
+							crewTurnedPlayerId: null,
+							crewTurnedSlot: null,
+							executedPlayerId: null,
+						};
+					}
 					state.pendingAction = null;
 					state.phase = "active_turn";
 					return afterAction(state);
@@ -1246,11 +1428,7 @@ export const faceturnsEngine: GameEngine & GameEngineWithSecrets = {
 			return noOp();
 		}
 
-		// block window (Ambush and future blockable-burst cards)
-		// only the strike's original target may act. block = pay cost, open
-		// block_declared for the attacker's accept-only response. no action =
-		// timeout = strike resolves unblocked (handled in onTimerExpired).
-		// There is intentionally no "decline to block" action here.
+		// block window
 
 		if (state.phase === "block_window") {
 			const pending = state.pendingAction!;
@@ -1258,6 +1436,13 @@ export const faceturnsEngine: GameEngine & GameEngineWithSecrets = {
 
 			if (action.type === "block") {
 				const blocker = state.players.get(playerId)!;
+				const blockerWouldBeBluffing = computeActorWasBluffing(
+					blocker,
+					"block",
+				);
+				if (blockerWouldBeBluffing && firstUnturnedSlot(blocker) === null) {
+					return noOp();
+				}
 				const blockCost = getClassActionCost(blocker, "block");
 				if (blocker.cash < blockCost) return noOp();
 
@@ -1268,9 +1453,9 @@ export const faceturnsEngine: GameEngine & GameEngineWithSecrets = {
 					actorId: blocker.playerId,
 					cashCost: blockCost,
 					declaredClass: "block",
-					actorWasBluffing: false,
-					targetPlayerId: pending.actorId, // flips: attacker becomes the "target" of the block's own response
-					originalActionType: pending.type, // "card_strike" — captured before reassignment
+					actorWasBluffing: blockerWouldBeBluffing,
+					targetPlayerId: pending.actorId,
+					originalActionType: pending.type,
 				};
 				state.phase = "block_declared";
 				return makeResult(state, C.BLOCK_DECLARED_MS);
@@ -1293,6 +1478,7 @@ export const faceturnsEngine: GameEngine & GameEngineWithSecrets = {
 					actorId: strikeerId,
 					crewTurnedPlayerId: null,
 					crewTurnedSlot: null,
+					executedPlayerId: null,
 				};
 				state.pendingAction = null;
 				state.phase = "active_turn";
@@ -1300,12 +1486,6 @@ export const faceturnsEngine: GameEngine & GameEngineWithSecrets = {
 			}
 
 			if (action.type === "challenge_block") {
-				// A card_strike-originated block (Ambush) has no declared class and
-				// nothing to bluff about — there is nothing to challenge. Gate this
-				// using originalActionType, NOT pending.declaredClass: by this point
-				// pendingAction has already been overwritten to the block's own
-				// action object (declaredClass: "block" regardless of origin), so
-				// declaredClass can no longer distinguish the two cases.
 				if (pending.originalActionType === "card_strike") return noOp();
 
 				const { actionProceeds: blockWasReal, resolution } = resolveChallenge(
@@ -1319,33 +1499,19 @@ export const faceturnsEngine: GameEngine & GameEngineWithSecrets = {
 					if (originalTarget) {
 						const blocker = state.players.get(strikeerId);
 						if (blocker) {
-							const unturnedSlots = ([0, 1] as const).filter(
-								(i) => blocker.crewIds[i] !== null && !blocker.crewTurned[i],
+							const outcome = resolveStrikeOrExecute(
+								state,
+								blocker,
+								strikeerId,
+								false,
 							);
-							if (unturnedSlots.length === 0) {
-								const slot = firstTurnedSlot(blocker);
-								if (slot !== null) {
-									turnCrewAtSlot(blocker, slot);
-									recomputePassives(blocker, state);
-									triggerCrewTurnedEffects(state, blocker, slot);
-								}
-							} else if (unturnedSlots.length === 1) {
-								const slot = unturnedSlots[0]!;
-								turnCrewAtSlot(blocker, slot);
-								recomputePassives(blocker, state);
-								triggerCrewTurnedEffects(state, blocker, slot);
-							} else {
-								const chooserPlayerId = blocker.hasVoidArms
-									? blocker.playerId
-									: strikeerId;
-								state.pendingInteraction = {
-									type: "choose_crew_to_turn",
-									targetPlayerId: blocker.playerId,
-									actorId: strikeerId,
-									chooserPlayerId,
-									eligibleSlots: unturnedSlots,
-									isStrike: false,
-								};
+							if (outcome.outcome !== "pending") {
+								state.lastResolution = buildStrikeResolution(
+									outcome,
+									strikeerId,
+									blocker.playerId,
+									"challenge_loss",
+								);
 							}
 						}
 					}
@@ -1364,6 +1530,218 @@ export const faceturnsEngine: GameEngine & GameEngineWithSecrets = {
 
 	onTimerExpired(ctx: GameContext): EngineResult {
 		const state = ctx.room.gamePayload as FaceturnServerState;
+
+		// Pending interaction must be handled regardless of current phase,
+		// otherwise a timeout during e.g. challenge_window while a choose_crew_to_turn
+		// interaction is open would run the wrong branch (challenge_window timeout)
+		// and re-execute the original action.
+		if (state.pendingInteraction !== null) {
+			const interaction = state.pendingInteraction;
+			state.pendingInteraction = null;
+
+			if (interaction.type === "peek_discard") {
+				const chosen = interaction.revealedCards[0];
+				const peekEnemies = getEnemies(state, interaction.actorId);
+				for (const enemy of peekEnemies) {
+					const idx = enemy.hand.indexOf(chosen);
+					if (idx !== -1) {
+						enemy.hand.splice(idx, 1);
+						enemy.discardPile.push(chosen);
+						enemy.totalCardsDiscarded++;
+						break;
+					}
+				}
+			} else if (interaction.type === "crew_reactivate") {
+				const actor = state.players.get(interaction.actorId)!;
+				const slot = interaction.eligibleSlots[0];
+				if (slot !== undefined)
+					triggerCrewTurnedEffects(state, actor, slot as 0 | 1);
+			} else if (interaction.type === "poison_target_pick") {
+				const poisonActor = state.players.get(interaction.actorId);
+				if (poisonActor) {
+					const firstEnemy = getEnemies(state, interaction.actorId)[0];
+					if (firstEnemy) {
+						applyPoisonToVictim(
+							state,
+							poisonActor,
+							firstEnemy.playerId,
+							interaction.damagePerRound,
+						);
+					}
+				}
+			} else if (interaction.type === "choose_crew_to_turn") {
+				const ccTarget = state.players.get(interaction.targetPlayerId);
+				if (ccTarget && interaction.eligibleSlots[0] !== undefined) {
+					const ccSlot = interaction.eligibleSlots[0] as 0 | 1;
+					turnCrewAtSlot(ccTarget, ccSlot);
+					recomputePassives(ccTarget, state);
+					triggerCrewTurnedEffects(state, ccTarget, ccSlot);
+
+					if (interaction.isStrike) {
+						const striker = state.players.get(interaction.actorId);
+						if (striker) applyBloodMoneyOnStrike(state, striker);
+					}
+
+					state.lastResolution = buildStrikeResolution(
+						{ outcome: "crew_turned", slot: ccSlot },
+						interaction.actorId,
+						interaction.targetPlayerId,
+						interaction.isStrike ? "strike" : "challenge_loss",
+					);
+				}
+
+				if (interaction.deferredActionPending && state.pendingAction) {
+					runDeferredPendingAction(state);
+				}
+			} else if (interaction.type === "truth_serum_reveal") {
+				const tsTarget = state.players.get(interaction.targetPlayerId);
+				const tsSlot = interaction.eligibleSlots[0];
+				if (tsTarget && tsSlot !== undefined) {
+					const result = resolveTruthSerumReveal(
+						state,
+						tsTarget,
+						tsSlot,
+						interaction.eligibleSlots,
+					);
+					if (result) {
+						state.lastResolution = {
+							type: "crew_class_revealed",
+							actorId: interaction.actorId,
+							targetPlayerId: interaction.targetPlayerId,
+							revealedSlot: result.revealedSlot,
+							revealedClass: result.revealedClass,
+						};
+					}
+				}
+			} else if (interaction.type === "choose_discard_count") {
+				const dcActor = state.players.get(interaction.actorId)!;
+				resolveChooseDiscardCount(
+					state,
+					dcActor,
+					0,
+					interaction.maxCount,
+					interaction.targetPlayerId,
+					interaction.damagePerCard,
+				);
+			} else if (interaction.type === "choose_from_discard") {
+				// no default action
+			} else if (interaction.type === "dig_deep_pick") {
+				// no default action
+			} else if (interaction.type === "switch_up_pick") {
+				const suActor = state.players.get(interaction.actorId)!;
+				const unturnSlot = interaction.faceUpSlots[0];
+				const turnSlot = interaction.faceDownSlots[0];
+				if (unturnSlot !== undefined && turnSlot !== undefined) {
+					resolveSwitchUpPick(
+						state,
+						suActor,
+						unturnSlot,
+						turnSlot,
+						interaction.faceUpSlots,
+						interaction.faceDownSlots,
+					);
+				}
+			} else if (interaction.type === "tactical_support_unturn_offer") {
+				const tsActor = state.players.get(interaction.actorId);
+				const tsTarget = state.players.get(interaction.targetPlayerId);
+				if (tsActor && tsTarget) {
+					resolveTacticalSupportUnturn(
+						state,
+						tsTarget,
+						null,
+						interaction.eligibleSlots,
+					);
+				}
+			} else if (interaction.type === "tag_out_pick") {
+				const toActor = state.players.get(interaction.actorId)!;
+				const toTeammate = state.players.get(interaction.teammateId);
+				const ownSlot = interaction.ownEligibleSlots[0];
+				const teammateSlot = interaction.teammateEligibleSlots[0];
+				if (toTeammate && ownSlot !== undefined && teammateSlot !== undefined) {
+					resolveTagOutPick(
+						state,
+						toActor,
+						toTeammate,
+						ownSlot,
+						teammateSlot,
+						interaction.ownEligibleSlots,
+						interaction.teammateEligibleSlots,
+					);
+				}
+			} else if (interaction.type === "void_legs_choice") {
+				const vlActor = state.players.get(interaction.actorId)!;
+				resolveVoidLegsChoice(state, vlActor, false, vlActor.voidLegsDamage);
+			} else if (interaction.type === "background_check_guess") {
+				const bgChallenger = state.players.get(interaction.actorId)!;
+				const bgTarget = state.players.get(interaction.targetPlayerId);
+				if (bgTarget && interaction.eligibleSlots[0] !== undefined) {
+					const CLASSES = [
+						"striker",
+						"blocker",
+						"collector",
+						"turner",
+					] as const;
+					const randomGuess =
+						CLASSES[Math.floor(Math.random() * CLASSES.length)]!;
+					resolveBackgroundCheckGuess(
+						state,
+						bgChallenger,
+						bgTarget,
+						interaction.eligibleSlots[0],
+						randomGuess,
+						interaction.eligibleSlots,
+					);
+				}
+				const { resolution, strikeOutcome } = resolveChallenge(
+					state,
+					interaction.actorId,
+				);
+				state.lastResolution = resolution;
+
+				if (
+					strikeOutcome &&
+					strikeOutcome.outcome !== "pending" &&
+					strikeOutcome.outcome !== "executed"
+				) {
+					state.lastResolution = buildStrikeResolution(
+						strikeOutcome,
+						interaction.actorId,
+						interaction.targetPlayerId,
+						"challenge_loss",
+					);
+				}
+				state.pendingAction = null;
+			} else if (interaction.type === "too_big_unturn_offer") {
+				const tbDefeated = state.pendingAction?.actorId ?? null;
+				const tbActor = state.players.get(interaction.actorId)!;
+				if (tbDefeated) {
+					resolveTooBigUnturnOffer(state, tbActor, false, tbDefeated);
+				}
+				if (state.pendingInteraction === null) {
+					state.pendingAction = null;
+				}
+			} else if (interaction.type === "bear_bones_bonus_strike") {
+				const bbActor = state.players.get(interaction.actorId)!;
+				resolveBearBonesBonusStrike(state, bbActor, false, null, null);
+				state.pendingAction = null;
+			} else if (interaction.type === "watcher_unturn_offer") {
+				// decline by default
+			} else if (interaction.type === "handles_unturn_offer") {
+				// decline by default
+			} else if (interaction.type === "lighthouse_disable_pick") {
+				const first = interaction.eligibleTargets[0];
+				if (first) {
+					resolveLighthouseDisablePick(
+						state,
+						first.playerId,
+						first.slot,
+						interaction.eligibleTargets,
+					);
+				}
+			}
+
+			return afterAction(state);
+		}
 
 		switch (state.phase) {
 			case "drafting": {
@@ -1413,201 +1791,6 @@ export const faceturnsEngine: GameEngine & GameEngineWithSecrets = {
 			}
 
 			case "active_turn": {
-				if (state.pendingInteraction !== null) {
-					const interaction = state.pendingInteraction;
-					state.pendingInteraction = null;
-
-					if (interaction.type === "peek_discard") {
-						const chosen = interaction.revealedCards[0];
-						const peekEnemies = getEnemies(state, interaction.actorId);
-						for (const enemy of peekEnemies) {
-							const idx = enemy.hand.indexOf(chosen);
-							if (idx !== -1) {
-								enemy.hand.splice(idx, 1);
-								enemy.discardPile.push(chosen);
-								enemy.totalCardsDiscarded++;
-								break;
-							}
-						}
-					} else if (interaction.type === "crew_reactivate") {
-						const actor = state.players.get(interaction.actorId)!;
-						const slot = interaction.eligibleSlots[0];
-						if (slot !== undefined)
-							triggerCrewTurnedEffects(state, actor, slot as 0 | 1);
-					} else if (interaction.type === "poison_target_pick") {
-						const poisonActor = state.players.get(interaction.actorId);
-						if (poisonActor) {
-							const firstEnemy = getEnemies(state, interaction.actorId)[0];
-							if (firstEnemy) {
-								applyPoisonToVictim(
-									state,
-									poisonActor,
-									firstEnemy.playerId,
-									interaction.damagePerRound,
-								);
-							}
-						}
-					} else if (interaction.type === "choose_crew_to_turn") {
-						const ccTarget = state.players.get(interaction.targetPlayerId);
-						if (ccTarget && interaction.eligibleSlots[0] !== undefined) {
-							const ccSlot = interaction.eligibleSlots[0] as 0 | 1;
-							turnCrewAtSlot(ccTarget, ccSlot);
-							recomputePassives(ccTarget, state);
-							triggerCrewTurnedEffects(state, ccTarget, ccSlot);
-
-							if (interaction.isStrike) {
-								const striker = state.players.get(interaction.actorId);
-								if (striker) applyBloodMoneyOnStrike(state, striker);
-							}
-						}
-					} else if (interaction.type === "truth_serum_reveal") {
-						const tsTarget = state.players.get(interaction.targetPlayerId);
-						const tsSlot = interaction.eligibleSlots[0];
-						if (tsTarget && tsSlot !== undefined) {
-							const result = resolveTruthSerumReveal(
-								state,
-								tsTarget,
-								tsSlot,
-								interaction.eligibleSlots,
-							);
-							if (result) {
-								state.lastResolution = {
-									type: "crew_class_revealed",
-									actorId: interaction.actorId,
-									targetPlayerId: interaction.targetPlayerId,
-									revealedSlot: result.revealedSlot,
-									revealedClass: result.revealedClass,
-								};
-							}
-						}
-					} else if (interaction.type === "choose_discard_count") {
-						const dcActor = state.players.get(interaction.actorId)!;
-						resolveChooseDiscardCount(
-							state,
-							dcActor,
-							0,
-							interaction.maxCount,
-							interaction.targetPlayerId,
-							interaction.damagePerCard,
-						);
-					} else if (interaction.type === "choose_from_discard") {
-						// no default action — declining entirely is the safe default
-					} else if (interaction.type === "dig_deep_pick") {
-						// no default action — same reasoning as choose_from_discard
-					} else if (interaction.type === "switch_up_pick") {
-						const suActor = state.players.get(interaction.actorId)!;
-						const unturnSlot = interaction.faceUpSlots[0];
-						const turnSlot = interaction.faceDownSlots[0];
-						if (unturnSlot !== undefined && turnSlot !== undefined) {
-							resolveSwitchUpPick(
-								state,
-								suActor,
-								unturnSlot,
-								turnSlot,
-								interaction.faceUpSlots,
-								interaction.faceDownSlots,
-							);
-						}
-					} else if (interaction.type === "tactical_support_unturn_offer") {
-						const tsActor = state.players.get(interaction.actorId);
-						const tsTarget = state.players.get(interaction.targetPlayerId);
-						if (tsActor && tsTarget) {
-							resolveTacticalSupportUnturn(
-								state,
-								tsTarget,
-								null,
-								interaction.eligibleSlots,
-							);
-						}
-					} else if (interaction.type === "tag_out_pick") {
-						const toActor = state.players.get(interaction.actorId)!;
-						const toTeammate = state.players.get(interaction.teammateId);
-						const ownSlot = interaction.ownEligibleSlots[0];
-						const teammateSlot = interaction.teammateEligibleSlots[0];
-						if (
-							toTeammate &&
-							ownSlot !== undefined &&
-							teammateSlot !== undefined
-						) {
-							resolveTagOutPick(
-								state,
-								toActor,
-								toTeammate,
-								ownSlot,
-								teammateSlot,
-								interaction.ownEligibleSlots,
-								interaction.teammateEligibleSlots,
-							);
-						}
-					} else if (interaction.type === "void_legs_choice") {
-						const vlActor = state.players.get(interaction.actorId)!;
-						resolveVoidLegsChoice(
-							state,
-							vlActor,
-							false,
-							vlActor.voidLegsDamage,
-						);
-					} else if (interaction.type === "background_check_guess") {
-						const bgChallenger = state.players.get(interaction.actorId)!;
-						const bgTarget = state.players.get(interaction.targetPlayerId);
-						if (bgTarget && interaction.eligibleSlots[0] !== undefined) {
-							const CLASSES = [
-								"striker",
-								"blocker",
-								"collector",
-								"turner",
-							] as const;
-							const randomGuess =
-								CLASSES[Math.floor(Math.random() * CLASSES.length)]!;
-							resolveBackgroundCheckGuess(
-								state,
-								bgChallenger,
-								bgTarget,
-								interaction.eligibleSlots[0],
-								randomGuess,
-								interaction.eligibleSlots,
-							);
-						}
-						const { actionProceeds, resolution } = resolveChallenge(
-							state,
-							interaction.actorId,
-						);
-						state.lastResolution = resolution;
-						if (actionProceeds) executePendingAction(state);
-						state.pendingAction = null;
-					} else if (interaction.type === "too_big_unturn_offer") {
-						const tbDefeated = state.pendingAction?.actorId ?? null;
-						const tbActor = state.players.get(interaction.actorId)!;
-						if (tbDefeated) {
-							resolveTooBigUnturnOffer(state, tbActor, false, tbDefeated);
-						}
-						if (state.pendingInteraction === null) {
-							state.pendingAction = null;
-						}
-					} else if (interaction.type === "bear_bones_bonus_strike") {
-						const bbActor = state.players.get(interaction.actorId)!;
-						resolveBearBonesBonusStrike(state, bbActor, false, null, null);
-						state.pendingAction = null;
-					} else if (interaction.type === "watcher_unturn_offer") {
-						// decline by default — do nothing
-					} else if (interaction.type === "handles_unturn_offer") {
-						// decline by default — do nothing. Matches Handles' "may"
-						// wording: timing out should not force a turn-down.
-					} else if (interaction.type === "lighthouse_disable_pick") {
-						const first = interaction.eligibleTargets[0];
-						if (first) {
-							resolveLighthouseDisablePick(
-								state,
-								first.playerId,
-								first.slot,
-								interaction.eligibleTargets,
-							);
-						}
-					}
-
-					return afterAction(state);
-				}
-
 				swapTurn(state);
 				return afterAction(state);
 			}
@@ -1624,30 +1807,47 @@ export const faceturnsEngine: GameEngine & GameEngineWithSecrets = {
 			case "challenge_window": {
 				state.challengeEligiblePlayerIds = [];
 				recordBluffIfUnchallenged(state);
-				executePendingAction(state);
-				state.lastResolution = {
-					type: "action_resolved",
-					challengerId: null,
-					actorId: state.pendingAction!.actorId,
-					crewTurnedPlayerId: null,
-					crewTurnedSlot: null,
-				};
+				const timedOutPending = state.pendingAction!;
+				const outcome = executePendingAction(state);
+				if (outcome && outcome.outcome !== "pending") {
+					state.lastResolution = buildStrikeResolution(
+						outcome,
+						timedOutPending.actorId,
+						timedOutPending.targetPlayerId ?? "",
+						"strike",
+					);
+				} else {
+					state.lastResolution = {
+						type: "action_resolved",
+						challengerId: null,
+						actorId: timedOutPending.actorId,
+						crewTurnedPlayerId: null,
+						crewTurnedSlot: null,
+						executedPlayerId: null,
+					};
+				}
 				state.pendingAction = null;
 				state.phase = "active_turn";
 				return afterAction(state);
 			}
 
 			case "block_window": {
-				// timed out with no block declared — the strike resolves unblocked
-				// against the original target.
 				const pending = state.pendingAction!;
 				if (pending.type === "card_strike") {
-					performStrike({
+					const outcome = performStrike({
 						state,
 						actor: state.players.get(pending.actorId)!,
 						targetPlayerId: pending.targetPlayerId ?? undefined,
 						targetCrewSlot: pending.targetCrewSlot ?? undefined,
 					});
+					if (outcome && outcome.outcome !== "pending") {
+						state.lastResolution = buildStrikeResolution(
+							outcome,
+							pending.actorId,
+							pending.targetPlayerId ?? "",
+							"strike",
+						);
+					}
 				}
 				state.pendingAction = null;
 				state.phase = "active_turn";
@@ -1661,6 +1861,7 @@ export const faceturnsEngine: GameEngine & GameEngineWithSecrets = {
 					actorId: state.pendingAction!.targetPlayerId ?? "",
 					crewTurnedPlayerId: null,
 					crewTurnedSlot: null,
+					executedPlayerId: null,
 				};
 				state.pendingAction = null;
 				state.phase = "active_turn";

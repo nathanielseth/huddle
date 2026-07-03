@@ -29,16 +29,17 @@ import {
 	getEnemies,
 	drawCards,
 	firstTurnedSlot,
-	allCrewTurned,
 	playerHasClass,
 	isConditionalEffect,
-	openChooseCrewToTurnOrAuto,
+	resolveStrikeOrExecute,
 	performStrike,
 	resolveReflectedSlowMoveDamage,
 	checkVanessaDrawTrigger,
 	maybeOpenBearBonesOffer,
 	applySupplyDropOnCollect,
+	executedPlayerIdFrom,
 } from "./effects";
+import type { StrikeOrExecuteOutcome } from "./effects";
 import { shuffle } from "../lib/random";
 
 export function markDirty(state: FaceturnServerState): void {
@@ -83,7 +84,6 @@ export function makeServerPlayer(
 		blockCostReduction: 0,
 		shieldPerTurn: 0,
 		moveBaseCostReduction: 0,
-		survivorModeActive: false,
 		hasVoidArms: false,
 		hasVoidLegsChoice: false,
 		voidLegsDiscardCost: 0,
@@ -107,6 +107,7 @@ export function makeServerPlayer(
 		costOverrides: new Map(),
 		draftSelections: { bossId: null, crewIds: [], moveIds: [] },
 		isDraftLocked: false,
+		hasTerminalStrikeBlock: false,
 	};
 }
 
@@ -338,10 +339,10 @@ export function startTurn(state: FaceturnServerState, playerId: string): void {
 
 	checkVanessaDrawTrigger(player, state);
 
-	// Void Legs: offer only opens if there's a real choice to make (a card
+	// void legs: offer only opens if there's a real choice to make (a card
 	// to discard). crewSkillsDisabled / disabledPassiveSlots are already
 	// folded into hasVoidLegsChoice via recomputePassives, since that flag
-	// is only set while the granting source (crew or active move) is live.
+	// is only set while the granting source (crew or active move) is live
 	if (player.hasVoidLegsChoice && player.hand.length > 0) {
 		state.pendingInteraction = {
 			type: "void_legs_choice",
@@ -501,11 +502,6 @@ export function checkWinConditions(
 				playerId: player.playerId,
 				winCondition: "boss_hp_zero",
 			});
-		} else if (allCrewTurned(player) && !player.survivorModeActive) {
-			toEliminate.push({
-				playerId: player.playerId,
-				winCondition: "all_crew_turned",
-			});
 		}
 	}
 
@@ -572,18 +568,40 @@ export function computeChallengeEligible(
 export function resolveChallenge(
 	state: FaceturnServerState,
 	challengerId: string,
-): { actionProceeds: boolean; resolution: ResolutionResult } {
+): {
+	actionProceeds: boolean;
+	resolution: ResolutionResult;
+	strikeOutcome: StrikeOrExecuteOutcome | null;
+} {
 	const pending = state.pendingAction!;
 	const actor = state.players.get(pending.actorId)!;
 	const challenger = state.players.get(challengerId)!;
 
 	if (!pending.actorWasBluffing) {
-		const turned = openChooseCrewToTurnOrAuto(state, challenger, null, false);
+		const outcome = resolveStrikeOrExecute(state, challenger, null, false);
 
-		// The Watcher: the actor successfully defended (the challenger was
-		// wrong).. offer the actor an optional self-unturn. Only opens if
-		// openChooseCrewToTurnOrAuto above didn't already claim the single
-		// pendingInteraction slot (e.g. the challenger had 2 unturned crew)
+		// the challenger is being punished for a bad challenge. if they have
+		// 2+ face-down crew, resolveStrikeOrExecute just opened its own
+		// choose_crew_to_turn interaction (the "penalty" interaction) — tag
+		// it so the caller knows the original pendingAction (the class action
+		// that was challenged) is still awaiting execution once this closes.
+		// callers must not run executePendingAction while this is open: doing
+		// so would let a second choose_crew_to_turn (opened against the
+		// original target) silently overwrite this one.
+		if (
+			outcome.outcome === "pending" &&
+			state.pendingInteraction?.type === "choose_crew_to_turn"
+		) {
+			state.pendingInteraction = {
+				...state.pendingInteraction,
+				deferredActionPending: true,
+			};
+		}
+
+		// the watcher: offer only makes sense if the challenger still has a
+		// face-up crew to unturn AND the pendingInteraction slot wasn't
+		// already claimed by resolveStrikeOrExecute's own "2 face-down
+		// slots" branch
 		if (state.pendingInteraction === null) {
 			const actor = state.players.get(pending.actorId)!;
 			if (actor.hasWatcherPassive) {
@@ -607,20 +625,21 @@ export function resolveChallenge(
 				challengerId,
 				actorId: pending.actorId,
 				crewTurnedPlayerId: challengerId,
-				crewTurnedSlot: turned,
+				crewTurnedSlot: outcome.outcome === "crew_turned" ? outcome.slot : null,
+				executedPlayerId: executedPlayerIdFrom(outcome, challengerId),
 			},
+			strikeOutcome: outcome,
 		};
 	}
 
 	challenger.hasCalledBluffSuccessfully = true;
 
 	let turned: 0 | 1 | null = null;
+	let strikeOutcome: StrikeOrExecuteOutcome | null = null;
+
+	// false flag: prevents the crew-turning consequence; the challenger
+	// still gets credit
 	if (actor.hasFalseFlag) {
-		// False Flag Operation: prevent the crew-turn consequence entirely
-		// and discard the Move instead. The challenger still gets full credit
-		// for the successful call (hasCalledBluffSuccessfully is already set
-		// above, and the resolution below still reports challenge_success)
-		// only the actor's crew-turning penalty is negated
 		const ffSlot = actor.activeMoves.findIndex(
 			(id) => id === CARD_IDS.MOVE.FALSE_FLAG_OPERATION,
 		);
@@ -628,12 +647,15 @@ export function resolveChallenge(
 			actor.activeMoves[ffSlot] = null;
 			actor.discardPile.push(CARD_IDS.MOVE.FALSE_FLAG_OPERATION);
 			actor.totalCardsDiscarded++;
-			recomputePassives(actor, state); // hasFalseFlag clears with the move gone
+			recomputePassives(actor, state);
 		}
 	} else {
-		turned = openChooseCrewToTurnOrAuto(state, actor, challengerId, false);
+		strikeOutcome = resolveStrikeOrExecute(state, actor, challengerId, false);
+		turned =
+			strikeOutcome.outcome === "crew_turned" ? strikeOutcome.slot : null;
 	}
 
+	// too big once-per-game optional self-unturn
 	if (state.pendingInteraction === null) {
 		if (challenger.tooBigUnturnUsed === false) {
 			const hasTooBig = challenger.crewIds.some(
@@ -668,7 +690,9 @@ export function resolveChallenge(
 			actorId: pending.actorId,
 			crewTurnedPlayerId: pending.actorId,
 			crewTurnedSlot: turned,
+			executedPlayerId: executedPlayerIdFrom(strikeOutcome, pending.actorId),
 		},
+		strikeOutcome,
 	};
 }
 
@@ -681,7 +705,9 @@ export function recordBluffIfUnchallenged(state: FaceturnServerState): void {
 	}
 }
 
-export function executePendingAction(state: FaceturnServerState): void {
+export function executePendingAction(
+	state: FaceturnServerState,
+): StrikeOrExecuteOutcome | null {
 	const pending = state.pendingAction!;
 	const actor = state.players.get(pending.actorId)!;
 
@@ -691,19 +717,18 @@ export function executePendingAction(state: FaceturnServerState): void {
 
 	switch (pending.type) {
 		case "class_action_strike": {
-			if (!targetPlayer) break;
-			performStrike({
+			if (!targetPlayer) return null;
+			return performStrike({
 				state,
 				actor,
 				targetPlayerId: targetPlayer.playerId,
 				targetCrewSlot: pending.targetCrewSlot ?? undefined,
 			});
-			break;
 		}
 		case "class_action_collect": {
 			actor.cash += C.COLLECT_CASH_GAIN;
 			applySupplyDropOnCollect(state, actor);
-			break;
+			return null;
 		}
 		case "class_action_unturn": {
 			const slot =
@@ -712,12 +737,13 @@ export function executePendingAction(state: FaceturnServerState): void {
 				actor.crewTurned[slot] = false;
 				recomputePassives(actor, state);
 			}
-			break;
+			return null;
 		}
 		case "class_action_block": {
-			break;
+			return null;
 		}
 	}
+	return null;
 }
 
 interface MoveTarget {
@@ -734,15 +760,8 @@ export function executeMove(
 ): void {
 	const move = getMove(moveId);
 
-	// Active moves claim their zone slot BEFORE resolveEffects runs, not
-	// after. This lets an active move's own effect handler (currently only
-	// Life Insurance) discover which slot it just landed in via
-	// actor.activeMoves.indexOf(moveId) during its own resolution. Every
-	// other active-move effect is an unconditional passive-grant primitive
-	// with no fizzle path, so moving the assignment earlier is safe for all
-	// of them, if a future active move's effect can fizzle, note that it
-	// will now be "in the zone" even on a fizzle, which is the more
-	// consistent behavior (the card was still played and paid for)
+	// active moves are equipped to a slot; burst and slow are resolved and
+	// discarded after effect application
 	let claimedSlot = -1;
 	if (move.moveType === "active") {
 		claimedSlot = actor.activeMoves.findIndex((s) => s === null);
@@ -853,6 +872,7 @@ export function resolveMoveChainFull(state: FaceturnServerState): void {
 			return eff.type === "reflect_slow_move_base_damage";
 		});
 
+		// resolve negate or reflect before anything else
 		if (isNegate || isReflect) {
 			actor.discardPile.push(entry.moveId);
 			actor.totalCardsDiscarded++;
