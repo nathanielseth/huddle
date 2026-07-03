@@ -28,8 +28,9 @@
 **Pack 2** · *in progress*
 
 - 🃏 **Poker Night** — classic texas hold'em
-- 🦸 **Flip Heroes** — bluffing strategy card game
+- 🦸 **Face Turn** — bluffing strategy card game
 - 💡 **Blank Slate** — clue-matching word game
+- 💀 **Deathvault** — trivia battle royal
 
 ## Project Structure
 
