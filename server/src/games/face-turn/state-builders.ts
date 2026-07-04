@@ -11,7 +11,7 @@ import type {
 	PendingInteractionView,
 	FaceturnsSecret,
 	MoveChainView,
-} from "../../../../shared/games/face-turn";
+} from "../../../../shared/games/face-turn/types";
 
 import type {
 	FaceturnServerState,

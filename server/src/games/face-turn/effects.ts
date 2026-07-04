@@ -6,7 +6,7 @@ import type {
 import { FACETURN_CONSTANTS as C } from "./types";
 import type { CardEffect, EffectPrimitive, ConditionalEffect } from "./cards";
 import { getCrew, getMove, getBoss, CARD_IDS, VOID_PIECE_IDS } from "./cards";
-import type { CrewClass } from "../../../../shared/games/face-turn";
+import type { CrewClass } from "../../../../shared/games/face-turn/types";
 import { shuffle } from "../lib/random";
 
 export interface EffectContext {

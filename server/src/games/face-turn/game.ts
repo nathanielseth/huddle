@@ -9,7 +9,7 @@ import type {
 	ResolutionResult,
 	WinCondition,
 	MoveChainEntry,
-} from "../../../../shared/games/face-turn";
+} from "../../../../shared/games/face-turn/types";
 import {
 	BOSS_MAP,
 	CREW_MAP,

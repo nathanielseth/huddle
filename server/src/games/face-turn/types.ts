@@ -7,7 +7,7 @@ import type {
 	ResolutionResult,
 	GameMode,
 	MoveChainEntry,
-} from "../../../../shared/games/face-turn";
+} from "../../../../shared/games/face-turn/types";
 
 export interface GameConfig {
 	mode: GameMode;

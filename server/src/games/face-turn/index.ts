@@ -4,7 +4,7 @@ import type {
 	GameContext,
 	EngineResult,
 } from "../../engine/GameEngine";
-import type { FaceturnsSecret } from "../../../../shared/games/face-turn";
+import type { FaceturnsSecret } from "../../../../shared/games/face-turn/types";
 import type {
 	FaceturnServerState,
 	FaceturnServerPlayer,
@@ -77,7 +77,7 @@ import {
 	type StrikeOrExecuteOutcome,
 	getLivingPlayers,
 } from "./effects";
-import type { ResolutionResult } from "../../../../shared/games/face-turn";
+import type { ResolutionResult } from "../../../../shared/games/face-turn/types";
 import { getCachedPublicState, buildPrivatePayloads } from "./state-builders";
 
 import {
