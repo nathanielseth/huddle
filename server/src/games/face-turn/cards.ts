@@ -33,6 +33,13 @@ export type EffectPrimitive =
 			type: "deal_damage_per_discarded_variable";
 			damagePerCard: number;
 	  }
+	// monkey-man: damage = (cards just discarded from the enemy's hand by
+	// the immediately preceding discard_all_enemy_hand primitive in this
+	// same effects array) * damagePerCard
+	| {
+			type: "deal_damage_per_enemy_hand_discarded";
+			damagePerCard: number;
+	  }
 
 	// strikes
 	// attacker chooses which crew to turn, unless defender has void arms,
@@ -49,7 +56,6 @@ export type EffectPrimitive =
 	  }
 	// burst move that opens a block window, not a challenge window
 	// no challenge phase. if not blocked, strike resolves normally.
-	// todo: insert a "block_window" phase after paying cost
 	| {
 			type: "strike_enemy_crew_blockable";
 	  }
@@ -128,10 +134,11 @@ export type EffectPrimitive =
 			type: "search_deck_for_card_add_to_hand";
 			cardId: string;
 	  }
-	// dig deep: look at top N cards, draw 1, shuffle rest
+	// dig deep: look at top N cards, draw drawCount
 	| {
 			type: "look_at_top_deck_draw_one";
 			lookCount: number;
+			drawCount?: number;
 	  }
 
 	// cash gain / loss
@@ -148,9 +155,9 @@ export type EffectPrimitive =
 	| { type: "shield_boss"; amount: number }
 	| { type: "remove_all_shields"; target: "enemy_boss" | "ally_boss" }
 	// immunity uses the shared bossImmunityTurns counter, an approximation
-	// rather than a true per-actor timer
 	| {
 			type: "immunity_until_next_turn";
+			turns?: number;
 	  }
 	// all-in: set ally boss hp to exactly 1, then gain cash and draw.
 	// hp is set before draw
@@ -182,10 +189,9 @@ export type EffectPrimitive =
 	| {
 			type: "command_guess_crew_class_turn_if_correct";
 	  }
-	// replace a face-up ally crew with a crew card from hand; new crew
-	// enters face-down, no turned effects
+	// replace a face-up ally crew with the player's reserved (draft-time)
 	| {
-			type: "command_replace_crew_from_hand";
+			type: "command_replace_crew_from_reserve";
 	  }
 
 	// negate / reflect
@@ -194,8 +200,6 @@ export type EffectPrimitive =
 	  }
 	// reflect base damage of a slow move back at its caster. reverse card
 	// itself is a slow move and can be nope!'d.
-	// todo: pop reverse card, reflect base damage to original caster,
-	// discard both. fizzle if no damage
 	| {
 			type: "reflect_slow_move_base_damage";
 	  }
@@ -278,7 +282,7 @@ export type EffectPrimitive =
 	| {
 			type: "passive_block_strikes_above_half_hp";
 	  }
-	// doctor norman: one-time trigger on exactly the 6th discard.
+	// doctor norman: one-time trigger on exactly the Nth discard.
 	// fires immediately
 	| {
 			type: "passive_full_heal_on_sixth_discard_once";
@@ -309,8 +313,9 @@ export type EffectPrimitive =
 	  }
 
 	// class multi-type grants
-	| { type: "become_also_striker_and_collector" }
-	| { type: "become_also_striker_and_turner" }
+	| { type: "become_also_striker" }
+	| { type: "become_also_turner" }
+	| { type: "transform_jeremy_into_berserker" }
 
 	// new required primitives
 	// lighthouse turned: disable target crew passive until that crew
@@ -351,6 +356,11 @@ export type EffectPrimitive =
 	| {
 			type: "passive_team_cash_on_ally_collect";
 			amount: number;
+	  }
+	// trickle-down economics: whenever a target opponent's Collector class
+	// action resolves, gain cash equal to the amount they just gained
+	| {
+			type: "passive_mirror_enemy_collect_cash";
 	  };
 
 // effect conditions - gate whether a primitive fires
@@ -361,7 +371,7 @@ export type EffectCondition =
 	| { when: "always" }
 	| { when: "another_ally_is_turned" } // other ally slot is face-up
 	| { when: "has_turned_ally_crew_this_game" } // permanent flag set in turnCrewAtSlot
-	| { when: "ally_striker_is_turned" } // any ally striker face-up (self or teammate)
+	| { when: "ally_class_is_turned"; class: CrewClass } // any ally of `class` face-up (self or teammate)
 	| { when: "has_shielded_boss" } // boss has shield > 0
 	| { when: "void_pieces_assembled" }; // all three void active cards present
 
@@ -399,17 +409,22 @@ export interface BossCard {
 	readonly faceTurnCost: number;
 	readonly commandEffects: readonly CardEffect[];
 	readonly passiveEffects: readonly CardEffect[];
+	readonly draftable?: boolean;
+	readonly hasCustomCommandLogic?: true;
 }
 
 export interface CrewCard {
 	readonly id: string;
 	readonly name: string;
 	readonly class: CrewClass;
-	readonly cost: number;
-	readonly effectText: string;
+	readonly effectText: {
+		readonly turned?: string;
+		readonly passive?: string;
+	};
 	readonly flavorText: string;
 	readonly turnedEffects: readonly CardEffect[]; // fires immediately when this crew turns face-up
 	readonly passiveEffects: readonly CardEffect[]; // active while this crew is face-up
+	readonly draftable?: boolean;
 }
 
 export interface MoveCard {
@@ -451,14 +466,15 @@ export const BOSSES: readonly BossCard[] = [
 			faceTurn:
 				"Pay 7 Cash: unblockable, unchallengeable strike against target enemy Crew. If they have no face-down Crew, executes their Boss instead.",
 			command:
-				"Replace one face-up ally Crew with a Crew from your hand. The new Crew enters face-down.",
-			passive: "Draw 1 card at the start of your turn.",
+				"Replace one face-up ally Crew with your reserved Crew (drafted alongside your other two). The new Crew enters face-down.",
+			passive: "Draw 2 cards at the start of your turn.",
 		},
 		flavorText: "",
 		maxHp: 100,
 		faceTurnCost: 7,
-		commandEffects: [{ type: "command_replace_crew_from_hand" }],
-		passiveEffects: [{ type: "passive_draw_per_turn", amount: 1 }],
+		commandEffects: [{ type: "command_replace_crew_from_reserve" }],
+		passiveEffects: [{ type: "passive_draw_per_turn", amount: 2 }],
+		hasCustomCommandLogic: true,
 	},
 	{
 		id: "the-razor",
@@ -468,26 +484,26 @@ export const BOSSES: readonly BossCard[] = [
 				"Pay 7 Cash: unblockable, unchallengeable strike against target enemy Crew. If they have no face-down Crew, executes their Boss instead.",
 			command:
 				"Declare the class of one face-down enemy Crew. If correct, turn it face-up.",
-			passive: "You deal 50% more damage.",
+			passive: "You deal 30% more damage.",
 		},
 		flavorText: "",
 		maxHp: 100,
 		faceTurnCost: 7,
 		commandEffects: [{ type: "command_guess_crew_class_turn_if_correct" }],
-		passiveEffects: [{ type: "passive_damage_multiplier", multiplier: 1.5 }],
+		passiveEffects: [{ type: "passive_damage_multiplier", multiplier: 1.3 }],
+		hasCustomCommandLogic: true,
 	},
 ];
 
 // crew
 
 export const CREW: readonly CrewCard[] = [
-	// strikers (class action cost: 3 cash)
+	// strikers
 	{
 		id: "pektus",
 		name: "Pektus",
 		class: "striker",
-		cost: 3,
-		effectText: "Turned: Deal 25 damage to target enemy Boss.",
+		effectText: { turned: "Deal 25 damage to target enemy Boss." },
 		flavorText: "",
 		turnedEffects: [{ type: "deal_damage", target: "enemy_boss", amount: 25 }],
 		passiveEffects: [],
@@ -496,13 +512,14 @@ export const CREW: readonly CrewCard[] = [
 		id: "shrike",
 		name: "Shrike",
 		class: "striker",
-		cost: 3,
-		effectText:
-			"Turned: Pay 4 Cash to strike target enemy Crew (unblockable). If they have no face-down Crew, this executes their Boss instead.",
+		effectText: {
+			turned:
+				"Pay 3 Cash to strike target enemy Crew (unblockable). If they have no face-down Crew, this executes their Boss instead.",
+		},
 		flavorText: "",
 		turnedEffects: [
-			// cash cost deducted before strike; fizzles if <4 cash
-			{ type: "strike_enemy_crew_unblockable_with_cash_cost", cashCost: 4 },
+			// cash cost deducted before strike; fizzles if <3 cash
+			{ type: "strike_enemy_crew_unblockable_with_cash_cost", cashCost: 3 },
 		],
 		passiveEffects: [],
 	},
@@ -510,9 +527,9 @@ export const CREW: readonly CrewCard[] = [
 		id: "g-rone",
 		name: "G-Rone",
 		class: "striker",
-		cost: 3,
-		effectText:
-			"Passive: At the end of each round, deal 10 damage to target enemy Boss.",
+		effectText: {
+			passive: "At the end of each round, deal 10 damage to target enemy Boss.",
+		},
 		flavorText: "",
 		turnedEffects: [],
 		passiveEffects: [{ type: "passive_poison_per_round", damagePerRound: 10 }],
@@ -521,26 +538,31 @@ export const CREW: readonly CrewCard[] = [
 		id: "monkey-man",
 		name: "Monkey-Man",
 		class: "striker",
-		cost: 3,
-		effectText: "Turned: Target opponent discards their entire hand.",
+		effectText: {
+			turned:
+				"Target opponent discards their entire hand. Deal 5 damage to target enemy Boss for each card discarded this way.",
+		},
 		flavorText: "",
-		turnedEffects: [{ type: "discard_all_enemy_hand" }],
+		turnedEffects: [
+			{ type: "discard_all_enemy_hand" },
+			{ type: "deal_damage_per_enemy_hand_discarded", damagePerCard: 5 },
+		],
 		passiveEffects: [],
 	},
 	{
 		id: "berto-lopez",
 		name: "Berto Lopez",
 		class: "striker",
-		cost: 3,
-		effectText:
-			"Turned: Deal 10 damage to target enemy Boss for each face-up ally Crew.",
+		effectText: {
+			turned: "Deal 15 damage to target enemy Boss for each face-up ally Crew.",
+		},
 		flavorText: "",
 		turnedEffects: [
 			// counts all face-up ally crew at resolution (includes self if already turned)
 			{
 				type: "deal_damage_per_face_up_ally",
 				target: "enemy_boss",
-				amountPerAlly: 10,
+				amountPerAlly: 15,
 			},
 		],
 		passiveEffects: [],
@@ -549,9 +571,9 @@ export const CREW: readonly CrewCard[] = [
 		id: "hot-girl",
 		name: "Hot Girl",
 		class: "striker",
-		cost: 3,
-		effectText:
-			"Turned: Deal damage equal to 30% of target enemy Boss's current HP.",
+		effectText: {
+			turned: "Deal damage equal to 30% of target enemy Boss's current HP.",
+		},
 		flavorText: "",
 		turnedEffects: [
 			{
@@ -567,9 +589,10 @@ export const CREW: readonly CrewCard[] = [
 		id: "black-fist",
 		name: "Black Fist",
 		class: "striker",
-		cost: 3,
-		effectText:
-			"Turned: Discard 3 cards from your hand. If you do, deal 35 damage to target enemy Boss.",
+		effectText: {
+			turned:
+				"Discard 3 cards from your hand. If you do, deal 35 damage to target enemy Boss.",
+		},
 		flavorText: "",
 		turnedEffects: [
 			// only deals damage if 3 cards were actually discarded
@@ -582,9 +605,10 @@ export const CREW: readonly CrewCard[] = [
 		id: "whisper",
 		name: "Whisper",
 		class: "striker",
-		cost: 3,
-		effectText:
-			"Turned: Discard 5 cards from your hand, then strike target enemy Crew (unblockable; executes their Boss if they have no face-down Crew). If you have successfully called a bluff this game, discard 1 card instead.",
+		effectText: {
+			turned:
+				"Discard 5 cards from your hand, then strike target enemy Crew (unblockable; executes their Boss if they have no face-down Crew). If you have successfully called a bluff this game, discard 1 card instead.",
+		},
 		flavorText: "",
 		turnedEffects: [
 			{
@@ -597,70 +621,65 @@ export const CREW: readonly CrewCard[] = [
 		passiveEffects: [],
 	},
 
-	// blockers (class action cost: 2 cash base)
+	// blockers
 
 	{
 		id: "rilla-gorilla",
 		name: "Rilla Gorilla",
 		class: "blocker",
-		cost: 2,
-		effectText: "Turned: Give 20 Shield to target ally Boss.",
+		effectText: { turned: "Give 40 Shield to target ally Boss." },
 		flavorText: "",
-		turnedEffects: [{ type: "shield_boss", amount: 20 }],
+		turnedEffects: [{ type: "shield_boss", amount: 40 }],
 		passiveEffects: [],
 	},
 	{
 		id: "frontline",
 		name: "Frontline",
 		class: "blocker",
-		cost: 2,
-		effectText:
-			"Turned: Target ally Boss is immune to damage until the start of your next turn.",
+		effectText: {
+			turned:
+				"Target ally Boss is immune to damage until the start of your next 2 turns.",
+		},
 		flavorText: "",
-		turnedEffects: [
-			// immunity uses the shared bossImmunityTurns counter (approximation)
-			{ type: "immunity_until_next_turn" },
-		],
+		turnedEffects: [{ type: "immunity_until_next_turn", turns: 2 }],
 		passiveEffects: [],
 	},
 	{
 		id: "mama-mercy",
 		name: "Mama Mercy",
 		class: "blocker",
-		cost: 2,
-		effectText:
-			"Passive: Whenever an enemy Striker turns face-up, give 10 Shield to target ally Boss.",
+		effectText: {
+			passive:
+				"Whenever an enemy Striker turns face-up, give 50 Shield to target ally Boss.",
+		},
 		flavorText: "",
 		turnedEffects: [],
 		passiveEffects: [
 			// event-based: fires when any striker turns face-up
-			{ type: "passive_shield_on_enemy_striker_turned", amount: 10 },
+			{ type: "passive_shield_on_enemy_striker_turned", amount: 50 },
 		],
 	},
 	{
 		id: "lighthouse",
 		name: "Lighthouse",
 		class: "blocker",
-		cost: 2,
-		effectText:
-			"Turned: Disable target Crew's Passive until that Crew turns face-down. Passive: Block costs 1 less Cash.",
+		effectText: {
+			turned: "Disable 2 target Crew's Passives until each turns face-down.",
+		},
 		flavorText: "",
 		turnedEffects: [{ type: "disable_target_crew_passive" }],
-		passiveEffects: [
-			// block class action cost reduced by 1 (min 0)
-			{ type: "passive_block_cost_reduction", reduction: 1 },
-		],
+		passiveEffects: [],
 	},
 	{
 		id: "glob",
 		name: "Glob",
 		class: "blocker",
-		cost: 2,
-		effectText:
-			"Turned: If target ally Boss has any Shield, give it 10 more Shield.",
+		effectText: {
+			turned: "If target ally Boss has any Shield, give it 50 more Shield.",
+		},
 		flavorText: "",
 		turnedEffects: [
-			when({ when: "has_shielded_boss" }, { type: "shield_boss", amount: 10 }),
+			when({ when: "has_shielded_boss" }, { type: "shield_boss", amount: 50 }),
 		],
 		passiveEffects: [],
 	},
@@ -668,52 +687,49 @@ export const CREW: readonly CrewCard[] = [
 		id: "silencer",
 		name: "Silencer",
 		class: "blocker",
-		cost: 2,
-		effectText:
-			"Passive: Reduce all incoming damage to target ally Boss from enemy Moves by 30%.",
+		effectText: {
+			passive:
+				"Reduce all incoming damage to target ally Boss from enemy Moves by 40%.",
+		},
 		flavorText: "",
 		turnedEffects: [],
 		passiveEffects: [
 			// applies to all damage sources; move-only scoping is a known approximation
-			{ type: "passive_negate_damage_percent", percent: 30 },
+			{ type: "passive_negate_damage_percent", percent: 40 },
 		],
 	},
 	{
 		id: "doctor-norman",
 		name: "Doctor Norman",
 		class: "blocker",
-		cost: 2,
-		effectText:
-			"Passive: Whenever you discard your 6th card, heal target ally Boss to full HP.",
+		effectText: {
+			passive:
+				"Whenever you discard your 4th card, heal target ally Boss to full HP.",
+		},
 		flavorText: "",
 		turnedEffects: [],
-		passiveEffects: [
-			// one-time trigger on exactly the 6th discard
-			{ type: "passive_full_heal_on_sixth_discard_once" },
-		],
+		passiveEffects: [{ type: "passive_full_heal_on_sixth_discard_once" }],
 	},
 	{
 		id: "lotus",
 		name: "Lotus",
 		class: "blocker",
-		cost: 2,
-		effectText: "Turned: This Crew is also treated as a Striker and Collector.",
+		effectText: { turned: "This Crew is also treated as a Striker." },
 		flavorText: "",
-		turnedEffects: [{ type: "become_also_striker_and_collector" }],
+		turnedEffects: [{ type: "become_also_striker" }],
 		passiveEffects: [],
 	},
 
-	// collectors (class action cost: 0 cash)
+	// collectors
 
 	{
 		id: "mayumi",
 		name: "Mayumi",
 		class: "collector",
-		cost: 0,
-		effectText: "Turned: Gain 3 Cash and draw 1 card.",
+		effectText: { turned: "Gain 2 Cash and draw 1 card." },
 		flavorText: "",
 		turnedEffects: [
-			{ type: "gain_cash", amount: 3 },
+			{ type: "gain_cash", amount: 2 },
 			{ type: "draw_cards", amount: 1 },
 		],
 		passiveEffects: [],
@@ -722,11 +738,13 @@ export const CREW: readonly CrewCard[] = [
 		id: "too-big",
 		name: "Too Big",
 		class: "collector",
-		cost: 0,
-		effectText:
-			"Turned: Steal 2 Cash from target opponent. Passive: Once per game, whenever you successfully call a bluff, you may turn this Crew face-down.",
+		effectText: {
+			turned: "Steal 1 Cash from target opponent.",
+			passive:
+				"Once per game, whenever you successfully call a bluff, you may turn this Crew face-down.",
+		},
 		flavorText: "",
-		turnedEffects: [{ type: "steal_cash", amount: 2 }],
+		turnedEffects: [{ type: "steal_cash", amount: 1 }],
 		passiveEffects: [
 			// successfully call a bluff = hasCalledBluffSuccessfully (you challenged and they were bluffing)
 			{ type: "passive_unturn_self_on_first_successful_challenge_call" },
@@ -736,44 +754,42 @@ export const CREW: readonly CrewCard[] = [
 		id: "claw-machine",
 		name: "Claw Machine",
 		class: "collector",
-		cost: 0,
-		effectText: "Turned: Draw 3 cards.",
+		effectText: { turned: "Draw 2 cards." },
 		flavorText: "",
-		turnedEffects: [{ type: "draw_cards", amount: 3 }],
+		turnedEffects: [{ type: "draw_cards", amount: 2 }],
 		passiveEffects: [],
 	},
 	{
 		id: "cristatella",
 		name: "Cristatella",
 		class: "collector",
-		cost: 0,
-		effectText: "Turned: This Crew is also treated as a Striker and Turner.",
+		effectText: { turned: "This Crew is also treated as a Turner." },
 		flavorText: "",
-		turnedEffects: [{ type: "become_also_striker_and_turner" }],
+		turnedEffects: [{ type: "become_also_turner" }],
 		passiveEffects: [],
 	},
 	{
 		id: "cool-guy",
 		name: "Cool Guy",
 		class: "collector",
-		cost: 0,
-		effectText:
-			"Passive: Whenever you play a Move, heal target ally Boss for 10 HP.",
+		effectText: {
+			passive: "Whenever you play a Move, heal target ally Boss for 5 HP.",
+		},
 		flavorText: "",
 		turnedEffects: [],
-		passiveEffects: [{ type: "passive_heal_on_move_played", amount: 10 }],
+		passiveEffects: [{ type: "passive_heal_on_move_played", amount: 5 }],
 	},
 	{
 		id: "belladonna",
 		name: "Belladonna",
 		class: "collector",
-		cost: 0,
-		effectText:
-			"Turned: Heal target ally Boss for 10 HP, gain 2 Cash, and draw 1 card.",
+		effectText: {
+			turned: "Heal target ally Boss for 10 HP, gain 1 Cash, and draw 1 card.",
+		},
 		flavorText: "",
 		turnedEffects: [
 			{ type: "heal_boss", amount: 10 },
-			{ type: "gain_cash", amount: 2 },
+			{ type: "gain_cash", amount: 1 },
 			{ type: "draw_cards", amount: 1 },
 		],
 		passiveEffects: [],
@@ -782,40 +798,42 @@ export const CREW: readonly CrewCard[] = [
 		id: "vanessa-de-vera",
 		name: "Vanessa De Vera",
 		class: "collector",
-		cost: 0,
-		effectText:
-			"Passive: The first time your hand becomes empty each turn, draw 4 cards.",
+		effectText: {
+			passive:
+				"The first time your hand becomes empty each turn, draw 3 cards.",
+		},
 		flavorText: "",
 		turnedEffects: [],
 		passiveEffects: [
 			// mid-turn trigger; flag resets at startTurn
-			{ type: "passive_draw_on_hand_empty_once_per_turn", amount: 4 },
+			{ type: "passive_draw_on_hand_empty_once_per_turn", amount: 3 },
 		],
 	},
 	{
 		id: "bear-bones",
 		name: "Bear Bones",
 		class: "collector",
-		cost: 0,
-		effectText:
-			"Passive: Whenever you successfully challenge an opponent, you may strike one face-down enemy Crew.",
+		effectText: {
+			passive:
+				"Whenever you successfully challenge an opponent, you may pay 1 Cash to strike one face-down enemy Crew.",
+		},
 		flavorText: "",
 		turnedEffects: [],
 		passiveEffects: [
-			// fires on challenge_success; optional bonus strike
 			{ type: "passive_optional_strike_on_successful_challenge" },
 		],
 	},
 
-	// turners (class action cost: 4 cash)
+	// turners
 
 	{
 		id: "handles",
 		name: "Handles",
 		class: "turner",
-		cost: 4,
-		effectText:
-			"Turned: If your other ally Crew is face-up, you may turn one face-up ally Crew face-down.",
+		effectText: {
+			turned:
+				"If your other ally Crew is face-up, you may turn one face-up ally Crew face-down.",
+		},
 		flavorText: "",
 		turnedEffects: [
 			// optional; opens a real handles_unturn_offer interaction
@@ -831,9 +849,9 @@ export const CREW: readonly CrewCard[] = [
 		id: "hider",
 		name: "Hider",
 		class: "turner",
-		cost: 4,
-		effectText:
-			"Turned: If your other ally Crew is face-up, turn that Crew face-down.",
+		effectText: {
+			turned: "If your other ally Crew is face-up, turn that Crew face-down.",
+		},
 		flavorText: "",
 		turnedEffects: [
 			// mandatory; forces the other slot face-down
@@ -848,9 +866,10 @@ export const CREW: readonly CrewCard[] = [
 		id: "terminal",
 		name: "Terminal",
 		class: "turner",
-		cost: 4,
-		effectText:
-			"Passive: Your Boss cannot be Striked (by Strike or Face Turn) while its HP is above 50.",
+		effectText: {
+			passive:
+				"Your Boss cannot be Striked (by Strike or Face Turn) while its HP is above 50.",
+		},
 		flavorText: "",
 		turnedEffects: [],
 		passiveEffects: [
@@ -863,9 +882,10 @@ export const CREW: readonly CrewCard[] = [
 		id: "suplex",
 		name: "Suplex",
 		class: "turner",
-		cost: 4,
-		effectText:
-			"Turned: If you have turned an ally Crew face-up this game, strike target enemy Crew (executes their Boss if they have no face-down Crew).",
+		effectText: {
+			turned:
+				"If you have turned an ally Crew face-up this game, strike target enemy Crew (executes their Boss if they have no face-down Crew).",
+		},
 		flavorText: "",
 		turnedEffects: [
 			// permanent "this game" flag, survives unturns
@@ -880,9 +900,10 @@ export const CREW: readonly CrewCard[] = [
 		id: "wolfman",
 		name: "Wolfman",
 		class: "turner",
-		cost: 4,
-		effectText:
-			"Turned: Search your deck for Full Moon, add it to your hand at 0 cost, then shuffle your deck.",
+		effectText: {
+			turned:
+				"Full Moon costs 0. Search your deck for Full Moon, then shuffle your deck.",
+		},
 		flavorText: "",
 		turnedEffects: [
 			{ type: "search_deck_for_card_add_to_hand", cardId: "full-moon" },
@@ -893,13 +914,23 @@ export const CREW: readonly CrewCard[] = [
 		id: "jeremy",
 		name: "Jeremy",
 		class: "turner",
-		cost: 4,
-		effectText:
-			"Passive: If this Crew transforms into The Berserker, the transformation is permanent.",
+		effectText: {
+			passive:
+				"If this Crew transforms into The Berserker, the transformation is permanent.",
+		},
 		flavorText: "",
 		turnedEffects: [],
 		passiveEffects: [],
-		// TODO: BERSERKER CARD
+	},
+	{
+		id: "berserker",
+		name: "The Berserker",
+		class: "striker",
+		effectText: { turned: "Deal 50 damage to target enemy Boss." },
+		flavorText: "",
+		turnedEffects: [{ type: "deal_damage", target: "enemy_boss", amount: 50 }],
+		passiveEffects: [],
+		draftable: false,
 	},
 ];
 
@@ -952,7 +983,7 @@ export const MOVES: readonly MoveCard[] = [
 	{
 		id: "background-check",
 		name: "Background Check",
-		baseCost: 3,
+		baseCost: 2,
 		moveType: "active",
 		effectText:
 			"Whenever an opponent challenges you, before the challenge resolves, they must declare the class of one of your face-down Crew. If their guess is wrong, turn one of their Crew face-up.",
@@ -1067,7 +1098,7 @@ export const MOVES: readonly MoveCard[] = [
 	{
 		id: "false-flag-operation",
 		name: "False Flag Operation",
-		baseCost: 3,
+		baseCost: 1,
 		moveType: "active",
 		effectText:
 			"Whenever you would turn a Crew face-up from failing a challenge, prevent that effect and discard this Move instead.",
@@ -1077,13 +1108,38 @@ export const MOVES: readonly MoveCard[] = [
 			{ type: "passive_false_flag" },
 		],
 	},
+	{
+		id: "bamboo-wall",
+		name: "Bamboo Wall",
+		baseCost: 1,
+		moveType: "active",
+		effectText:
+			"If you have a face-up Blocker, at the start of each of your turns, give 15 Shield to target ally Boss.",
+		flavorText: "",
+		effects: [
+			when(
+				{ when: "ally_class_is_turned", class: "blocker" },
+				{ type: "passive_shield_per_turn", amount: 15 },
+			),
+		],
+	},
+	{
+		id: "trickle-down-economics",
+		name: "Trickle-Down Economics",
+		baseCost: 3,
+		moveType: "active",
+		effectText:
+			"Whenever target opponent's Collector action resolves, gain the same amount of Cash they gained.",
+		flavorText: "",
+		effects: [{ type: "passive_mirror_enemy_collect_cash" }],
+	},
 
 	// burst moves
 
 	{
 		id: "deleb-i",
 		name: "Deleb-i, The Iterated Void",
-		baseCost: 3,
+		baseCost: 2,
 		moveType: "burst",
 		effectText:
 			"If The Iterated Void's Arms, Legs, and Torso are all in your active zone, you win the game.",
@@ -1117,7 +1173,7 @@ export const MOVES: readonly MoveCard[] = [
 		id: "claim-the-bounty",
 		name: "Claim The Bounty",
 		baseCost: 4,
-		moveType: "burst",
+		moveType: "slow",
 		effectText:
 			"Deal 30 damage to target enemy Boss. If you have successfully called a bluff this game, this costs 0 Cash instead.",
 		flavorText: "",
@@ -1127,7 +1183,7 @@ export const MOVES: readonly MoveCard[] = [
 		id: "ambush",
 		name: "Ambush",
 		baseCost: 3,
-		moveType: "burst",
+		moveType: "slow",
 		effectText:
 			"Strike target enemy Crew — or execute their Boss if they have no face-down Crew. This strike can be blocked.",
 		flavorText: "",
@@ -1162,9 +1218,9 @@ export const MOVES: readonly MoveCard[] = [
 		effects: [{ type: "shield_boss", amount: 10 }],
 	},
 	{
-		id: "mass-layoff",
-		name: "Mass Layoff",
-		baseCost: 4,
+		id: "job-application",
+		name: "Job Application",
+		baseCost: 3,
 		moveType: "burst",
 		effectText:
 			"Set your Cash and target opponent's Cash to 0. Then draw 3 cards.",
@@ -1222,11 +1278,11 @@ export const MOVES: readonly MoveCard[] = [
 		flavorText: "",
 		effects: [
 			when(
-				{ when: "ally_striker_is_turned" },
+				{ when: "ally_class_is_turned", class: "striker" },
 				{ type: "deal_damage", target: "enemy_boss", amount: 25 },
 			),
 			when(
-				{ when: "ally_striker_is_turned" },
+				{ when: "ally_class_is_turned", class: "striker" },
 				{ type: "deal_damage", target: "enemy_boss", amount: 15 },
 				true,
 			),
@@ -1235,8 +1291,8 @@ export const MOVES: readonly MoveCard[] = [
 	{
 		id: "ratatatat",
 		name: "Ratatatat!",
-		baseCost: 3,
-		moveType: "burst",
+		baseCost: 2,
+		moveType: "slow",
 		effectText:
 			"Deal 20 damage to target enemy Boss. This damage ignores Shield.",
 		flavorText: "",
@@ -1248,9 +1304,11 @@ export const MOVES: readonly MoveCard[] = [
 		baseCost: 2,
 		moveType: "burst",
 		effectText:
-			"Look at the top 4 cards of your deck. Draw 1, then shuffle your deck.",
+			"Look at the top 5 cards of your deck. Draw 2, then shuffle your deck.",
 		flavorText: "",
-		effects: [{ type: "look_at_top_deck_draw_one", lookCount: 4 }],
+		effects: [
+			{ type: "look_at_top_deck_draw_one", lookCount: 5, drawCount: 2 },
+		],
 	},
 	{
 		id: "reinforcements",
@@ -1309,13 +1367,11 @@ export const MOVES: readonly MoveCard[] = [
 	{
 		id: "rage-serum",
 		name: "Rage Serum",
-		baseCost: 0,
+		baseCost: 1,
 		moveType: "burst",
 		effectText: "Transform Jeremy into The Berserker.",
 		flavorText: "",
-		effects: [
-			// TODO: BERSERKER CARD
-		],
+		effects: [{ type: "transform_jeremy_into_berserker" }],
 	},
 	{
 		id: "scorched-earth",
@@ -1366,8 +1422,8 @@ export const MOVES: readonly MoveCard[] = [
 		],
 	},
 	{
-		id: "big-score",
-		name: "Big Score",
+		id: "bailout",
+		name: "Bailout",
 		baseCost: 2,
 		moveType: "burst",
 		effectText: "Heal target ally Boss for 20 HP and gain 2 Cash.",
@@ -1434,12 +1490,57 @@ export const MOVES: readonly MoveCard[] = [
 		flavorText: "",
 		effects: [{ type: "return_one_from_discard_to_hand" }],
 	},
+	{
+		id: "spare-change",
+		name: "Spare Change",
+		baseCost: 1,
+		moveType: "burst",
+		effectText: "Gain 2 Cash.",
+		flavorText: "",
+		effects: [{ type: "gain_cash", amount: 2 }],
+	},
+	{
+		id: "paycheck",
+		name: "Paycheck",
+		baseCost: 2,
+		moveType: "burst",
+		effectText: "Gain 4 Cash.",
+		flavorText: "",
+		effects: [{ type: "gain_cash", amount: 4 }],
+	},
+	{
+		id: "sucker-punch",
+		name: "Sucker Punch",
+		baseCost: 1,
+		moveType: "burst",
+		effectText: "Deal 15 damage to target enemy Boss.",
+		flavorText: "",
+		effects: [{ type: "deal_damage", target: "enemy_boss", amount: 15 }],
+	},
+	{
+		id: "wolfblaster",
+		name: "Wolfblaster",
+		baseCost: 5,
+		moveType: "burst",
+		effectText: "Deal 40 damage to target enemy Boss.",
+		flavorText: "",
+		effects: [{ type: "deal_damage", target: "enemy_boss", amount: 40 }],
+	},
+	{
+		id: "dead-drop-retrieval",
+		name: "Dead Drop Retrieval",
+		baseCost: 2,
+		moveType: "burst",
+		effectText: "Draw 3 cards.",
+		flavorText: "",
+		effects: [{ type: "draw_cards", amount: 3 }],
+	},
 
 	// slow moves
 
 	{
-		id: "backstab",
-		name: "Backstab",
+		id: "cheap-shot",
+		name: "Cheap Shot",
 		baseCost: 1,
 		moveType: "slow",
 		effectText: "Deal 20 damage to target enemy Boss.",
@@ -1452,11 +1553,11 @@ export const MOVES: readonly MoveCard[] = [
 		baseCost: 3,
 		moveType: "slow",
 		effectText:
-			"If you or an ally has a face-up Striker, strike target enemy Crew (unblockable; executes their Boss if they have no face-down Crew).",
+			"If you or an ally has a face-up Collector, strike target enemy Crew (unblockable; executes their Boss if they have no face-down Crew).",
 		flavorText: "",
 		effects: [
 			when(
-				{ when: "ally_striker_is_turned" },
+				{ when: "ally_class_is_turned", class: "collector" },
 				{ type: "strike_enemy_crew", unblockable: true },
 			),
 		],
@@ -1485,8 +1586,8 @@ export const MOVES: readonly MoveCard[] = [
 		effects: [{ type: "negate_enemy_slow_move" }],
 	},
 	{
-		id: "read-the-room",
-		name: "Read The Room",
+		id: "interrogation",
+		name: "Interrogation",
 		baseCost: 1,
 		moveType: "slow",
 		effectText:
@@ -1541,7 +1642,7 @@ export const MOVES: readonly MoveCard[] = [
 	{
 		id: "truth-serum",
 		name: "Truth Serum",
-		baseCost: 3,
+		baseCost: 4,
 		moveType: "slow",
 		effectText:
 			"Target opponent reveals the class of one of their face-down Crew.",
@@ -1574,6 +1675,10 @@ export function getMove(id: string): MoveCard {
 	return card;
 }
 
+export function isDraftable(crew: CrewCard): boolean {
+	return crew.draftable !== false;
+}
+
 // target scope derivation
 
 export type MoveTargetScope = "enemy" | "ally" | "none";
@@ -1594,6 +1699,7 @@ export function getMoveTargetScope(move: MoveCard): MoveTargetScope {
 		"deal_damage_percent_current_hp",
 		"deal_damage_ignore_shield",
 		"deal_damage_per_discarded_variable",
+		"deal_damage_per_enemy_hand_discarded",
 		"strike_enemy_crew",
 		"strike_enemy_crew_unblockable_with_cash_cost",
 		"strike_enemy_crew_blockable",
@@ -1606,6 +1712,7 @@ export function getMoveTargetScope(move: MoveCard): MoveTargetScope {
 		"remove_all_shields", // only when target: "enemy_boss"
 		"set_both_cash_zero_then_draw",
 		"mutual_discard_hand_then_redraw_same_count",
+		"passive_mirror_enemy_collect_cash",
 	]);
 
 	const ALLY_SCOPED_TYPES = new Set<EffectPrimitive["type"]>([
@@ -1676,6 +1783,8 @@ export const CARD_IDS = {
 		SUPLEX: "suplex",
 		WOLFMAN: "wolfman",
 		JEREMY: "jeremy",
+		// undraftable
+		BERSERKER: "berserker",
 	},
 	MOVE: {
 		// active
@@ -1702,7 +1811,7 @@ export const CARD_IDS = {
 		AMBUSH: "ambush",
 		DEVASTATE: "devastate",
 		BULLETPROOF_VEST: "bulletproof-vest",
-		MASS_LAYOFF: "mass-layoff",
+		JOB_APPLICATION: "job-application",
 		FULL_MOON: "full-moon",
 		ALL_IN: "all-in",
 		CHEAP_LABOR: "cheap-labor",
@@ -1719,18 +1828,18 @@ export const CARD_IDS = {
 		HEEL_TURN: "heel-turn",
 		FIRST_AID: "first-aid",
 		NEETOS_CLOCK: "neetos-clock",
-		BIG_SCORE: "big-score",
+		BAILOUT: "bailout",
 		PULL_COUNTER: "pull-counter",
 		CASH_OUT: "cash-out",
 		SWITCH_UP: "switch-up",
 		TAG_OUT: "tag-out",
 		TAKE_IT_BACK: "take-it-back",
 		// slow
-		BACKSTAB: "backstab",
+		CHEAP_SHOT: "cheap-shot",
 		UNFINISHED_BUSINESS: "unfinished-business",
 		KAMIKAZE: "kamikaze",
 		NOPE: "nope",
-		READ_THE_ROOM: "read-the-room",
+		INTERROGATION: "interrogation",
 		REVERSE_CARD: "reverse-card",
 		PICKPOCKET: "pickpocket",
 		STRIP_EM_DOWN: "strip-em-down",

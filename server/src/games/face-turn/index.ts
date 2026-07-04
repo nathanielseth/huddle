@@ -56,6 +56,7 @@ import {
 	firstUnturnedSlot,
 	turnCrewAtSlot,
 	applyBloodMoneyOnStrike,
+	isPlayerOrTeammate,
 	resolveTruthSerumReveal,
 	resolveVoidLegsChoice,
 	resolveChooseDiscardCount,
@@ -74,6 +75,7 @@ import {
 	resolveStrikeOrExecute,
 	isStrikeBlockedByTerminal,
 	type StrikeOrExecuteOutcome,
+	getLivingPlayers,
 } from "./effects";
 import type { ResolutionResult } from "../../../../shared/games/face-turn";
 import { getCachedPublicState, buildPrivatePayloads } from "./state-builders";
@@ -84,6 +86,7 @@ import {
 	CARD_IDS,
 	getMoveTargetScope,
 	unwrapEffect,
+	isDraftable,
 } from "./cards";
 
 function buildStrikeResolution(
@@ -279,19 +282,23 @@ export const faceturnsEngine: GameEngine & GameEngineWithSecrets = {
 		const state = ctx.room.gamePayload as FaceturnServerState;
 		const roomPlayers = [...ctx.room.players.values()];
 
-		if (
-			roomPlayers.length < C.MIN_PLAYERS ||
-			roomPlayers.length > C.MAX_PLAYERS
-		) {
-			throw new Error(
-				`[face-turn] requires ${C.MIN_PLAYERS}–${C.MAX_PLAYERS} players.`,
-			);
-		}
-
 		const config: GameConfig = (ctx.room as { config?: GameConfig }).config ?? {
 			mode: "duel",
 		};
 		state.mode = config.mode;
+
+		  const { min, max } =
+				config.mode === "duel"
+					? { min: 2, max: 2 }
+					: config.mode === "teams"
+						? { min: C.TEAM_SIZE * 2 - (C.TEAM_SIZE - 1), max: C.TEAM_SIZE * 2 }
+						: { min: C.FFA_MIN_PLAYERS, max: C.FFA_MAX_PLAYERS };
+
+			if (roomPlayers.length < min || roomPlayers.length > max) {
+				throw new Error(
+					`[face-turn] ${config.mode} requires ${min}–${max} players.`,
+				);
+			}
 
 		const playerIds = roomPlayers.map((p) => p.playerId);
 		const { teams, turnOrder, playerOrder, teamIndexByPlayerId } =
@@ -343,12 +350,17 @@ export const faceturnsEngine: GameEngine & GameEngineWithSecrets = {
 					break;
 				}
 				case "select_crew": {
+					const crewDef = CREW_MAP.get(action.crewId);
 					if (
-						!CREW_MAP.has(action.crewId) ||
+						!crewDef || !isDraftable(crewDef) ||
 						draft.crewIds.includes(action.crewId)
 					)
 						return noOp();
-					if (draft.crewIds.length >= C.CREW_SLOTS) return noOp();
+					const crewCap =
+						draft.bossId === CARD_IDS.BOSS.THE_DEALER
+							? C.CREW_SLOTS + 1
+							: C.CREW_SLOTS;
+					if (draft.crewIds.length >= crewCap) return noOp();
 					draft.crewIds.push(action.crewId);
 					break;
 				}
@@ -429,14 +441,10 @@ export const faceturnsEngine: GameEngine & GameEngineWithSecrets = {
 		if (state.phase === "mulligan") {
 			if (action.type !== "mulligan") return noOp();
 			mulliganPlayer(player, action.redraw);
-			(
-				player as FaceturnServerPlayer & { mulliganDecided?: boolean }
-			).mulliganDecided = true;
+			player.mulliganDecided = true;
 
 			const allDecided = [...state.players.values()].every(
-				(p) =>
-					(p as FaceturnServerPlayer & { mulliganDecided?: boolean })
-						.mulliganDecided,
+				(p) => p.mulliganDecided,
 			);
 
 			if (allDecided) {
@@ -579,18 +587,27 @@ export const faceturnsEngine: GameEngine & GameEngineWithSecrets = {
 			if (interaction.type === "lighthouse_disable_pick") {
 				if (action.type !== "resolve_lighthouse_disable_pick") return noOp();
 
-				const isEligible = interaction.eligibleTargets.some(
-					(t) =>
-						t.playerId === action.targetPlayerId && t.slot === action.crewSlot,
-				);
-				if (!isEligible) return noOp();
-
-				resolveLighthouseDisablePick(
-					state,
-					action.targetPlayerId,
-					action.crewSlot,
-					interaction.eligibleTargets,
-				);
+				const maxPicks = interaction.maxPicks ?? 1;
+				const seen = new Set<string>();
+				let resolvedAny = false;
+				for (const pick of action.picks.slice(0, maxPicks)) {
+					const key = `${pick.targetPlayerId}:${pick.crewSlot}`;
+					if (seen.has(key)) continue; // dedupe
+					seen.add(key);
+					const isEligible = interaction.eligibleTargets.some(
+						(t) =>
+							t.playerId === pick.targetPlayerId && t.slot === pick.crewSlot,
+					);
+					if (!isEligible) continue;
+					resolveLighthouseDisablePick(
+						state,
+						pick.targetPlayerId,
+						pick.crewSlot,
+						interaction.eligibleTargets,
+					);
+					resolvedAny = true;
+				}
+				if (!resolvedAny) return noOp();
 
 				state.pendingInteraction = null;
 				return afterAction(state);
@@ -749,7 +766,7 @@ export const faceturnsEngine: GameEngine & GameEngineWithSecrets = {
 			if (interaction.type === "dig_deep_pick") {
 				if (action.type !== "resolve_dig_deep_pick") return noOp();
 				const lookCount = interaction.revealedCards.length;
-				resolveDigDeepPick(player, action.cardId, lookCount);
+				resolveDigDeepPick(player, [action.cardId], lookCount);
 				state.pendingInteraction = null;
 				return makeResult(state, ctx.room.timer?.duration ?? null, {
 					privatePayloads: buildPrivatePayloads(state),
@@ -1028,7 +1045,7 @@ export const faceturnsEngine: GameEngine & GameEngineWithSecrets = {
 
 					const boss = getBoss(player.bossId);
 
-					if (boss.id === "the-razor") {
+					if (boss.hasCustomCommandLogic && boss.id === "the-razor") {
 						if (!action.guessClass || action.targetCrewSlot === undefined)
 							return noOp();
 						const targetPlayer = action.targetPlayerId
@@ -1056,11 +1073,8 @@ export const faceturnsEngine: GameEngine & GameEngineWithSecrets = {
 						return afterAction(state);
 					}
 
-					if (boss.id === "the-dealer") {
-						const reserveCrewId = action.reserveCrewId;
-						if (!reserveCrewId || !CREW_MAP.has(reserveCrewId)) return noOp();
-						const handIdx = player.hand.indexOf(reserveCrewId);
-						if (handIdx === -1) return noOp();
+					if (boss.hasCustomCommandLogic && boss.id === "the-dealer") {
+						if (player.reserveCrewId === null) return noOp();
 
 						const foundSlot =
 							action.targetAllySlot !== undefined
@@ -1081,14 +1095,21 @@ export const faceturnsEngine: GameEngine & GameEngineWithSecrets = {
 							player.discardPile.push(oldCrewId);
 							player.totalCardsDiscarded++;
 						}
-						player.hand.splice(handIdx, 1);
-						player.crewIds[targetSlot] = reserveCrewId;
+						player.crewIds[targetSlot] = player.reserveCrewId;
 						player.crewTurned[targetSlot] = false;
 						player.crewClassOverrides.delete(targetSlot);
 						player.disabledPassiveSlots.delete(targetSlot);
+						player.reserveCrewId = null;
 						recomputePassives(player, state);
 
 						return afterAction(state);
+					}
+
+					if (boss.hasCustomCommandLogic) {
+						throw new Error(
+							`[face-turn] boss "${boss.id}" declares hasCustomCommandLogic ` +
+								`but engine.ts has no matching use_boss_command branch`,
+						);
 					}
 
 					if (action.targetPlayerId) {
@@ -1159,10 +1180,20 @@ export const faceturnsEngine: GameEngine & GameEngineWithSecrets = {
 					const slot = action.slotIndex as 0 | 1 | 2;
 					const moveId = player.activeMoves[slot];
 					if (!moveId) return noOp();
+					const wasGlobalDisable = getMove(moveId).effects.some((e) => {
+						const eff = unwrapEffect(e);
+						return eff.type === "passive_disable_all_crew_skills";
+					});
 					player.activeMoves[slot] = null;
+					player.trickleDownTargets.delete(slot);
 					player.discardPile.push(moveId);
 					player.totalCardsDiscarded++;
 					recomputePassives(player, state);
+					if (wasGlobalDisable) {
+						for (const p of getLivingPlayers(state)) {
+							if (p.playerId !== player.playerId) recomputePassives(p, state);
+						}
+					}
 					return makeResult(state, ctx.room.timer?.duration ?? null);
 				}
 
@@ -1363,7 +1394,8 @@ export const faceturnsEngine: GameEngine & GameEngineWithSecrets = {
 			}
 
 			if (action.type === "block" && pending.type === "class_action_strike") {
-				if (playerId !== pending.targetPlayerId) return noOp();
+				if (!isPlayerOrTeammate(state, playerId, pending.targetPlayerId!))
+					return noOp();
 				const blocker = state.players.get(playerId)!;
 				const blockerWouldBeBluffing = computeActorWasBluffing(
 					blocker,
@@ -1432,7 +1464,8 @@ export const faceturnsEngine: GameEngine & GameEngineWithSecrets = {
 
 		if (state.phase === "block_window") {
 			const pending = state.pendingAction!;
-			if (playerId !== pending.targetPlayerId) return noOp();
+			if (!isPlayerOrTeammate(state, playerId, pending.targetPlayerId!))
+				return noOp();
 
 			if (action.type === "block") {
 				const blocker = state.players.get(playerId)!;
@@ -1729,12 +1762,12 @@ export const faceturnsEngine: GameEngine & GameEngineWithSecrets = {
 			} else if (interaction.type === "handles_unturn_offer") {
 				// decline by default
 			} else if (interaction.type === "lighthouse_disable_pick") {
-				const first = interaction.eligibleTargets[0];
-				if (first) {
+				const maxPicks = interaction.maxPicks ?? 1;
+				for (const t of interaction.eligibleTargets.slice(0, maxPicks)) {
 					resolveLighthouseDisablePick(
 						state,
-						first.playerId,
-						first.slot,
+						t.playerId,
+						t.slot,
 						interaction.eligibleTargets,
 					);
 				}
@@ -1891,6 +1924,7 @@ export const faceturnsEngine: GameEngine & GameEngineWithSecrets = {
 					.map((id, i): [number, string | null] => [i, id])
 					.filter((entry): entry is [number, string] => entry[1] !== null),
 			),
+			reserveCrewId: player.reserveCrewId,
 			costOverrides: Object.fromEntries(player.costOverrides),
 			draftSelections: player.draftSelections
 				? {

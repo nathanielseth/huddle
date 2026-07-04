@@ -33,6 +33,8 @@ export interface FaceturnServerPlayer {
 	// bonus crew classes from effects like lotus and cristatella
 	crewClassOverrides: Map<number, Set<CrewClass>>;
 
+	reserveCrewId: string | null;
+
 	hand: string[];
 	deck: string[];
 	discardPile: string[];
@@ -71,6 +73,9 @@ export interface FaceturnServerPlayer {
 	shieldPerTurn: number;
 	// global cost reduction for all moves (big voucher), distinct from per-card costOverrides, min 0
 	moveBaseCostReduction: number;
+
+	mulliganDecided: boolean;
+
 	// action-level gate: while bossHp > 50, strikes and face turn cannot target this boss
 	// the attempt fizzles entirely, distinct from damage reduction
 	hasTerminalStrikeBlock: boolean;
@@ -87,9 +92,12 @@ export interface FaceturnServerPlayer {
 	// maps active-move slot index to protected ally's playerId, locked at cast time
 	// cleared when the slot's life insurance is consumed or discarded
 	lifeInsuranceTargets: Map<0 | 1 | 2, string>;
+	// maps an active-move slot to its locked watched enemy; cleared only when that slot is discarded, and read live by applyTrickleDownOnCollect
+	trickleDownTargets: Map<0 | 1 | 2, string>;
 	// failed challenge discards the false flag active move instead of turning crew
 	hasFalseFlag: boolean;
-	// set when totalCardsDiscarded hits 6 exactly (doctor norman)
+	// set when totalCardsDiscarded hits the doctor norman trigger threshold exactly
+	// (see DOCTOR_NORMAN_TRIGGER_DISCARD_COUNT in resolveEffects.ts, currently 4)
 	doctorNormanTriggered: boolean;
 	// per-turn flag reset in startTurn (vanessa de vera)
 	vanessaDrawUsedThisTurn: boolean;
@@ -180,6 +188,13 @@ export interface FaceturnServerState {
 	winnerId: string | null;
 	winCondition: WinCondition | null;
 
+	// NEW: one-shot scratch value stashed by discard_all_enemy_hand's handler
+	// (monkey-man), consumed and cleared by the very next
+	// deal_damage_per_enemy_hand_discarded primitive in the same effects
+	// array. must never be read by anything else — it is not durable state
+	// and is not part of the public view.
+	lastEnemyHandDiscardCount?: number | undefined;
+
 	// public state cache, invalidated on every mutation
 	_publicStateCacheValid: boolean;
 	_cachedPublicState: unknown;
@@ -246,6 +261,7 @@ export type PendingInteraction =
 			type: "dig_deep_pick";
 			actorId: string;
 			revealedCards: readonly string[];
+			maxPicks?: number;
 	  }
 	| {
 			// handles: genuine optional unturn of one own face-up crew (both guaranteed face-up when this opens)
@@ -275,6 +291,7 @@ export type PendingInteraction =
 			type: "bear_bones_bonus_strike";
 			actorId: string;
 			eligibleTargetIds: string[];
+			cashCost: number;
 	  }
 	| {
 			// too big: once-per-game optional self-unturn offer after a successful challenge call
@@ -307,6 +324,7 @@ export type PendingInteraction =
 			type: "lighthouse_disable_pick";
 			actorId: string;
 			eligibleTargets: readonly { playerId: string; slot: 0 | 1 }[];
+			maxPicks?: number;
 	  }
 	| {
 			// tag out: teams mode only, swap one own crew slot with a teammate's
@@ -366,11 +384,11 @@ export const FACETURN_CONSTANTS = {
 	RESOLUTION_DISPLAY_MS: 3 * 1_000,
 
 	STRIKE_CASH_COST: 3,
-	BLOCK_CASH_COST: 2,
+	BLOCK_CASH_COST: 0,
 	COLLECT_CASH_COST: 0,
 	UNTURN_CASH_COST: 4,
 
-	BOSS_FACE_TURN_COST: 7,
+	BOSS_FACE_TURN_COST: 6,
 
 	COLLECT_CASH_GAIN: 2,
 
@@ -383,7 +401,14 @@ export const FACETURN_CONSTANTS = {
 
 	MAX_PLAYERS: 4,
 	MIN_PLAYERS: 2,
-	TEAM_SIZE: 2,
+	TEAM_SIZE: 3,
 	FFA_MIN_PLAYERS: 3,
-	FFA_MAX_PLAYERS: 4,
+	FFA_MAX_PLAYERS: 6,
 } as const;
+
+export const CLASS_ACTION_COST_BY_CLASS: Record<CrewClass, number> = {
+	striker: FACETURN_CONSTANTS.STRIKE_CASH_COST,
+	blocker: FACETURN_CONSTANTS.BLOCK_CASH_COST,
+	collector: FACETURN_CONSTANTS.COLLECT_CASH_COST,
+	turner: FACETURN_CONSTANTS.UNTURN_CASH_COST,
+};

@@ -66,7 +66,6 @@ const UseBossCommandSchema = z.object({
 	guessClass: z.enum(["striker", "blocker", "collector", "turner"]).optional(),
 	targetCrewSlot: z.number().int().min(0).max(1).optional(),
 	targetAllySlot: z.number().int().min(0).max(1).optional(),
-	reserveCrewId: z.string().optional(),
 	targetPlayerId: z.string().optional(),
 });
 
@@ -227,9 +226,16 @@ const ResolveHandlesUnturnOfferSchema = z.object({
 });
 
 const ResolveLighthouseDisablePickSchema = z.object({
-	type: z.literal("resolve_lighthouse_disable_pick"),
-	targetPlayerId: z.string(),
-	crewSlot: z.number().int().min(0).max(1),
+  type: z.literal("resolve_lighthouse_disable_pick"),
+  picks: z
+    .array(
+      z.object({
+        targetPlayerId: z.string(),
+        crewSlot: z.number().int().min(0).max(1),
+      }),
+    )
+    .min(1)
+    .max(2),
 });
 
 // Tag Out: swap one own Crew slot with a teammate's (teams mode only)

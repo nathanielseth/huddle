@@ -55,6 +55,18 @@ function buildCrewSlots(player: FaceturnServerPlayer): readonly CrewSlotView[] {
 }
 
 function buildBossView(player: FaceturnServerPlayer): BossView {
+	if (!player.bossId) {
+		return {
+			id: "",
+			name: "",
+			hp: 0,
+			maxHp: 0,
+			shield: 0,
+			shieldTurnsRemaining: null,
+			commandUsed: false,
+			passiveEffects: [],
+		};
+	}
 	const def = getBoss(player.bossId);
 	return {
 		id: def.id,
@@ -204,6 +216,7 @@ function buildPendingInteractionView(
 				type: "bear_bones_bonus_strike",
 				actorId: pi.actorId,
 				eligibleTargetIds: pi.eligibleTargetIds,
+				cashCost: pi.cashCost,
 			};
 
 		case "too_big_unturn_offer":
@@ -253,6 +266,7 @@ function buildPendingInteractionView(
 				type: "lighthouse_disable_pick",
 				actorId: pi.actorId,
 				eligibleTargets: pi.eligibleTargets,
+				...(pi.maxPicks !== undefined ? { maxPicks: pi.maxPicks } : {}),
 			};
 
 		case "handles_unturn_offer":
@@ -391,6 +405,7 @@ export function buildPrivatePayloads(
 					.map((id, i): [number, string | null] => [i, id])
 					.filter((entry): entry is [number, string] => entry[1] !== null),
 			),
+			reserveCrewId: player.reserveCrewId,
 			costOverrides: Object.fromEntries(player.costOverrides),
 			draftSelections: player.draftSelections
 				? {

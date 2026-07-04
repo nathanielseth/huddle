@@ -36,7 +36,7 @@ export interface MoveCardDef {
 	readonly name: string;
 	readonly baseCost: number;
 	readonly flavorText: string;
-	
+
 	// null while the move's type hasn't been assigned yet (draft selection)
 	readonly moveType: MoveType | null;
 	readonly effectSummary: string;
@@ -190,6 +190,7 @@ export type PendingInteractionView =
 			// top-of-deck reveal is private to the actor, not exposed in public view
 			type: "dig_deep_pick";
 			actorId: string;
+			maxPicks?: number;
 	  }
 	| { type: "handles_unturn_offer"; actorId: string; eligibleSlots: number[] }
 	| {
@@ -208,6 +209,7 @@ export type PendingInteractionView =
 			type: "bear_bones_bonus_strike";
 			actorId: string;
 			eligibleTargetIds: string[];
+			cashCost: number;
 	  }
 	| { type: "too_big_unturn_offer"; actorId: string }
 	| {
@@ -230,6 +232,7 @@ export type PendingInteractionView =
 			type: "lighthouse_disable_pick";
 			actorId: string;
 			eligibleTargets: readonly { playerId: string; slot: number }[];
+			maxPicks?: number;
 	  }
 	| {
 			type: "tag_out_pick";
@@ -316,6 +319,8 @@ export interface FaceturnsSecret {
 
 	// slot index → crew id; hidden from opponents until crew turns face-up
 	readonly crewAssignments: Readonly<Record<number, string>>;
+
+	readonly reserveCrewId: string | null;
 
 	// temporary per-turn cost overrides from discount effects
 	readonly costOverrides: Readonly<Record<string, number>>;

@@ -20,6 +20,8 @@ import {
 	BOSSES,
 	CREW,
 	MOVES,
+	isDraftable,
+	unwrapEffect,
 } from "./cards";
 import {
 	resolveEffects,
@@ -37,6 +39,7 @@ import {
 	checkVanessaDrawTrigger,
 	maybeOpenBearBonesOffer,
 	applySupplyDropOnCollect,
+	applyTrickleDownOnCollect,
 	executedPlayerIdFrom,
 } from "./effects";
 import type { StrikeOrExecuteOutcome } from "./effects";
@@ -62,6 +65,7 @@ export function makeServerPlayer(
 		crewIds: [null, null],
 		crewTurned: [false, false],
 		crewClassOverrides: new Map(),
+		reserveCrewId: null,
 		hand: [],
 		deck: [],
 		discardPile: [],
@@ -92,6 +96,7 @@ export function makeServerPlayer(
 		hasWatcherPassive: false,
 		hasLifeInsurance: false,
 		lifeInsuranceTargets: new Map(),
+		trickleDownTargets: new Map(),
 		hasFalseFlag: false,
 		hasSupplyDrop: false,
 		supplyDropCashAmount: 0,
@@ -107,6 +112,7 @@ export function makeServerPlayer(
 		costOverrides: new Map(),
 		draftSelections: { bossId: null, crewIds: [], moveIds: [] },
 		isDraftLocked: false,
+		mulliganDecided: false,
 		hasTerminalStrikeBlock: false,
 	};
 }
@@ -133,9 +139,19 @@ export function buildTeamsAndTurnOrder(
 		const repA = teams[0]![Math.floor(Math.random() * teams[0]!.length)]!;
 		const repB = teams[1]![Math.floor(Math.random() * teams[1]!.length)]!;
 		const playerOrder: [string, string] = [repA, repB];
-		const otherA = teams[0]!.find((p) => p !== repA)!;
-		const otherB = teams[1]!.find((p) => p !== repB)!;
-		const turnOrder = [repA, repB, otherA, otherB];
+
+		const rotateFromRep = (team: string[], rep: string): string[] => {
+			const repIdx = team.indexOf(rep);
+			return [...team.slice(repIdx), ...team.slice(0, repIdx)];
+		};
+		const rotatedA = rotateFromRep(teams[0]!, repA);
+		const rotatedB = rotateFromRep(teams[1]!, repB);
+		const maxLen = Math.max(rotatedA.length, rotatedB.length);
+		const turnOrder: string[] = [];
+		for (let i = 0; i < maxLen; i++) {
+			if (rotatedA[i]) turnOrder.push(rotatedA[i]!);
+			if (rotatedB[i]) turnOrder.push(rotatedB[i]!);
+		}
 		return { teams, turnOrder, playerOrder, teamIndexByPlayerId };
 	}
 
@@ -168,42 +184,28 @@ export function setTurnOrderAfterRps(
 
 	const teamOfRepA = state.teams[state.players.get(repA)!.teamIndex]!;
 	const teamOfRepB = state.teams[state.players.get(repB)!.teamIndex]!;
-	const otherA = teamOfRepA.find((p) => p !== repA)!;
-	const otherB = teamOfRepB.find((p) => p !== repB)!;
 
-	const rpsWinnerIsRepA = rpsWinnerId === repA;
-	let firstRep: string;
-	let secondRep: string;
-	let firstOther: string;
-	let secondOther: string;
+	// which rep's team goes first is decided by rps; goFirst=false flips it
+	const repAGoesFirst = goFirst === (rpsWinnerId === repA);
+	const [firstTeam, firstRep, secondTeam, secondRep] = repAGoesFirst
+		? [teamOfRepA, repA, teamOfRepB, repB]
+		: [teamOfRepB, repB, teamOfRepA, repA];
 
-	if (goFirst) {
-		if (rpsWinnerIsRepA) {
-			firstRep = repA;
-			secondRep = repB;
-			firstOther = otherA;
-			secondOther = otherB;
-		} else {
-			firstRep = repB;
-			secondRep = repA;
-			firstOther = otherB;
-			secondOther = otherA;
-		}
-	} else {
-		if (rpsWinnerIsRepA) {
-			firstRep = repB;
-			secondRep = repA;
-			firstOther = otherB;
-			secondOther = otherA;
-		} else {
-			firstRep = repA;
-			secondRep = repB;
-			firstOther = otherA;
-			secondOther = otherB;
-		}
+	const rotateFromRep = (team: string[], rep: string): string[] => {
+		const repIdx = team.indexOf(rep);
+		return [...team.slice(repIdx), ...team.slice(0, repIdx)];
+	};
+	const rotatedFirst = rotateFromRep(firstTeam, firstRep);
+	const rotatedSecond = rotateFromRep(secondTeam, secondRep);
+
+	const maxLen = Math.max(rotatedFirst.length, rotatedSecond.length);
+	const turnOrder: string[] = [];
+	for (let i = 0; i < maxLen; i++) {
+		if (rotatedFirst[i]) turnOrder.push(rotatedFirst[i]!);
+		if (rotatedSecond[i]) turnOrder.push(rotatedSecond[i]!);
 	}
 
-	state.turnOrder = [firstRep, secondRep, firstOther, secondOther];
+	state.turnOrder = turnOrder;
 }
 
 export function isDraftValid(player: FaceturnServerPlayer): boolean {
@@ -213,7 +215,9 @@ export function isDraftValid(player: FaceturnServerPlayer): boolean {
 	const boss = BOSS_MAP.get(draft.bossId);
 	if (!boss) return false;
 
-	if (draft.crewIds.length !== C.CREW_SLOTS) return false;
+	const requiredCrewCount =
+		draft.bossId === CARD_IDS.BOSS.THE_DEALER ? C.CREW_SLOTS + 1 : C.CREW_SLOTS;
+	if (draft.crewIds.length !== requiredCrewCount) return false;
 	if (draft.moveIds.length !== C.MOVES_PER_DECK) return false;
 
 	const allIds = [draft.bossId, ...draft.crewIds, ...draft.moveIds];
@@ -228,8 +232,12 @@ export function finalizeDraft(player: FaceturnServerPlayer): void {
 	player.bossHp = boss.maxHp;
 	player.bossMaxHp = boss.maxHp;
 
-	for (let i = 0; i < draft.crewIds.length; i++) {
+	// the dealer drafts 3 crew: 2 go into the normal face-up-eligible slots, the 3rd goes into reserve
+	for (let i = 0; i < Math.min(draft.crewIds.length, C.CREW_SLOTS); i++) {
 		player.crewIds[i as 0 | 1] = draft.crewIds[i]!;
+	}
+	if (boss.id === CARD_IDS.BOSS.THE_DEALER) {
+		player.reserveCrewId = draft.crewIds[C.CREW_SLOTS] ?? null;
 	}
 
 	player.deck = shuffle(draft.moveIds);
@@ -242,11 +250,14 @@ export function autoFillAndFinalizeDraft(player: FaceturnServerPlayer): void {
 			BOSSES[Math.floor(Math.random() * BOSSES.length)]!.id;
 	}
 
-	const maxCrewes = C.CREW_SLOTS;
+	const maxCrewes =
+		player.draftSelections!.bossId === CARD_IDS.BOSS.THE_DEALER
+			? C.CREW_SLOTS + 1
+			: C.CREW_SLOTS;
 	const maxMoves = C.MOVES_PER_DECK;
 
 	const availableCrewes = CREW.filter(
-		(h) => !player.draftSelections!.crewIds.includes(h.id),
+		(h) => isDraftable(h) && !player.draftSelections!.crewIds.includes(h.id),
 	);
 	while (
 		player.draftSelections!.crewIds.length < maxCrewes &&
@@ -677,6 +688,20 @@ export function resolveChallenge(
 				}
 			}
 		}
+		// the watcher: this IS a "you win a challenge" event too
+		// the challenger just won by correctly calling a bluff
+		if (state.pendingInteraction === null && challenger.hasWatcherPassive) {
+			const watcherEligibleSlots = ([0, 1] as const).filter(
+				(i) => challenger.crewIds[i] !== null && challenger.crewTurned[i],
+			);
+			if (watcherEligibleSlots.length > 0) {
+				state.pendingInteraction = {
+					type: "watcher_unturn_offer",
+					actorId: challenger.playerId,
+					eligibleSlots: watcherEligibleSlots,
+				};
+			}
+		}
 		if (state.pendingInteraction === null) {
 			maybeOpenBearBonesOffer(state, challenger, pending.actorId);
 		}
@@ -728,6 +753,7 @@ export function executePendingAction(
 		case "class_action_collect": {
 			actor.cash += C.COLLECT_CASH_GAIN;
 			applySupplyDropOnCollect(state, actor);
+			applyTrickleDownOnCollect(state, actor, C.COLLECT_CASH_GAIN);
 			return null;
 		}
 		case "class_action_unturn": {
@@ -759,6 +785,8 @@ export function executeMove(
 	targets: MoveTarget = {},
 ): void {
 	const move = getMove(moveId);
+
+	actor.costOverrides.delete(moveId);
 
 	// active moves are equipped to a slot; burst and slow are resolved and
 	// discarded after effect application
@@ -798,6 +826,19 @@ export function executeMove(
 	if (move.moveType === "active") {
 		if (claimedSlot !== -1) {
 			recomputePassives(actor, state);
+			// blackmail (and any future move with a global side effect on
+			// other players) needs everyone's derived stats refreshed
+			// immediately, not just the caster's — recomputePassives only
+			// self-derives for whoever it's called on.
+			const hasGlobalDisable = move.effects.some((e) => {
+				const eff = unwrapEffect(e);
+				return eff.type === "passive_disable_all_crew_skills";
+			});
+			if (hasGlobalDisable) {
+				for (const p of state.players.values()) {
+					if (p.playerId !== actor.playerId) recomputePassives(p, state);
+				}
+			}
 		}
 	} else {
 		actor.discardPile.push(moveId);
