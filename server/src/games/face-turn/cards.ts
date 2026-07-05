@@ -256,10 +256,6 @@ export type EffectPrimitive =
 			multiplier: number;
 	  }
 	| {
-			type: "passive_block_cost_reduction";
-			reduction: number;
-	  }
-	| {
 			type: "passive_disable_all_crew_skills";
 	  }
 	// void arms: when opponent would pick which of your face-down crew to

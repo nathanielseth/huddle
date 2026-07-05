@@ -8,6 +8,8 @@ import type {
 	GameMode,
 	MoveChainEntry,
 } from "../../../../shared/games/face-turn/types";
+import { FACETURN_CONSTANTS } from "../../../../shared/games/face-turn/constants";
+export { FACETURN_CONSTANTS };
 
 export interface GameConfig {
 	mode: GameMode;
@@ -67,8 +69,6 @@ export interface FaceturnServerPlayer {
 	damageReductionPercent: number;
 
 	hasWatcherPassive: boolean;
-	// subtractive block cost reduction (lighthouse), min 0
-	blockCostReduction: number;
 	// shield granted to this player's boss at start of every turn (void torso)
 	shieldPerTurn: number;
 	// global cost reduction for all moves (big voucher), distinct from per-card costOverrides, min 0
@@ -364,47 +364,6 @@ export interface ServerPendingAction {
 	// null for any pendingAction that isn't itself a block
 	originalActionType: ServerPendingActionType | null;
 }
-
-export const FACETURN_CONSTANTS = {
-	MAX_DECK_SIZE: 24,
-	CREW_SLOTS: 2,
-	MOVES_PER_DECK: 21, // 1 boss + 2 crew + 21 moves = 24 total
-	OPENING_HAND_SIZE: 3,
-	HAND_LIMIT: 6,
-
-	DRAFTING_DURATION_MS: 5 * 60 * 1_000,
-	RPS_DURATION_MS: 30 * 1_000,
-	MULLIGAN_DURATION_MS: 30 * 1_000,
-	ACTIVE_TURN_DURATION_MS: 35 * 1_000,
-	CHALLENGE_WINDOW_MS: 15 * 1_000,
-	MOVE_CHAIN_WINDOW_MS: 15 * 1_000,
-	BLOCK_DECLARED_MS: 15 * 1_000,
-	BLOCK_WINDOW_MS: 15 * 1_000, // target's window to declare a block against a card_strike
-	BLOCK_CHALLENGE_MS: 15 * 1_000,
-	RESOLUTION_DISPLAY_MS: 3 * 1_000,
-
-	STRIKE_CASH_COST: 3,
-	BLOCK_CASH_COST: 0,
-	COLLECT_CASH_COST: 0,
-	UNTURN_CASH_COST: 4,
-
-	BOSS_FACE_TURN_COST: 6,
-
-	COLLECT_CASH_GAIN: 2,
-
-	BOSS_DEFAULT_HP: 100,
-	MAX_ACTIVE_MOVE_SLOTS: 3,
-
-	ROUND_LIMIT_DUEL: 15,
-	ROUND_LIMIT_TEAMS: 18,
-	ROUND_LIMIT_FFA: 20,
-
-	MAX_PLAYERS: 4,
-	MIN_PLAYERS: 2,
-	TEAM_SIZE: 3,
-	FFA_MIN_PLAYERS: 3,
-	FFA_MAX_PLAYERS: 6,
-} as const;
 
 export const CLASS_ACTION_COST_BY_CLASS: Record<CrewClass, number> = {
 	striker: FACETURN_CONSTANTS.STRIKE_CASH_COST,

@@ -294,7 +294,15 @@ export function registerHandlers(
 
 		const found = store.findPlayerBySocket(socket.id);
 		if (!found) return;
-		runner.handleAction(found.room, found.playerId, payload, io, store);
+		const { room, playerId } = found;
+
+		if (room.phase === "lobby") {
+			const isHost = isHostSocket(room, socket.id);
+			runner.handleConfigUpdate(room, playerId, isHost, payload, io);
+			return;
+		}
+
+		runner.handleAction(room, playerId, payload, io, store);
 	});
 
 	socket.on("pause_game", () => {

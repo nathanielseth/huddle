@@ -85,7 +85,6 @@ export function makeServerPlayer(
 		crewSkillsDisabled: false,
 		damageMultiplier: 1,
 		damageReductionPercent: 0,
-		blockCostReduction: 0,
 		shieldPerTurn: 0,
 		moveBaseCostReduction: 0,
 		hasVoidArms: false,
@@ -962,7 +961,7 @@ export function getClassActionCost(
 		case "strike":
 			return C.STRIKE_CASH_COST;
 		case "block":
-			return Math.max(0, C.BLOCK_CASH_COST - player.blockCostReduction);
+			return C.BLOCK_CASH_COST;
 		case "collect":
 			return C.COLLECT_CASH_COST;
 		case "unturn":

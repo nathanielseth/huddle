@@ -32,6 +32,7 @@ function buildCrewSlots(player: FaceturnServerPlayer): readonly CrewSlotView[] {
 				crewId: null,
 				crewClass: null,
 				isTurned: false,
+				extraClasses: [],
 			};
 		}
 		if (!player.crewTurned[idx]) {
@@ -41,15 +42,18 @@ function buildCrewSlots(player: FaceturnServerPlayer): readonly CrewSlotView[] {
 				crewId: null,
 				crewClass: null,
 				isTurned: false,
+				extraClasses: [],
 			};
 		}
 		const crew = getCrew(crewId);
+		const overrides = player.crewClassOverrides.get(idx);
 		return {
 			slotIndex: idx,
 			status: "face_up",
 			crewId: crew.id,
 			crewClass: crew.class,
 			isTurned: true,
+			extraClasses: overrides ? [...overrides] : [],
 		};
 	});
 }
@@ -120,6 +124,7 @@ function buildPlayerView(
 		hasShieldedBossThisGame: player.hasShieldedBossThisGame,
 		poisonStacks: totalIncomingPoison,
 		cashGainPerTurn: player.cashGainPerTurn,
+		moveBaseCostReduction: player.moveBaseCostReduction,
 		isEliminated: state.eliminatedPlayers.has(player.playerId),
 		teamIndex: player.teamIndex,
 	};
@@ -193,7 +198,11 @@ function buildPendingInteractionView(
 		case "dig_deep_pick":
 			// revealedCards is deliberately omitted — private info, delivered
 			// only via FaceturnsSecret to the owning player.
-			return { type: "dig_deep_pick", actorId: pi.actorId };
+			return {
+				type: "dig_deep_pick",
+				actorId: pi.actorId,
+				...(pi.maxPicks !== undefined ? { maxPicks: pi.maxPicks } : {}),
+			};
 
 		case "switch_up_pick":
 			return {
@@ -397,6 +406,12 @@ export function buildPrivatePayloads(
 			state.pendingInteraction.actorId === playerId
 				? state.pendingInteraction.revealedCards
 				: null;
+		
+			const digDeepRevealedCards: readonly string[] | null =
+					state.pendingInteraction?.type === "dig_deep_pick" &&
+					state.pendingInteraction.actorId === playerId
+						? state.pendingInteraction.revealedCards
+						: null;
 
 		payloads.set(playerId, {
 			hand: [...player.hand],
@@ -415,6 +430,7 @@ export function buildPrivatePayloads(
 					}
 				: null,
 			peekRevealedCards,
+			digDeepRevealedCards,
 		});
 	}
 

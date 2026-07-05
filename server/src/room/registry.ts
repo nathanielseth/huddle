@@ -25,6 +25,8 @@ export interface Room {
 	lastActiveAt: number;
 	gamePayload: unknown;
 	publicPayload: unknown;
+	configPayload: unknown;
+	gameConfig: unknown;
 	timer: GameTimer | null;
 	pausedTimerRemaining: number | null;
 	pauseReason: PauseReason | null;
@@ -122,6 +124,8 @@ export function createRoom(
 		createdAt: now,
 		lastActiveAt: now,
 		gamePayload: null,
+		configPayload: null,
+		gameConfig: null,
 		publicPayload: null,
 		timer: null,
 		pausedTimerRemaining: null,
@@ -204,6 +208,7 @@ export function getPublicState(room: Room): GameState {
 		players,
 		timer: room.timer,
 		gamePayload: room.publicPayload,
+		configPayload: room.configPayload,
 		...(room.pauseReason !== null && { pauseReason: room.pauseReason }),
 		...(room.hostReconnectDeadline !== null && {
 			hostReconnectDeadline: room.hostReconnectDeadline,

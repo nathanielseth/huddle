@@ -661,9 +661,6 @@ function recomputePassiveSwitch(
 				effect.percent,
 			);
 			break;
-		case "passive_block_cost_reduction":
-			player.blockCostReduction += effect.reduction;
-			break;
 		case "passive_reduce_all_move_costs":
 			player.moveBaseCostReduction += effect.reduction;
 			break;
@@ -724,7 +721,6 @@ export function recomputePassives(
 	player.crewSkillsDisabled = false;
 	player.damageMultiplier = 1;
 	player.damageReductionPercent = 0;
-	player.blockCostReduction = 0;
 	player.shieldPerTurn = 0;
 	player.moveBaseCostReduction = 0;
 	player.hasVoidArms = false;
@@ -1345,7 +1341,6 @@ const handlers: Partial<Record<EffectPrimitive["type"], Handler>> = {
 	passive_optional_discard_for_damage_per_turn() {},
 	passive_damage_multiplier() {},
 	passive_negate_damage_percent() {},
-	passive_block_cost_reduction() {},
 	passive_reduce_all_move_costs() {},
 	passive_disable_all_crew_skills() {},
 	passive_defender_chooses_crew_to_turn() {},

@@ -29,6 +29,7 @@ export interface GameState {
 	players: Player[];
 	timer: GameTimer | null;
 	gamePayload: unknown; // typed per-game, cast where used
+	configPayload: unknown;
 	pauseReason?: PauseReason;
 	hostReconnectDeadline?: number | null;
 }

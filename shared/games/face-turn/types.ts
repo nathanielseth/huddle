@@ -1,3 +1,8 @@
+export interface FaceturnsConfigPayload {
+	mode: "duel" | "ffa" | "teams";
+	teamChoices: Record<string, "A" | "B">;
+}
+
 export type FaceturnsPhase =
 	| "drafting"
 	| "mulligan"
@@ -50,6 +55,7 @@ export interface CrewSlotView {
 	readonly crewId: string | null;
 	readonly crewClass: CrewClass | null;
 	readonly isTurned: boolean;
+	readonly extraClasses: readonly CrewClass[];
 }
 
 export interface BossView {
@@ -97,6 +103,7 @@ export interface FaceturnsPlayerView {
 
 	// cash granted at the start of each turn this player takes
 	readonly cashGainPerTurn: number;
+	readonly moveBaseCostReduction: number;
 	readonly isEliminated: boolean;
 	readonly teamIndex: number;
 }
@@ -334,4 +341,5 @@ export interface FaceturnsSecret {
 
 	// the two cards revealed when resolving peek effects
 	readonly peekRevealedCards: readonly [string, string] | null;
+	readonly digDeepRevealedCards: readonly string[] | null;
 }

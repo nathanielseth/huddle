@@ -1,5 +1,30 @@
 import { z } from "zod";
 
+// config
+export const FaceturnsConfigPayloadSchema = z.object({
+	mode: z.enum(["duel", "ffa", "teams"]),
+	teamChoices: z.record(z.string(), z.enum(["A", "B"])),
+	
+});
+export type FaceturnsConfigPayload = z.infer<
+	typeof FaceturnsConfigPayloadSchema
+>;
+
+export const DEFAULT_FACETURN_CONFIG: FaceturnsConfigPayload = {
+	mode: "duel",
+	teamChoices: {},
+};
+
+export const FaceturnsConfigActionSchema = z.discriminatedUnion("kind", [
+	z.object({
+		kind: z.literal("set_mode"),
+		mode: z.enum(["duel", "ffa", "teams"]),
+	}),
+	z.object({ kind: z.literal("set_team"), team: z.enum(["A", "B"]) }),
+	// add new `kind` variants here
+]);
+export type FaceturnsConfigAction = z.infer<typeof FaceturnsConfigActionSchema>;
+
 // draft
 const SelectBossSchema = z.object({
 	type: z.literal("select_boss"),
@@ -165,7 +190,7 @@ const ResolveChooseFromDiscardSchema = z.object({
 // Dig Deep: player picks one of the revealed top-of-deck cards to draw
 const ResolveDigDeepPickSchema = z.object({
 	type: z.literal("resolve_dig_deep_pick"),
-	cardId: z.string(),
+	cardIds: z.array(z.string()).min(1),
 });
 
 // Switch Up: picks a face-up slot to unturn and a DIFFERENT face-down slot to turn

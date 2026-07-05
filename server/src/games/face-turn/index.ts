@@ -12,8 +12,10 @@ import type {
 	GameConfig,
 } from "./types";
 import { FACETURN_CONSTANTS as C } from "./types";
-import { FaceturnsActionSchema } from "./schemas";
-import type { FaceturnsAction } from "./schemas";
+import { FaceturnsActionSchema, FaceturnsConfigActionSchema } from "./schemas";
+import type {
+	FaceturnsAction,
+} from "./schemas";
 import {
 	makeServerPlayer,
 	buildTeamsAndTurnOrder,
@@ -79,6 +81,7 @@ import {
 } from "./effects";
 import type { ResolutionResult } from "../../../../shared/games/face-turn/types";
 import { getCachedPublicState, buildPrivatePayloads } from "./state-builders";
+import { applyConfigAction, buildGameConfig } from "./config";
 
 import {
 	getCrew,
@@ -248,8 +251,10 @@ function applyRpsWinner(state: FaceturnServerState): EngineResult {
 
 export const faceturnsEngine: GameEngine & GameEngineWithSecrets = {
 	gameId: "face-turn",
-
 	actionSchema: FaceturnsActionSchema,
+	configActionSchema: FaceturnsConfigActionSchema,
+	applyConfigAction,
+	buildGameConfig,
 
 	getInitialState(): FaceturnServerState {
 		return {
@@ -282,23 +287,23 @@ export const faceturnsEngine: GameEngine & GameEngineWithSecrets = {
 		const state = ctx.room.gamePayload as FaceturnServerState;
 		const roomPlayers = [...ctx.room.players.values()];
 
-		const config: GameConfig = (ctx.room as { config?: GameConfig }).config ?? {
+		const config: GameConfig = (ctx.room.gameConfig as GameConfig | null) ?? {
 			mode: "duel",
 		};
 		state.mode = config.mode;
 
-		  const { min, max } =
-				config.mode === "duel"
-					? { min: 2, max: 2 }
-					: config.mode === "teams"
-						? { min: C.TEAM_SIZE * 2 - (C.TEAM_SIZE - 1), max: C.TEAM_SIZE * 2 }
-						: { min: C.FFA_MIN_PLAYERS, max: C.FFA_MAX_PLAYERS };
+		const { min, max } =
+			config.mode === "duel"
+				? { min: 2, max: 2 }
+				: config.mode === "teams"
+					? { min: C.TEAM_SIZE * 2 - (C.TEAM_SIZE - 1), max: C.TEAM_SIZE * 2 }
+					: { min: C.FFA_MIN_PLAYERS, max: C.FFA_MAX_PLAYERS };
 
-			if (roomPlayers.length < min || roomPlayers.length > max) {
-				throw new Error(
-					`[face-turn] ${config.mode} requires ${min}–${max} players.`,
-				);
-			}
+		if (roomPlayers.length < min || roomPlayers.length > max) {
+			throw new Error(
+				`[face-turn] ${config.mode} requires ${min}–${max} players.`,
+			);
+		}
 
 		const playerIds = roomPlayers.map((p) => p.playerId);
 		const { teams, turnOrder, playerOrder, teamIndexByPlayerId } =
@@ -352,7 +357,8 @@ export const faceturnsEngine: GameEngine & GameEngineWithSecrets = {
 				case "select_crew": {
 					const crewDef = CREW_MAP.get(action.crewId);
 					if (
-						!crewDef || !isDraftable(crewDef) ||
+						!crewDef ||
+						!isDraftable(crewDef) ||
 						draft.crewIds.includes(action.crewId)
 					)
 						return noOp();
@@ -766,7 +772,12 @@ export const faceturnsEngine: GameEngine & GameEngineWithSecrets = {
 			if (interaction.type === "dig_deep_pick") {
 				if (action.type !== "resolve_dig_deep_pick") return noOp();
 				const lookCount = interaction.revealedCards.length;
-				resolveDigDeepPick(player, [action.cardId], lookCount);
+				resolveDigDeepPick(
+					player,
+					action.cardIds,
+					lookCount,
+					interaction.maxPicks ?? 1,
+				);
 				state.pendingInteraction = null;
 				return makeResult(state, ctx.room.timer?.duration ?? null, {
 					privatePayloads: buildPrivatePayloads(state),
@@ -1916,6 +1927,12 @@ export const faceturnsEngine: GameEngine & GameEngineWithSecrets = {
 			state.pendingInteraction.actorId === playerId
 				? state.pendingInteraction.revealedCards
 				: null;
+		
+		const digDeepRevealedCards: readonly string[] | null =
+			state.pendingInteraction?.type === "dig_deep_pick" &&
+			state.pendingInteraction.actorId === playerId
+				? state.pendingInteraction.revealedCards
+				: null;
 
 		return {
 			hand: [...player.hand],
@@ -1934,6 +1951,7 @@ export const faceturnsEngine: GameEngine & GameEngineWithSecrets = {
 					}
 				: null,
 			peekRevealedCards,
+			digDeepRevealedCards,
 		};
 	},
 };

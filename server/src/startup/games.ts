@@ -6,6 +6,7 @@ import { witzoneEngine } from "../games/witzone/index";
 import { pokerEngine } from "../games/poker/index";
 import { cybsecsEngine } from "../games/cybersecs/index";
 import { squadoodleEngine } from "../games/squadoodle/index";
+import { faceturnsEngine } from "../games/face-turn/index";
 import { logger } from "../lib/logger";
 import type { GameEngine } from "../engine/GameEngine";
 
@@ -16,7 +17,8 @@ const ENGINES: readonly GameEngine[] = [
 	witzoneEngine,
 	pokerEngine,
 	cybsecsEngine,
-	squadoodleEngine
+	squadoodleEngine,
+	faceturnsEngine,
 ];
 
 export function registerGames(runner: GameRunner): void {
