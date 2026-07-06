@@ -74,6 +74,9 @@ export class GameRunner {
 		if (!engine) return;
 
 		room.gamePayload = engine.getInitialState();
+		room.gameConfig = engine.buildGameConfig
+			? engine.buildGameConfig(room.configPayload, [...room.players.keys()])
+			: null;
 		room.phase = "in_game";
 
 		this.executeSafely(
@@ -108,6 +111,33 @@ export class GameRunner {
 			() => engine.onAction({ room }, playerId, validatedAction),
 			(result) => { this.applyResult(result, engine.gameId, room, io, store); },
 		);
+	}
+
+	handleConfigUpdate(
+		room: Room,
+		senderPlayerId: string,
+		senderIsHost: boolean,
+		action: unknown,
+		io: IO,
+	): void {
+		const engine = this.resolveEngine(room.gameId);
+		if (!engine || room.phase !== "lobby") return;
+		if (!engine.configActionSchema || !engine.applyConfigAction) return;
+
+		const parsed = engine.configActionSchema.safeParse(action);
+		if (!parsed.success) return;
+
+		const next = engine.applyConfigAction(
+			room.configPayload,
+			parsed.data,
+			senderPlayerId,
+			senderIsHost,
+		);
+		if (next === null) return;
+
+		room.configPayload = next;
+		touchRoom(room);
+		io.to(room.code).emit("game_state", getPublicState(room));
 	}
 
 	cancelTimer(roomCode: string): void {
@@ -294,7 +324,9 @@ export class GameRunner {
 				io,
 				store,
 				() => engine.onTimerExpired({ room }),
-				(result) => { this.applyResult(result, engine.gameId, room, io, store); },
+				(result) => {
+					this.applyResult(result, engine.gameId, room, io, store);
+				},
 			);
 		}, delay);
 

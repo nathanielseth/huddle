@@ -20,6 +20,17 @@ export interface EngineResult {
 export interface GameEngine {
 	readonly gameId: string;
 	readonly actionSchema?: z.ZodTypeAny;
+	readonly configActionSchema?: z.ZodTypeAny;
+	readonly applyConfigAction?: (
+		currentPayload: unknown,
+		action: unknown,
+		senderPlayerId: string,
+		senderIsHost: boolean,
+	) => unknown;
+	readonly buildGameConfig?: (
+		configPayload: unknown,
+		playerIds: string[],
+	) => unknown;
 	getInitialState(): unknown;
 	onAction(
 		ctx: GameContext,
@@ -28,6 +39,10 @@ export interface GameEngine {
 	): Awaitable<EngineResult>;
 	onTimerExpired(ctx: GameContext): Awaitable<EngineResult>;
 	onStart(ctx: GameContext): Awaitable<EngineResult>;
+}
+
+export interface GameEngineWithSecrets extends GameEngine {
+	getPlayerSecret(ctx: GameContext, playerId: string): Awaitable<unknown>;
 }
 
 export interface GameEngineWithSecrets extends GameEngine {
