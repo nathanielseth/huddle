@@ -446,6 +446,7 @@ export const faceturnsEngine: GameEngine & GameEngineWithSecrets = {
 
 		if (state.phase === "mulligan") {
 			if (action.type !== "mulligan") return noOp();
+			if (player.mulliganDecided) return noOp();
 			mulliganPlayer(player, action.redraw);
 			player.mulliganDecided = true;
 

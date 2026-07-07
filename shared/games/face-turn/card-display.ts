@@ -922,6 +922,16 @@ export const MOVE_DISPLAY: readonly MoveCardDisplay[] = [
 	},
 ];
 
+export const SELF_CREW_SLOT_MOVE_IDS = new Set<string>([
+	"kamikaze",
+	"heel-turn",
+	"pull-counter",
+]);
+
+export function needsSelfCrewSlot(move: MoveCardDisplay): boolean {
+	return SELF_CREW_SLOT_MOVE_IDS.has(move.id);
+}
+
 // lookup maps — display-only, safe for client use
 
 export const BOSS_DISPLAY_MAP = new Map(BOSS_DISPLAY.map((b) => [b.id, b]));

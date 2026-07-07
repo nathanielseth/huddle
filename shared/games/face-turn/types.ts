@@ -106,6 +106,7 @@ export interface FaceturnsPlayerView {
 	readonly moveBaseCostReduction: number;
 	readonly isEliminated: boolean;
 	readonly teamIndex: number;
+	readonly mulliganDecided: boolean;
 }
 
 export type PendingActionType =

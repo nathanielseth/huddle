@@ -321,9 +321,7 @@ export type EffectPrimitive =
 	| { type: "become_also_turner" }
 	| { type: "transform_jeremy_into_berserker" }
 
-	// new required primitives
-	// lighthouse turned: disable target crew passive until that crew
-	// turns face-down. works on ally or enemy; clears on unturn
+	// disable target crew's passive AND class identity until that crew turns face-down
 	| {
 			type: "disable_target_crew_passive";
 			targetSlot?: number;

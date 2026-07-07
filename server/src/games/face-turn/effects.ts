@@ -226,8 +226,6 @@ function evaluateConditionForRecompute(
 	}
 }
 
-// respects class overrides from lotus and cristatella. a
-// lighthouse-disabled crew still counts as its class for bluff-calling
 export function resolveCrewClass(
 	player: FaceturnServerPlayer,
 	slot: 0 | 1,
@@ -235,6 +233,7 @@ export function resolveCrewClass(
 ): string | boolean {
 	const crewId = player.crewIds[slot];
 	if (!crewId) return cls ? false : "";
+	if (player.disabledPassiveSlots.has(slot)) return cls ? false : "";
 	const overrides = player.crewClassOverrides.get(slot);
 	if (cls) {
 		if (overrides?.has(cls)) return true;
@@ -461,9 +460,7 @@ export function playerHasClass(
 	return player.crewIds.some((crewId, i) => {
 		if (!crewId) return false;
 		const idx = i as 0 | 1;
-		// class identity (for bluff-calling purposes) is not a passive — a
-		// lighthouse-disabled crew still counts as its class for class-action
-		// bluff resolution. disabling a passive ≠ disabling the crew's type.
+		if (player.disabledPassiveSlots.has(idx)) return false;
 		const overrides = player.crewClassOverrides.get(idx);
 		if (overrides?.has(cls)) return true;
 		return getCrew(crewId).class === cls;
@@ -1406,7 +1403,10 @@ const handlers: Partial<Record<EffectPrimitive["type"], Handler>> = {
 	transform_jeremy_into_berserker(_effect, ctx) {
 		const actor = ctx.actor;
 		const slot = actor.crewIds.findIndex(
-			(id, i) => id === CARD_IDS.CREW.JEREMY && actor.crewTurned[i as 0 | 1],
+			(id, i) =>
+				id === CARD_IDS.CREW.JEREMY &&
+				actor.crewTurned[i as 0 | 1] &&
+				!actor.disabledPassiveSlots.has(i as 0 | 1),
 		);
 		if (slot === -1) return; // no face-up jeremy, fizzle
 		const s = slot as 0 | 1;

@@ -127,6 +127,7 @@ function buildPlayerView(
 		moveBaseCostReduction: player.moveBaseCostReduction,
 		isEliminated: state.eliminatedPlayers.has(player.playerId),
 		teamIndex: player.teamIndex,
+		mulliganDecided: player.mulliganDecided,
 	};
 }
 
