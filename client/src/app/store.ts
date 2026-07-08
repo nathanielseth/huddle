@@ -26,6 +26,7 @@ interface GameStore {
 	phase: RoomPhase;
 	gameId: string | null;
 	gamePayload: unknown;
+	configPayload: unknown;
 	timer: GameTimer | null;
 	secret: unknown;
 	pauseReason: PauseReason | null;
@@ -37,6 +38,7 @@ interface GameStore {
 	joinRoom: (code: string, name: string) => void;
 	leaveRoom: () => void;
 	clearError: () => void;
+	updateConfig: (payload: unknown) => void;
 	startGame: () => void;
 	pauseGame: () => void;
 	resumeGame: () => void;
@@ -65,6 +67,7 @@ const ROOM_RESET = {
 	phase: "lobby",
 	gameId: null,
 	gamePayload: null,
+	configPayload: null,
 	timer: null,
 	secret: null,
 	error: null,
@@ -92,12 +95,15 @@ export const useGameStore = create<GameStore>((set, get) => ({
 	phase: "lobby",
 	gameId: null,
 	gamePayload: null,
+	configPayload: null,
 	secret: null,
 	timer: null,
 	pauseReason: null,
 	hostReconnectDeadline: null,
 
-	setPlayerName: (name) => { set({ playerName: name }); },
+	setPlayerName: (name) => {
+		set({ playerName: name });
+	},
 
 	connect: () => {
 		if (socket.connected) return;
@@ -134,7 +140,14 @@ export const useGameStore = create<GameStore>((set, get) => ({
 		set(ROOM_RESET);
 	},
 
-	clearError: () => { set({ error: null }); },
+	clearError: () => {
+		set({ error: null });
+	},
+
+	updateConfig: (payload) => {
+		if (get().status !== "connected") return;
+		socket.emit("player_action", payload);
+	},
 
 	startGame: () => {
 		if (get().status !== "connected") return;
@@ -178,6 +191,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
 			phase: state.phase,
 			gameId: state.gameId,
 			gamePayload: state.gamePayload,
+			configPayload: state.configPayload,
 			timer: state.timer,
 			playerName: resolvedName,
 			pauseReason: state.pauseReason ?? null,
@@ -185,13 +199,16 @@ export const useGameStore = create<GameStore>((set, get) => ({
 		});
 	},
 
-	_setStatus: (status) => { set({ status }); },
+	_setStatus: (status) => {
+		set({ status });
+	},
 
-	_setError: (message) =>
-		{ set((state) => ({
+	_setError: (message) => {
+		set((state) => ({
 			error: message,
 			role: state.roomCode ? state.role : null,
-		})); },
+		}));
+	},
 
 	_closeRoom: () => {
 		clearRejoinTimeout();
@@ -234,5 +251,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
 		});
 	},
 
-	_setSecret: (payload) => { set({ secret: payload }); },
+	_setSecret: (payload) => {
+		set({ secret: payload });
+	},
 }));
