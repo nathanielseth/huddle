@@ -13,6 +13,7 @@ export interface BossCardDisplay {
 	readonly faceTurnCost: number;
 	readonly draftable?: boolean;
 	readonly hasCustomCommandLogic?: true;
+	readonly artSrc?: string;
 }
 
 export interface CrewCardDisplay {
@@ -25,6 +26,7 @@ export interface CrewCardDisplay {
 	};
 	readonly flavorText: string;
 	readonly draftable?: boolean;
+	readonly artSrc?: string;
 }
 
 export interface MoveCardDisplay {
@@ -34,6 +36,7 @@ export interface MoveCardDisplay {
 	readonly moveType: MoveType;
 	readonly effectText: string;
 	readonly flavorText: string;
+	readonly artSrc?: string;
 }
 
 // bosses
@@ -930,6 +933,17 @@ export const SELF_CREW_SLOT_MOVE_IDS = new Set<string>([
 
 export function needsSelfCrewSlot(move: MoveCardDisplay): boolean {
 	return SELF_CREW_SLOT_MOVE_IDS.has(move.id);
+}
+
+export const MOVE_TARGET_SCOPE: Readonly<Record<string, "ally" | "ally_self">> = {
+	"tag-out": "ally",
+	"life-insurance": "ally_self",
+	"tactical-support": "ally_self",
+	"trickle-down-economics": "ally_self",
+};
+
+export function getMoveTargetScope(moveId: string): "enemy" | "ally" | "ally_self" {
+	return MOVE_TARGET_SCOPE[moveId] ?? "enemy";
 }
 
 // lookup maps — display-only, safe for client use

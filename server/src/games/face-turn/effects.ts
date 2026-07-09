@@ -1042,7 +1042,10 @@ const handlers: Partial<Record<EffectPrimitive["type"], Handler>> = {
 	swap_crew_with_teammate(_effect, ctx) {
 		const teammates = getTeammates(ctx.state, ctx.actor.playerId);
 		if (teammates.length === 0) return;
-		const teammate = teammates[0]!;
+		const teammate =
+			(ctx.targetPlayerId
+				? teammates.find((t) => t.playerId === ctx.targetPlayerId)
+				: undefined) ?? teammates[0]!;
 		const ownEligibleSlots = ([0, 1] as const).filter(
 			(i) => ctx.actor.crewIds[i] !== null,
 		);
