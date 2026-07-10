@@ -357,28 +357,28 @@ export const CREW_DISPLAY: readonly CrewCardDisplay[] = [
 		flavorText: "",
 	},
 	{
-		id: "wolfman",
-		name: "Wolfman",
+		id: "retro",
+		name: "Retro",
 		class: "turner",
 		effectText: {
 			turned:
-				"Full Moon costs 0. Search your deck for Full Moon, then shuffle your deck.",
+				"Chronotrix costs 0. Search your deck for Chronotrix, then shuffle your deck.",
 		},
 		flavorText: "",
 	},
 	{
-		id: "jeremy",
-		name: "Jeremy",
+		id: "andrew",
+		name: "Andrew",
 		class: "turner",
 		effectText: {
 			passive:
-				"If this Crew transforms into The Berserker, the transformation is permanent.",
+				"If this Crew transforms into Wolfman, the transformation is permanent.",
 		},
 		flavorText: "",
 	},
 	{
-		id: "berserker",
-		name: "The Berserker",
+		id: "wolfman",
+		name: "Wolfman",
 		class: "striker",
 		effectText: { turned: "Deal 50 damage to target enemy Boss." },
 		flavorText: "",
@@ -610,8 +610,8 @@ export const MOVE_DISPLAY: readonly MoveCardDisplay[] = [
 		flavorText: "",
 	},
 	{
-		id: "full-moon",
-		name: "Full Moon",
+		id: "chronotrix",
+		name: "Chronotrix",
 		baseCost: 10,
 		moveType: "burst",
 		effectText:
@@ -697,11 +697,11 @@ export const MOVE_DISPLAY: readonly MoveCardDisplay[] = [
 		flavorText: "",
 	},
 	{
-		id: "rage-serum",
-		name: "Rage Serum",
+		id: "full-moon",
+		name: "Full Moon",
 		baseCost: 1,
 		moveType: "burst",
-		effectText: "Transform Jeremy into The Berserker.",
+		effectText: "Transform Andrew into Wolfman.",
 		flavorText: "",
 	},
 	{
@@ -935,14 +935,17 @@ export function needsSelfCrewSlot(move: MoveCardDisplay): boolean {
 	return SELF_CREW_SLOT_MOVE_IDS.has(move.id);
 }
 
-export const MOVE_TARGET_SCOPE: Readonly<Record<string, "ally" | "ally_self">> = {
-	"tag-out": "ally",
-	"life-insurance": "ally_self",
-	"tactical-support": "ally_self",
-	"trickle-down-economics": "ally_self",
-};
+export const MOVE_TARGET_SCOPE: Readonly<Record<string, "ally" | "ally_self">> =
+	{
+		"tag-out": "ally",
+		"life-insurance": "ally_self",
+		"tactical-support": "ally_self",
+		"trickle-down-economics": "ally_self",
+	};
 
-export function getMoveTargetScope(moveId: string): "enemy" | "ally" | "ally_self" {
+export function getMoveTargetScope(
+	moveId: string,
+): "enemy" | "ally" | "ally_self" {
 	return MOVE_TARGET_SCOPE[moveId] ?? "enemy";
 }
 

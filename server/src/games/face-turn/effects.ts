@@ -1403,17 +1403,17 @@ const handlers: Partial<Record<EffectPrimitive["type"], Handler>> = {
 		recomputePassives(ctx.actor, ctx.state);
 	},
 
-	transform_jeremy_into_berserker(_effect, ctx) {
+	transform_andrew_into_wolfman(_effect, ctx) {
 		const actor = ctx.actor;
 		const slot = actor.crewIds.findIndex(
 			(id, i) =>
-				id === CARD_IDS.CREW.JEREMY &&
+				id === CARD_IDS.CREW.ANDREW &&
 				actor.crewTurned[i as 0 | 1] &&
 				!actor.disabledPassiveSlots.has(i as 0 | 1),
 		);
-		if (slot === -1) return; // no face-up jeremy, fizzle
+		if (slot === -1) return; // no face-up andrew, fizzle
 		const s = slot as 0 | 1;
-		actor.crewIds[s] = CARD_IDS.CREW.BERSERKER;
+		actor.crewIds[s] = CARD_IDS.CREW.WOLFMAN;
 		actor.crewTurned[s] = false;
 		actor.crewClassOverrides.delete(s);
 		actor.disabledPassiveSlots.delete(s);

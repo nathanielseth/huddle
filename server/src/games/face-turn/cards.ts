@@ -132,11 +132,11 @@ export type EffectPrimitive =
 	| {
 			type: "return_one_from_discard_to_hand";
 	  }
-	// full moon: return discards to hand until at hand_limit; cards at normal cost
+	// chronotrix: return discards to hand until at hand_limit; cards at normal cost
 	| {
 			type: "return_discards_to_hand_until_full";
 	  }
-	// wolfman: search deck for a specific card, add to hand at 0 cost,
+	// retro: search deck for a specific card, add to hand at 0 cost,
 	// shuffle. fizzles if already in hand or not in deck
 	| {
 			type: "search_deck_for_card_add_to_hand";
@@ -319,7 +319,7 @@ export type EffectPrimitive =
 	// class multi-type grants
 	| { type: "become_also_striker" }
 	| { type: "become_also_turner" }
-	| { type: "transform_jeremy_into_berserker" }
+	| { type: "transform_andrew_into_wolfman" }
 
 	// disable target crew's passive AND class identity until that crew turns face-down
 	| {
@@ -615,17 +615,17 @@ const CREW_MECHANICS: Record<
 		],
 		passiveEffects: [],
 	},
-	wolfman: {
+	retro: {
 		turnedEffects: [
-			{ type: "search_deck_for_card_add_to_hand", cardId: "full-moon" },
+			{ type: "search_deck_for_card_add_to_hand", cardId: "chronotrix" },
 		],
 		passiveEffects: [],
 	},
-	jeremy: {
+	andrew: {
 		turnedEffects: [],
 		passiveEffects: [],
 	},
-	berserker: {
+	wolfman: {
 		turnedEffects: [{ type: "deal_damage", target: "enemy_boss", amount: 50 }],
 		passiveEffects: [],
 	},
@@ -742,7 +742,7 @@ const MOVE_MECHANICS: Record<string, Pick<MoveCard, "effects">> = {
 	"job-application": {
 		effects: [{ type: "set_both_cash_zero_then_draw", drawAmount: 3 }],
 	},
-	"full-moon": {
+	chronotrix: {
 		effects: [
 			{ type: "return_discards_to_hand_until_full" },
 			{ type: "gain_cash", amount: 10 },
@@ -808,8 +808,8 @@ const MOVE_MECHANICS: Record<string, Pick<MoveCard, "effects">> = {
 	"tactical-support": {
 		effects: [{ type: "give_ally_cash_then_optional_unturn", cashAmount: 2 }],
 	},
-	"rage-serum": {
-		effects: [{ type: "transform_jeremy_into_berserker" }],
+	"full-moon": {
+		effects: [{ type: "transform_andrew_into_wolfman" }],
 	},
 	"scorched-earth": {
 		effects: [{ type: "discard_all_actives_all_players" }],
@@ -1045,10 +1045,10 @@ export const CARD_IDS = {
 		HIDER: "hider",
 		TERMINAL: "terminal",
 		SUPLEX: "suplex",
-		WOLFMAN: "wolfman",
-		JEREMY: "jeremy",
+		RETRO: "retro",
+		ANDREW: "andrew",
 		// undraftable
-		BERSERKER: "berserker",
+		WOLFMAN: "wolfman",
 	},
 	MOVE: {
 		// active
@@ -1076,7 +1076,7 @@ export const CARD_IDS = {
 		DEVASTATE: "devastate",
 		BULLETPROOF_VEST: "bulletproof-vest",
 		JOB_APPLICATION: "job-application",
-		FULL_MOON: "full-moon",
+		CHRONOTRIX: "chronotrix",
 		ALL_IN: "all-in",
 		CHEAP_LABOR: "cheap-labor",
 		COORDINATED_STRIKE: "coordinated-strike",
@@ -1086,7 +1086,7 @@ export const CARD_IDS = {
 		EMPTY_THE_CLIP: "empty-the-clip",
 		FRESH_START: "fresh-start",
 		TACTICAL_SUPPORT: "tactical-support",
-		RAGE_SERUM: "rage-serum",
+		FULL_MOON: "full-moon",
 		SCORCHED_EARTH: "scorched-earth",
 		TRIANGLE_OF_TRUST: "triangle-of-trust",
 		HEEL_TURN: "heel-turn",
