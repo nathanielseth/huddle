@@ -4,6 +4,7 @@ import type { ComponentType, LazyExoticComponent } from "react";
 interface GameEntry {
 	id: string;
 	inGame: LazyExoticComponent<ComponentType>;
+	config?: LazyExoticComponent<ComponentType>;
 }
 
 // named exports can't be passed to lazy() directly, so we wrap them in a helper
@@ -39,7 +40,7 @@ export const GAME_REGISTRY: GameEntry[] = [
 		inGame: lazyNamed(() => import("@/games/poker/Poker"), "Poker"),
 	},
 	{
-		id: "cybersecs",
+		id: "breachpoint",
 		inGame: lazyNamed(() => import("@/games/cybersecs/Cybersecs"), "Cybersecs"),
 	},
 	{
@@ -49,4 +50,13 @@ export const GAME_REGISTRY: GameEntry[] = [
 			"Squadoodle",
 		),
 	},
+	{
+		id: "face-turn",
+		inGame: lazyNamed(() => import("@/games/face-turn/FaceTurn"), "FaceTurn"),
+		config: lazyNamed(
+			() => import("@/games/face-turn/FaceTurnConfig"),
+			"FaceTurnConfig",
+		),
+	},
+	//
 ];

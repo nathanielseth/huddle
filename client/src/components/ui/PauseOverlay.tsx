@@ -123,7 +123,7 @@ export function PauseOverlay({
 									</button>
 									<button
 										type="button"
-										onClick={() => setConfirming(false)}
+										onClick={() => { setConfirming(false); }}
 										className="h-11 w-full rounded-lg text-white/40 text-sm font-semibold tracking-widest uppercase hover:text-white/70 hover:bg-white/5 transition-all cursor-pointer"
 									>
 										Cancel
@@ -161,7 +161,7 @@ export function PauseOverlay({
 										</button>
 										<button
 											type="button"
-											onClick={() => setConfirming(true)}
+											onClick={() => { setConfirming(true); }}
 											className="h-9 w-full rounded-lg text-white/30 text-xs font-semibold tracking-widest uppercase hover:text-white/60 hover:bg-white/5 transition-all cursor-pointer"
 										>
 											End Game

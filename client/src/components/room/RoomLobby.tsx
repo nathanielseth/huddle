@@ -1,10 +1,11 @@
-import { useState } from "react";
+import { Suspense, useState, type ComponentType, type LazyExoticComponent } from "react";
 import { useNavigate } from "react-router";
 import { m, AnimatePresence } from "motion/react";
 import { LogOut, Copy, Check } from "lucide-react";
 import { QRCodeSVG } from "qrcode.react";
 import { useGameStore } from "../../app/store";
 import { GAMES } from "../../data/games";
+import { GAME_REGISTRY } from "../../app/registry";
 import { PlayerList } from "./PlayerList";
 
 export function RoomLobby() {
@@ -21,6 +22,7 @@ export function RoomLobby() {
 	const [copied, setCopied] = useState(false);
 
 	const game = GAMES.find((g) => g.id === gameId) ?? null;
+	const gameEntry = GAME_REGISTRY.find((g) => g.id === gameId) ?? null;
 	const connectedCount = players.filter((p) => p.isConnected).length;
 	const minPlayers = game?.playerCount[0] ?? 2;
 	const canStart = connectedCount >= minPlayers;
@@ -74,6 +76,7 @@ export function RoomLobby() {
 						minPlayers={minPlayers}
 						onStart={startGame}
 						onKick={kickPlayer}
+						ConfigPanel={gameEntry?.config ?? null}
 					/>
 				) : (
 					<GuestLobby
@@ -104,6 +107,7 @@ interface HostLobbyProps {
 	minPlayers: number;
 	onStart: () => void;
 	onKick: (id: string) => void;
+	ConfigPanel: LazyExoticComponent<ComponentType> | null;
 }
 
 function HostLobby({
@@ -115,6 +119,7 @@ function HostLobby({
 	minPlayers,
 	onStart,
 	onKick,
+	ConfigPanel,
 }: HostLobbyProps) {
 	return (
 		<>
@@ -186,6 +191,12 @@ function HostLobby({
 
 			<PlayerList players={players} playerId={null} onKick={onKick} />
 
+			{ConfigPanel && (
+				<Suspense fallback={null}>
+					<ConfigPanel />
+				</Suspense>
+			)}
+			
 			<StartButton
 				canStart={canStart}
 				minPlayers={minPlayers}
