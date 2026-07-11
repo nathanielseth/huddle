@@ -297,7 +297,7 @@ function buildPendingInteractionView(
 	}
 }
 
-export function buildPublicState(state: FaceturnServerState): FaceturnsState {
+function buildPublicState(state: FaceturnServerState): FaceturnsState {
 	const players: Record<string, FaceturnsPlayerView> = {};
 	for (const [id, p] of state.players) {
 		players[id] = buildPlayerView(p, state);
@@ -407,12 +407,12 @@ export function buildPrivatePayloads(
 			state.pendingInteraction.actorId === playerId
 				? state.pendingInteraction.revealedCards
 				: null;
-		
-			const digDeepRevealedCards: readonly string[] | null =
-					state.pendingInteraction?.type === "dig_deep_pick" &&
-					state.pendingInteraction.actorId === playerId
-						? state.pendingInteraction.revealedCards
-						: null;
+
+		const digDeepRevealedCards: readonly string[] | null =
+			state.pendingInteraction?.type === "dig_deep_pick" &&
+			state.pendingInteraction.actorId === playerId
+				? state.pendingInteraction.revealedCards
+				: null;
 
 		payloads.set(playerId, {
 			hand: [...player.hand],

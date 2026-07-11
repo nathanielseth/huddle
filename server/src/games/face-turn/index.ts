@@ -13,9 +13,7 @@ import type {
 } from "./types";
 import { FACETURN_CONSTANTS as C } from "./types";
 import { FaceturnsActionSchema, FaceturnsConfigActionSchema } from "./schemas";
-import type {
-	FaceturnsAction,
-} from "./schemas";
+import type { FaceturnsAction } from "./schemas";
 import {
 	makeServerPlayer,
 	buildTeamsAndTurnOrder,
@@ -247,6 +245,21 @@ function applyRpsWinner(state: FaceturnServerState): EngineResult {
 	return makeResult(state, C.MULLIGAN_DURATION_MS, {
 		privatePayloads: buildPrivatePayloads(state),
 	});
+}
+
+function removeCardFromFirstHolder(
+	players: readonly FaceturnServerPlayer[],
+	cardId: string,
+): FaceturnServerPlayer | null {
+	for (const player of players) {
+		const idx = player.hand.indexOf(cardId);
+		if (idx === -1) continue;
+		player.hand.splice(idx, 1);
+		player.discardPile.push(cardId);
+		player.totalCardsDiscarded++;
+		return player;
+	}
+	return null;
 }
 
 export const faceturnsEngine: GameEngine & GameEngineWithSecrets = {
@@ -489,15 +502,7 @@ export const faceturnsEngine: GameEngine & GameEngineWithSecrets = {
 					return noOp();
 
 				const enemies = getEnemies(state, playerId);
-				for (const enemy of enemies) {
-					const idx = enemy.hand.indexOf(chosen);
-					if (idx !== -1) {
-						enemy.hand.splice(idx, 1);
-						enemy.discardPile.push(chosen);
-						enemy.totalCardsDiscarded++;
-						break;
-					}
-				}
+				removeCardFromFirstHolder(enemies, chosen);
 
 				state.pendingInteraction = null;
 				return makeResult(state, ctx.room.timer?.duration ?? null, {
@@ -1587,15 +1592,7 @@ export const faceturnsEngine: GameEngine & GameEngineWithSecrets = {
 			if (interaction.type === "peek_discard") {
 				const chosen = interaction.revealedCards[0];
 				const peekEnemies = getEnemies(state, interaction.actorId);
-				for (const enemy of peekEnemies) {
-					const idx = enemy.hand.indexOf(chosen);
-					if (idx !== -1) {
-						enemy.hand.splice(idx, 1);
-						enemy.discardPile.push(chosen);
-						enemy.totalCardsDiscarded++;
-						break;
-					}
-				}
+				removeCardFromFirstHolder(peekEnemies, chosen);
 			} else if (interaction.type === "crew_reactivate") {
 				const actor = state.players.get(interaction.actorId)!;
 				const slot = interaction.eligibleSlots[0];

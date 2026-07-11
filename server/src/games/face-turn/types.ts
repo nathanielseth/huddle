@@ -364,10 +364,3 @@ export interface ServerPendingAction {
 	// null for any pendingAction that isn't itself a block
 	originalActionType: ServerPendingActionType | null;
 }
-
-export const CLASS_ACTION_COST_BY_CLASS: Record<CrewClass, number> = {
-	striker: FACETURN_CONSTANTS.STRIKE_CASH_COST,
-	blocker: FACETURN_CONSTANTS.BLOCK_CASH_COST,
-	collector: FACETURN_CONSTANTS.COLLECT_CASH_COST,
-	turner: FACETURN_CONSTANTS.UNTURN_CASH_COST,
-};

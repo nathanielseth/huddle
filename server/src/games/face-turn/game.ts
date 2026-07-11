@@ -384,10 +384,7 @@ export function swapTurn(state: FaceturnServerState): void {
 	startTurn(state, nextPlayerId);
 }
 
-export function eliminatePlayer(
-	state: FaceturnServerState,
-	playerId: string,
-): void {
+function eliminatePlayer(state: FaceturnServerState, playerId: string): void {
 	if (state.eliminatedPlayers.has(playerId)) return;
 
 	state.eliminatedPlayers.add(playerId);
