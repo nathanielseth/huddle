@@ -18,13 +18,6 @@ export interface EffectContext {
 	moveId?: string | undefined;
 }
 
-export function getPlayer(
-	state: FaceturnServerState,
-	playerId: string,
-): FaceturnServerPlayer {
-	return state.players.get(playerId)!;
-}
-
 export function getLivingPlayers(
 	state: FaceturnServerState,
 ): FaceturnServerPlayer[] {
@@ -51,10 +44,7 @@ export function isPlayerOrTeammate(
 	);
 }
 
-export function getTeamIndex(
-	state: FaceturnServerState,
-	playerId: string,
-): number {
+function getTeamIndex(state: FaceturnServerState, playerId: string): number {
 	return state.players.get(playerId)!.teamIndex;
 }
 
@@ -444,13 +434,6 @@ export function firstTurnedSlot(player: FaceturnServerPlayer): 0 | 1 | null {
 		if (player.crewIds[idx] && player.crewTurned[idx]) return idx;
 	}
 	return null;
-}
-
-export function allCrewTurned(player: FaceturnServerPlayer): boolean {
-	return player.crewIds.every((id, i) => {
-		if (!id) return true;
-		return player.crewTurned[i as 0 | 1];
-	});
 }
 
 export function playerHasClass(
@@ -1558,19 +1541,28 @@ export function resolveDigDeepPick(
 	if (topSlice.length === 0) return;
 
 	const picks = cardIds.slice(0, maxPicks);
-	const remaining = [...topSlice];
-	const actuallyPicked: string[] = [];
 
+	const availableCounts = new Map<string, number>();
+	for (const id of topSlice) {
+		availableCounts.set(id, (availableCounts.get(id) ?? 0) + 1);
+	}
+
+	const actuallyPicked: string[] = [];
 	for (const cardId of picks) {
-		const idx = remaining.indexOf(cardId);
-		if (idx === -1) continue; // not present (or already consumed), skip
-		remaining.splice(idx, 1);
+		const count = availableCounts.get(cardId) ?? 0;
+		if (count <= 0) continue; // not present (or already consumed), skip
+		availableCounts.set(cardId, count - 1);
 		actuallyPicked.push(cardId);
 	}
 
 	if (actuallyPicked.length === 0) return; // nothing valid picked, fizzle
 
 	actor.deck.splice(0, lookCount); // remove the looked-at cards from the deck
+
+	const remaining: string[] = [];
+	for (const [id, count] of availableCounts) {
+		for (let i = 0; i < count; i++) remaining.push(id);
+	}
 
 	for (const cardId of actuallyPicked) {
 		if (actor.hand.length < C.HAND_LIMIT) {
@@ -1686,7 +1678,7 @@ export function resolveLighthouseDisablePick(
 
 // gathers every currently face-up crew slot across every living player,
 // for lighthouse's eligible-target pool.
-export function gatherFaceUpCrewSlots(
+function gatherFaceUpCrewSlots(
 	state: FaceturnServerState,
 ): { playerId: string; slot: 0 | 1 }[] {
 	const result: { playerId: string; slot: 0 | 1 }[] = [];
@@ -1895,14 +1887,17 @@ export function triggerCrewTurnedEffects(
 			"passive_shield_on_enemy_striker_turned",
 		);
 		for (const enemy of getEnemies(state, player.playerId)) {
-			const mamaSlot = enemy.crewIds.findIndex(
-				(id) => id === CARD_IDS.CREW.MAMA_MERCY,
-			);
-			if (mamaSlot === -1) continue;
-			const slot = mamaSlot as 0 | 1;
-			if (!enemy.crewTurned[slot]) continue;
+			let mamaSlot: 0 | 1 | null = null;
+			for (let i = 0; i < 2; i++) {
+				if (enemy.crewIds[i as 0 | 1] === CARD_IDS.CREW.MAMA_MERCY) {
+					mamaSlot = i as 0 | 1;
+					break;
+				}
+			}
+			if (mamaSlot === null) continue;
+			if (!enemy.crewTurned[mamaSlot]) continue;
 			if (enemy.crewSkillsDisabled) continue;
-			if (enemy.disabledPassiveSlots.has(slot)) continue;
+			if (enemy.disabledPassiveSlots.has(mamaSlot)) continue;
 			enemy.bossShield += mamaShieldAmount;
 			enemy.hasShieldedBossThisGame = true;
 		}
