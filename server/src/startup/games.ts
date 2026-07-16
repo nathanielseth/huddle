@@ -7,6 +7,8 @@ import { pokerEngine } from "../games/poker/index";
 import { cybsecsEngine } from "../games/cybersecs/index";
 import { squadoodleEngine } from "../games/squadoodle/index";
 import { faceturnsEngine } from "../games/face-turn/index";
+import { blankSlateEngine } from "../games/blank-slate/index";
+import { deathvaultEngine } from "../games/deathvault/index";
 import { logger } from "../lib/logger";
 import type { GameEngine } from "../engine/GameEngine";
 
@@ -19,6 +21,8 @@ const ENGINES: readonly GameEngine[] = [
 	cybsecsEngine,
 	squadoodleEngine,
 	faceturnsEngine,
+	blankSlateEngine,
+	deathvaultEngine,
 ];
 
 export function registerGames(runner: GameRunner): void {
