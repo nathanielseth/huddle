@@ -23,7 +23,6 @@
 	},
 	"include": [
 		"src/**/*",
-		"../client/src/games/sussy/constants.ts", // forgot how this got here
 		"vitest.config.ts"
 	]
 }
