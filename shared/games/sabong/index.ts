@@ -70,6 +70,7 @@ export type BattleEvent =
 			readonly winnerId: string;
 			readonly reason: "hp_advantage" | "coinflip";
 	  };
+
 export interface SabongPlayerView {
 	readonly playerId: string;
 	readonly balance: number;
@@ -91,6 +92,7 @@ export interface SabongPrivateView {
 	>;
 	readonly shopSpyRemaining: number | null;
 	readonly shopSabotageRemaining: number | null;
+	readonly receivedAyuda: boolean;
 }
 
 export interface SabongState {

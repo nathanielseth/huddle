@@ -1,15 +1,15 @@
 export type DeathvaultPhase =
-	| "question_wager" // players place wagers
-	| "question_answer" // trivia question live
-	| "question_result" // answers + wager outcomes revealed
-	| "minigame_intro" // animated intro / rules card
-	| "minigame_active" // interactive minigame
-	| "minigame_result" // minigame outcome + transfers
-	| "round_end" // leaderboard between normal rounds
-	| "final_wager" // double‑or‑nothing final wager
+	| "question_wager"
+	| "question_answer"
+	| "question_result"
+	| "minigame_intro"
+	| "minigame_active"
+	| "minigame_result"
+	| "round_end"
+	| "final_wager"
 	| "final_answer"
 	| "final_result"
-	| "podium"; // winners revealed, game over
+	| "podium";
 
 export type MinigameId =
 	| "prisoners_dilemma"
@@ -110,7 +110,6 @@ export interface ToxicTriviaState {
 	readonly choices: readonly DeathvaultChoice[];
 	readonly passOrder: readonly string[];
 	readonly currentHolderId: string;
-	// hidden until minigame_result – otherwise clients could peek.
 	readonly correctChoiceId: string | null;
 	readonly prizePool: number;
 	readonly outcome: ToxicTriviaOutcome | null;
