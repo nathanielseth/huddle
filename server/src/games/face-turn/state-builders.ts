@@ -197,8 +197,8 @@ function buildPendingInteractionView(
 			};
 
 		case "dig_deep_pick":
-			// revealedCards is deliberately omitted — private info, delivered
-			// only via FaceturnsSecret to the owning player.
+			// revealedCards is deliberately omitted, private info, delivered only
+			// via FaceturnsSecret to the owning player
 			return {
 				type: "dig_deep_pick",
 				actorId: pi.actorId,
@@ -251,7 +251,7 @@ function buildPendingInteractionView(
 			return {
 				type: "watcher_unturn_offer",
 				actorId: pi.actorId,
-				eligibleSlots: pi.eligibleSlots,
+				eligibleTargets: pi.eligibleTargets,
 			};
 
 		case "tag_out_pick":
@@ -277,13 +277,6 @@ function buildPendingInteractionView(
 				actorId: pi.actorId,
 				eligibleTargets: pi.eligibleTargets,
 				...(pi.maxPicks !== undefined ? { maxPicks: pi.maxPicks } : {}),
-			};
-
-		case "handles_unturn_offer":
-			return {
-				type: "handles_unturn_offer",
-				actorId: pi.actorId,
-				eligibleSlots: pi.eligibleSlots,
 			};
 
 		default: {

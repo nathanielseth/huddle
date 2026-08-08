@@ -20,6 +20,7 @@ import {
 	BOSSES,
 	CREW,
 	MOVES,
+	VOID_PIECE_IDS,
 	isDraftable,
 	unwrapEffect,
 } from "./cards";
@@ -29,6 +30,7 @@ import {
 	recomputePassives,
 	getLivingPlayers,
 	getEnemies,
+	getTeammates,
 	drawCards,
 	firstTurnedSlot,
 	playerHasClass,
@@ -83,16 +85,19 @@ export function makeServerPlayer(
 		cashOnEnemyMoveOrStrike: 0,
 		healOnMovePlayed: 0,
 		crewSkillsDisabled: false,
-		damageMultiplier: 1,
+		damageBonusFlat: 0,
 		damageReductionPercent: 0,
 		shieldPerTurn: 0,
 		moveBaseCostReduction: 0,
+		burstMoveCostReduction: 0,
+		enemyMoveCostSurcharge: 0,
 		hasVoidArms: false,
 		hasVoidLegsChoice: false,
 		voidLegsDiscardCost: 0,
 		voidLegsDamage: 0,
 		hasBackgroundCheck: false,
 		hasWatcherPassive: false,
+		hasBastionPassive: false,
 		hasLifeInsurance: false,
 		lifeInsuranceTargets: new Map(),
 		trickleDownTargets: new Map(),
@@ -101,11 +106,11 @@ export function makeServerPlayer(
 		supplyDropCashAmount: 0,
 		hasPrankCall: false,
 		prankCallBonusAmount: 0,
-		doctorNormanTriggered: false,
 		vanessaDrawUsedThisTurn: false,
 		tooBigUnturnUsed: false,
 		disabledPassiveSlots: new Set(),
 		prankCallBonusUsedThisRound: false,
+		bastionCashBonusUsedThisTurn: false,
 		playedMoveThisTurn: false,
 		classActionUsedThisTurn: false,
 		costOverrides: new Map(),
@@ -162,7 +167,7 @@ export function buildTeamsAndTurnOrder(
 		return { teams, turnOrder, playerOrder, teamIndexByPlayerId };
 	}
 
-	// duel: two solo teams, fixed order
+	// duel
 	const teams: string[][] = [[playerIds[0]!], [playerIds[1]!]];
 	teamIndexByPlayerId.set(playerIds[0]!, 0);
 	teamIndexByPlayerId.set(playerIds[1]!, 1);
@@ -184,7 +189,7 @@ export function setTurnOrderAfterRps(
 	const teamOfRepA = state.teams[state.players.get(repA)!.teamIndex]!;
 	const teamOfRepB = state.teams[state.players.get(repB)!.teamIndex]!;
 
-	// which rep's team goes first is decided by rps; goFirst=false flips it
+	// goFirst=false means the rps winner's team actually goes second
 	const repAGoesFirst = goFirst === (rpsWinnerId === repA);
 	const [firstTeam, firstRep, secondTeam, secondRep] = repAGoesFirst
 		? [teamOfRepA, repA, teamOfRepB, repB]
@@ -223,6 +228,33 @@ export function isDraftValid(player: FaceturnServerPlayer): boolean {
 	return new Set(allIds).size === allIds.length;
 }
 
+export function loadDraftSelections(
+	player: FaceturnServerPlayer,
+	proposed: { bossId: string | null; crewIds: string[]; moveIds: string[] },
+): void {
+	const bossId =
+		proposed.bossId && BOSS_MAP.has(proposed.bossId) ? proposed.bossId : null;
+
+	const crewCap =
+		bossId === CARD_IDS.BOSS.THE_DEALER ? C.CREW_SLOTS + 1 : C.CREW_SLOTS;
+	const crewIds: string[] = [];
+	for (const id of proposed.crewIds) {
+		if (crewIds.length >= crewCap) break;
+		const crewDef = CREW_MAP.get(id);
+		if (!crewDef || !isDraftable(crewDef) || crewIds.includes(id)) continue;
+		crewIds.push(id);
+	}
+
+	const moveIds: string[] = [];
+	for (const id of proposed.moveIds) {
+		if (moveIds.length >= C.MOVES_PER_DECK) break;
+		if (!MOVE_MAP.has(id) || moveIds.includes(id)) continue;
+		moveIds.push(id);
+	}
+
+	player.draftSelections = { bossId, crewIds, moveIds };
+}
+
 export function finalizeDraft(player: FaceturnServerPlayer): void {
 	const draft = player.draftSelections!;
 	const boss = getBoss(draft.bossId!);
@@ -231,7 +263,7 @@ export function finalizeDraft(player: FaceturnServerPlayer): void {
 	player.bossHp = boss.maxHp;
 	player.bossMaxHp = boss.maxHp;
 
-	// the dealer drafts 3 crew: 2 go into the normal face-up-eligible slots, the 3rd goes into reserve
+	// dealer drafts 3 crew: 2 in normal slots, 1 in reserve
 	for (let i = 0; i < Math.min(draft.crewIds.length, C.CREW_SLOTS); i++) {
 		player.crewIds[i as 0 | 1] = draft.crewIds[i]!;
 	}
@@ -243,7 +275,48 @@ export function finalizeDraft(player: FaceturnServerPlayer): void {
 	player.draftSelections = null;
 }
 
-export function autoFillAndFinalizeDraft(player: FaceturnServerPlayer): void {
+// hardcoded pairs where a card is a total fizzle unless the required cards are also in the same draft
+const DEAD_WITHOUT: readonly {
+	readonly cardId: string;
+	readonly pool: "crew" | "move";
+	readonly requires: readonly { id: string; pool: "crew" | "move" }[];
+}[] = [
+	// full-moon needs andrew
+	{
+		cardId: CARD_IDS.MOVE.FULL_MOON,
+		pool: "move",
+		requires: [{ id: CARD_IDS.CREW.ANDREW, pool: "crew" }],
+	},
+	// retro searches deck for chronotrix; fizzles if absent
+	{
+		cardId: CARD_IDS.CREW.RETRO,
+		pool: "crew",
+		requires: [{ id: CARD_IDS.MOVE.CHRONOTRIX, pool: "move" }],
+	},
+	// deleb-i only wins if all three void pieces are active
+	{
+		cardId: CARD_IDS.MOVE.DELEB_I,
+		pool: "move",
+		requires: VOID_PIECE_IDS.map((id) => ({ id, pool: "move" as const })),
+	},
+];
+
+// checks whether prerequisite cards are absent from the final draft sets;
+// safe regardless of draw order because we only check presence
+function isDeadPick(
+	id: string,
+	pool: "crew" | "move",
+	crewIds: readonly string[],
+	moveIds: readonly string[],
+): boolean {
+	const rule = DEAD_WITHOUT.find((r) => r.cardId === id && r.pool === pool);
+	if (!rule) return false;
+	return rule.requires.some((req) =>
+		req.pool === "crew" ? !crewIds.includes(req.id) : !moveIds.includes(req.id),
+	);
+}
+
+export function randomizeEmptyDraftSlots(player: FaceturnServerPlayer): void {
 	if (!player.draftSelections?.bossId) {
 		player.draftSelections!.bossId =
 			BOSSES[Math.floor(Math.random() * BOSSES.length)]!.id;
@@ -255,36 +328,65 @@ export function autoFillAndFinalizeDraft(player: FaceturnServerPlayer): void {
 			: C.CREW_SLOTS;
 	const maxMoves = C.MOVES_PER_DECK;
 
+	// check existing manual picks before filling, so prerequisite cards can still be added later
+	const draft = player.draftSelections!;
+
 	const availableCrewes = CREW.filter(
-		(h) => isDraftable(h) && !player.draftSelections!.crewIds.includes(h.id),
+		(h) => isDraftable(h) && !draft.crewIds.includes(h.id),
 	);
-	while (
-		player.draftSelections!.crewIds.length < maxCrewes &&
-		availableCrewes.length
-	) {
-		player.draftSelections!.crewIds.push(
-			availableCrewes.splice(
-				Math.floor(Math.random() * availableCrewes.length),
-				1,
-			)[0]!.id,
-		);
+	while (draft.crewIds.length < maxCrewes && availableCrewes.length) {
+		const idx = Math.floor(Math.random() * availableCrewes.length);
+		const pick = availableCrewes.splice(idx, 1)[0]!;
+		if (isDeadPick(pick.id, "crew", draft.crewIds, draft.moveIds)) continue;
+		draft.crewIds.push(pick.id);
 	}
 
-	const availableMoves = MOVES.filter(
-		(s) => !player.draftSelections!.moveIds.includes(s.id),
-	);
-	while (
-		player.draftSelections!.moveIds.length < maxMoves &&
-		availableMoves.length
-	) {
-		player.draftSelections!.moveIds.push(
-			availableMoves.splice(
-				Math.floor(Math.random() * availableMoves.length),
-				1,
-			)[0]!.id,
-		);
+	const availableMoves = MOVES.filter((s) => !draft.moveIds.includes(s.id));
+	while (draft.moveIds.length < maxMoves && availableMoves.length) {
+		const idx = Math.floor(Math.random() * availableMoves.length);
+		const pick = availableMoves.splice(idx, 1)[0]!;
+		if (isDeadPick(pick.id, "move", draft.crewIds, draft.moveIds)) continue;
+		draft.moveIds.push(pick.id);
 	}
 
+	// second pass: picks that were dead earlier might be alive now, fill remaining slots
+	if (draft.crewIds.length < maxCrewes || draft.moveIds.length < maxMoves) {
+		fillRemainingIgnoringDeadPicks(draft, maxCrewes, maxMoves);
+	}
+}
+
+// fallback when every candidate was dead on first draw; re-scans once, admits anything not permanently dead
+function fillRemainingIgnoringDeadPicks(
+	draft: { crewIds: string[]; moveIds: string[] },
+	maxCrewes: number,
+	maxMoves: number,
+): void {
+	if (draft.crewIds.length < maxCrewes) {
+		const rest = shuffle(
+			CREW.filter((h) => isDraftable(h) && !draft.crewIds.includes(h.id)).map(
+				(h) => h.id,
+			),
+		);
+		for (const id of rest) {
+			if (draft.crewIds.length >= maxCrewes) break;
+			if (isDeadPick(id, "crew", draft.crewIds, draft.moveIds)) continue;
+			draft.crewIds.push(id);
+		}
+	}
+	if (draft.moveIds.length < maxMoves) {
+		const rest = shuffle(
+			MOVES.filter((s) => !draft.moveIds.includes(s.id)).map((s) => s.id),
+		);
+		for (const id of rest) {
+			if (draft.moveIds.length >= maxMoves) break;
+			if (isDeadPick(id, "move", draft.crewIds, draft.moveIds)) continue;
+			draft.moveIds.push(id);
+		}
+	}
+}
+
+export function autoFillAndFinalizeDraft(player: FaceturnServerPlayer): void {
+	randomizeEmptyDraftSlots(player);
 	finalizeDraft(player);
 	player.isDraftLocked = true;
 }
@@ -349,10 +451,7 @@ export function startTurn(state: FaceturnServerState, playerId: string): void {
 
 	checkVanessaDrawTrigger(player, state);
 
-	// void legs: offer only opens if there's a real choice to make (a card
-	// to discard). crewSkillsDisabled / disabledPassiveSlots are already
-	// folded into hasVoidLegsChoice via recomputePassives, since that flag
-	// is only set while the granting source (crew or active move) is live
+	// void legs offer: only opens if there is a card to discard
 	if (player.hasVoidLegsChoice && player.hand.length > 0) {
 		state.pendingInteraction = {
 			type: "void_legs_choice",
@@ -441,6 +540,7 @@ function eliminatePlayer(state: FaceturnServerState, playerId: string): void {
 	}
 }
 
+// tiebreaker: highest total hp, then fewest turned crew; draw if still tied
 function resolveRoundLimitTiebreaker(
 	state: FaceturnServerState,
 	living: FaceturnServerPlayer[],
@@ -547,6 +647,27 @@ export function applyWin(
 	state.phase = "finished";
 }
 
+// list actor's own slots first so ui defaults to unturning own crew
+function watcherEligibleTargets(
+	state: FaceturnServerState,
+	actor: FaceturnServerPlayer,
+): { playerId: string; slot: 0 | 1 }[] {
+	const targets: { playerId: string; slot: 0 | 1 }[] = [];
+	for (const i of [0, 1] as const) {
+		if (actor.crewIds[i] !== null && actor.crewTurned[i]) {
+			targets.push({ playerId: actor.playerId, slot: i });
+		}
+	}
+	for (const mate of getTeammates(state, actor.playerId)) {
+		for (const i of [0, 1] as const) {
+			if (mate.crewIds[i] !== null && mate.crewTurned[i]) {
+				targets.push({ playerId: mate.playerId, slot: i });
+			}
+		}
+	}
+	return targets;
+}
+
 export function computeChallengeEligible(
 	state: FaceturnServerState,
 	actorId: string,
@@ -587,14 +708,8 @@ export function resolveChallenge(
 	if (!pending.actorWasBluffing) {
 		const outcome = resolveStrikeOrExecute(state, challenger, null, false);
 
-		// the challenger is being punished for a bad challenge. if they have
-		// 2+ face-down crew, resolveStrikeOrExecute just opened its own
-		// choose_crew_to_turn interaction (the "penalty" interaction) — tag
-		// it so the caller knows the original pendingAction (the class action
-		// that was challenged) is still awaiting execution once this closes.
-		// callers must not run executePendingAction while this is open: doing
-		// so would let a second choose_crew_to_turn (opened against the
-		// original target) silently overwrite this one.
+		// challenger gets a face‑up penalty; if 2+ face‑down crew exist, resolveStrikeOrExecute opens a choose_crew_to_turn interaction
+		// tag it as pending, and dont run executePendingAction until it closes to avoid overwriting
 		if (
 			outcome.outcome === "pending" &&
 			state.pendingInteraction?.type === "choose_crew_to_turn"
@@ -605,21 +720,16 @@ export function resolveChallenge(
 			};
 		}
 
-		// the watcher: offer only makes sense if the challenger still has a
-		// face-up crew to unturn AND the pendingInteraction slot wasn't
-		// already claimed by resolveStrikeOrExecute's own "2 face-down
-		// slots" branch
+		// the watcher: only offer if no pending interaction
 		if (state.pendingInteraction === null) {
 			const actor = state.players.get(pending.actorId)!;
 			if (actor.hasWatcherPassive) {
-				const eligibleSlots = ([0, 1] as const).filter(
-					(i) => actor.crewIds[i] !== null && actor.crewTurned[i],
-				);
-				if (eligibleSlots.length > 0) {
+				const eligibleTargets = watcherEligibleTargets(state, actor);
+				if (eligibleTargets.length > 0) {
 					state.pendingInteraction = {
 						type: "watcher_unturn_offer",
 						actorId: pending.actorId,
-						eligibleSlots,
+						eligibleTargets,
 					};
 				}
 			}
@@ -644,8 +754,7 @@ export function resolveChallenge(
 	let turned: 0 | 1 | null = null;
 	let strikeOutcome: StrikeOrExecuteOutcome | null = null;
 
-	// false flag: prevents the crew-turning consequence; the challenger
-	// still gets credit
+	// false flag: prevents the crew-turning consequence; the challenger still gets credit
 	if (actor.hasFalseFlag) {
 		const ffSlot = actor.activeMoves.findIndex(
 			(id) => id === CARD_IDS.MOVE.FALSE_FLAG_OPERATION,
@@ -684,17 +793,14 @@ export function resolveChallenge(
 				}
 			}
 		}
-		// the watcher: this IS a "you win a challenge" event too
-		// the challenger just won by correctly calling a bluff
+		// the watcher: the challenger also gets this if they just won the challenge
 		if (state.pendingInteraction === null && challenger.hasWatcherPassive) {
-			const watcherEligibleSlots = ([0, 1] as const).filter(
-				(i) => challenger.crewIds[i] !== null && challenger.crewTurned[i],
-			);
-			if (watcherEligibleSlots.length > 0) {
+			const eligibleTargets = watcherEligibleTargets(state, challenger);
+			if (eligibleTargets.length > 0) {
 				state.pendingInteraction = {
 					type: "watcher_unturn_offer",
 					actorId: challenger.playerId,
-					eligibleSlots: watcherEligibleSlots,
+					eligibleTargets,
 				};
 			}
 		}
@@ -753,11 +859,15 @@ export function executePendingAction(
 			return null;
 		}
 		case "class_action_unturn": {
+			const unturnTarget = pending.targetPlayerId
+				? (state.players.get(pending.targetPlayerId) ?? actor)
+				: actor;
 			const slot =
-				(pending.targetAllySlot as 0 | 1 | null) ?? firstTurnedSlot(actor);
-			if (slot !== null && actor.crewIds[slot]) {
-				actor.crewTurned[slot] = false;
-				recomputePassives(actor, state);
+				(pending.targetAllySlot as 0 | 1 | null) ??
+				firstTurnedSlot(unturnTarget);
+			if (slot !== null && unturnTarget.crewIds[slot]) {
+				unturnTarget.crewTurned[slot] = false;
+				recomputePassives(unturnTarget, state);
 			}
 			return null;
 		}
@@ -784,8 +894,6 @@ export function executeMove(
 
 	actor.costOverrides.delete(moveId);
 
-	// active moves are equipped to a slot; burst and slow are resolved and
-	// discarded after effect application
 	let claimedSlot = -1;
 	if (move.moveType === "active") {
 		claimedSlot = actor.activeMoves.findIndex((s) => s === null);
@@ -822,10 +930,7 @@ export function executeMove(
 	if (move.moveType === "active") {
 		if (claimedSlot !== -1) {
 			recomputePassives(actor, state);
-			// blackmail (and any future move with a global side effect on
-			// other players) needs everyone's derived stats refreshed
-			// immediately, not just the caster's — recomputePassives only
-			// self-derives for whoever it's called on.
+			// global disable effects like blackmail need all players recomputed immediately
 			const hasGlobalDisable = move.effects.some((e) => {
 				const eff = unwrapEffect(e);
 				return eff.type === "passive_disable_all_crew_skills";
@@ -943,11 +1048,24 @@ export function resolveMoveChainFull(state: FaceturnServerState): void {
 }
 
 export function getMoveCost(
+	state: FaceturnServerState,
 	player: FaceturnServerPlayer,
 	moveId: string,
 ): number {
-	const base = player.costOverrides.get(moveId) ?? getMove(moveId).baseCost;
-	return Math.max(0, base - player.moveBaseCostReduction);
+	const move = getMove(moveId);
+	const base = player.costOverrides.get(moveId) ?? move.baseCost;
+
+	let reduction = player.moveBaseCostReduction;
+	if (move.moveType === "burst") {
+		reduction += player.burstMoveCostReduction;
+	}
+
+	const surcharge = getEnemies(state, player.playerId).reduce(
+		(sum, enemy) => sum + enemy.enemyMoveCostSurcharge,
+		0,
+	);
+
+	return Math.max(0, base - reduction + surcharge);
 }
 
 export function getClassActionCost(

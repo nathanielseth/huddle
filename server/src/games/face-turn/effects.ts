@@ -7,7 +7,7 @@ import { FACETURN_CONSTANTS as C } from "./types";
 import type { CardEffect, EffectPrimitive, ConditionalEffect } from "./cards";
 import { getCrew, getMove, getBoss, CARD_IDS, VOID_PIECE_IDS } from "./cards";
 import type { CrewClass } from "../../../../shared/games/face-turn/types";
-import { shuffle } from "../lib/random";
+import { shuffle, pickRandom } from "../lib/random";
 
 export interface EffectContext {
 	state: FaceturnServerState;
@@ -66,6 +66,7 @@ export function getEnemies(
 	return getLivingPlayers(state).filter((p) => p.teamIndex !== teamIdx);
 }
 
+// falls back to the actor when target is missing, eliminated, or an enemy
 function resolveTarget(ctx: EffectContext): FaceturnServerPlayer | null {
 	if (ctx.targetPlayerId) {
 		const p = ctx.state.players.get(ctx.targetPlayerId);
@@ -75,12 +76,7 @@ function resolveTarget(ctx: EffectContext): FaceturnServerPlayer | null {
 	return enemies[0] ?? null;
 }
 
-// resolves the ally-boss target for heal/shield/hp-set effects.
-// falls back to the actor's own boss when no targetPlayerId is given, or
-// when the given id is invalid, eliminated, or an enemy.
-// this keeps every ally-targeted primitive safe to call from duel/ffa,
-// where no explicit target is ever chosen, matching the "default to self"
-// ui contract.
+// always safe to call in duel/ffa; defaults to self when no valid ally target
 function resolveAllyTarget(ctx: EffectContext): FaceturnServerPlayer {
 	if (!ctx.targetPlayerId) return ctx.actor;
 	if (ctx.targetPlayerId === ctx.actor.playerId) return ctx.actor;
@@ -97,11 +93,7 @@ export function isConditionalEffect(e: CardEffect): e is ConditionalEffect {
 	return "condition" in e && "effect" in e;
 }
 
-// finds the numeric amount field on the first primitive of a given type
-// inside a card's effect list, unwrapping conditionals. used when a
-// passive's magnitude needs to be read back from the card database rather
-// than duplicated as a magic number at the trigger site, e.g. mama mercy's
-// shield amount
+// reads a passive magnitude from the card database so trigger sites don't duplicate magic numbers
 function findEffectAmount(
 	effects: readonly CardEffect[],
 	type: EffectPrimitive["type"],
@@ -116,11 +108,8 @@ function findEffectAmount(
 	return 0;
 }
 
-// scans every living player's active moves for a live
-// passive_disable_all_crew_skills source (Blackmail). crewSkillsDisabled is
-// global — any player's Blackmail disables everyone's crew passives — so
-// recomputePassives must resolve this up front, from the raw move list,
-// rather than from the derived flag it is still in the middle of computing.
+// crewSkillsDisabled is global: any player's blackmail shuts down all crew passives
+// this function scans raw move lists so recomputePassives can resolve the flag up front
 function hasActiveCrewSkillsDisableSource(
 	player: FaceturnServerPlayer,
 	state: FaceturnServerState,
@@ -137,8 +126,6 @@ function hasActiveCrewSkillsDisableSource(
 	}
 	return false;
 }
-
-// conditions
 
 function checkVoidPiecesAssembled(actor: FaceturnServerPlayer): boolean {
 	return VOID_PIECE_IDS.every((id) => actor.activeMoves.includes(id));
@@ -236,6 +223,7 @@ function clampHp(hp: number, max: number): number {
 	return Math.max(0, Math.min(max, Math.round(hp)));
 }
 
+// life insurance fires once per game: stops lethal damage at 1 hp and discards itself
 function consumeLifeInsuranceProtecting(
 	state: FaceturnServerState,
 	target: FaceturnServerPlayer,
@@ -257,14 +245,20 @@ function consumeLifeInsuranceProtecting(
 			return;
 		}
 	}
-	// defensive fallback
 	recomputePassives(target, state);
 }
 
-// damage pipeline: multiplier → reduction% → immunity (full negate) →
-// shield absorb → life insurance (one-shot 1hp floor, consumes itself).
-// unblockable bypasses shield, immunity, reduction; cannotBeMultiplied skips the
-// actor's damageMultiplier.
+// shared once-per-turn cap for bastion's two passive triggers (damage taken, crew turned)
+// not silenced by blackmail: boss passives are added unconditionally
+function maybeTriggerBastionCashBonus(target: FaceturnServerPlayer): void {
+	if (!target.hasBastionPassive) return;
+	if (target.bastionCashBonusUsedThisTurn) return;
+	target.bastionCashBonusUsedThisTurn = true;
+	target.cash += 1;
+}
+
+// damage pipeline: flat bonus, reduction%, immunity, shield, life insurance
+// unblockable skips shield/immunity/reduction; cannotBeMultiplied skips the actor's flat bonus
 function applyDamage(
 	state: FaceturnServerState,
 	target: FaceturnServerPlayer,
@@ -276,7 +270,7 @@ function applyDamage(
 	let dmg =
 		unblockable || cannotBeMultiplied
 			? rawAmount
-			: Math.floor(rawAmount * sourceActor.damageMultiplier);
+			: rawAmount + sourceActor.damageBonusFlat;
 
 	if (!unblockable) {
 		if (target.damageReductionPercent > 0) {
@@ -297,22 +291,23 @@ function applyDamage(
 	if (target.hasLifeInsurance && target.bossHp - dmg <= 0) {
 		target.bossHp = 1;
 		consumeLifeInsuranceProtecting(state, target);
+		maybeTriggerBastionCashBonus(target);
 		return rawAmount;
 	}
 
 	target.bossHp = clampHp(target.bossHp - dmg, target.bossMaxHp);
+	maybeTriggerBastionCashBonus(target);
 	return dmg;
 }
 
-// piercing strike: bypasses shield but still respects immunity and
-// reduction%
+// piercing damage: bypasses shield but still respects immunity and reduction%
 function applyDamageIgnoreShield(
 	state: FaceturnServerState,
 	target: FaceturnServerPlayer,
 	rawAmount: number,
 	sourceActor: FaceturnServerPlayer,
 ): number {
-	let dmg = Math.floor(rawAmount * sourceActor.damageMultiplier);
+	let dmg = rawAmount + sourceActor.damageBonusFlat;
 
 	if (target.bossImmunityTurns > 0) return 0;
 	if (target.damageReductionPercent > 0) {
@@ -323,10 +318,12 @@ function applyDamageIgnoreShield(
 	if (target.hasLifeInsurance && target.bossHp - dmg <= 0) {
 		target.bossHp = 1;
 		consumeLifeInsuranceProtecting(state, target);
+		maybeTriggerBastionCashBonus(target);
 		return rawAmount;
 	}
 
 	target.bossHp = clampHp(target.bossHp - dmg, target.bossMaxHp);
+	maybeTriggerBastionCashBonus(target);
 	return dmg;
 }
 
@@ -345,29 +342,23 @@ export function discardFromHand(
 	count: number,
 	state: FaceturnServerState,
 ): string[] {
-	const beforeCount = player.totalCardsDiscarded;
 	const toDiscard = player.hand.splice(0, Math.min(count, player.hand.length));
 	player.discardPile.push(...toDiscard);
 	player.totalCardsDiscarded += toDiscard.length;
 	for (const id of toDiscard) player.costOverrides.delete(id);
 
 	if (toDiscard.length > 0) {
-		maybeTriggerDoctorNorman(player, beforeCount);
+		maybeTriggerDoctorNorman(player);
 		checkVanessaDrawTrigger(player, state);
 	}
 
 	return toDiscard;
 }
 
-const DOCTOR_NORMAN_TRIGGER_DISCARD_COUNT = 4;
+const DOCTOR_NORMAN_SHIELD_PER_DISCARD = 10;
 
-function maybeTriggerDoctorNorman(
-	player: FaceturnServerPlayer,
-	beforeCount: number,
-): void {
-	if (player.doctorNormanTriggered) return;
-	if (beforeCount >= DOCTOR_NORMAN_TRIGGER_DISCARD_COUNT) return;
-	if (player.totalCardsDiscarded < DOCTOR_NORMAN_TRIGGER_DISCARD_COUNT) return;
+// doctor norman gives shield on every self-initiated discard
+function maybeTriggerDoctorNorman(player: FaceturnServerPlayer): void {
 	const slot = player.crewIds.findIndex(
 		(id) => id === CARD_IDS.CREW.DOCTOR_NORMAN,
 	);
@@ -375,8 +366,8 @@ function maybeTriggerDoctorNorman(
 	if (!player.crewTurned[slot as 0 | 1]) return;
 	if (player.crewSkillsDisabled) return;
 	if (player.disabledPassiveSlots.has(slot as 0 | 1)) return;
-	player.bossHp = player.bossMaxHp;
-	player.doctorNormanTriggered = true;
+	player.bossShield += DOCTOR_NORMAN_SHIELD_PER_DISCARD;
+	player.hasShieldedBossThisGame = true;
 }
 
 export function checkVanessaDrawTrigger(
@@ -416,7 +407,7 @@ export function unturnCrewAtSlot(
 ): void {
 	if (!player.crewIds[slot]) return;
 	player.crewTurned[slot] = false;
-	// lighthouse's disable expires when the disabled crew turns face-down.
+	// lighthouse's disable expires when the disabled crew goes face-down
 	player.disabledPassiveSlots.delete(slot);
 }
 
@@ -436,6 +427,8 @@ export function firstTurnedSlot(player: FaceturnServerPlayer): 0 | 1 | null {
 	return null;
 }
 
+// only face-down crew (or crew with an active class override) count for truthfulness of declarations.
+// face-up crew are spent for this purpose, even though their passives still apply.
 export function playerHasClass(
 	player: FaceturnServerPlayer,
 	cls: "striker" | "blocker" | "collector" | "turner",
@@ -446,11 +439,10 @@ export function playerHasClass(
 		if (player.disabledPassiveSlots.has(idx)) return false;
 		const overrides = player.crewClassOverrides.get(idx);
 		if (overrides?.has(cls)) return true;
+		if (player.crewTurned[idx]) return false;
 		return getCrew(crewId).class === cls;
 	});
 }
-
-// unified strike / execute resolution
 
 export type StrikeOrExecuteOutcome =
 	| { outcome: "crew_turned"; slot: 0 | 1 }
@@ -458,15 +450,15 @@ export type StrikeOrExecuteOutcome =
 	| { outcome: "executed"; survivedViaLifeInsurance: boolean }
 	| { outcome: "negated"; negatedBy: "terminal" | "immunity" };
 
-// single source of truth: used by both the strike resolver and the
-// declare-time gate, so they can never disagree.
+// single gate used by both strike resolution and declare-time checks so they never diverge
 export function isStrikeBlockedByTerminal(
 	target: FaceturnServerPlayer,
 ): boolean {
 	return target.hasTerminalStrikeBlock && target.bossHp > 50;
 }
 
-// turns a face-down enemy crew slot face-up, or, if none are left, attempts to execute their boss
+// unified strike / execute path: turns a face-down crew, or executes if none remain
+// when multiple crew are valid, asks the correct player to choose based on void arms
 export function resolveStrikeOrExecute(
 	state: FaceturnServerState,
 	target: FaceturnServerPlayer,
@@ -514,9 +506,9 @@ export function resolveStrikeOrExecute(
 			eligibleSlots: unturnedSlots,
 			isStrike,
 		};
-		return { outcome: "pending" }; // blood money deferred to interaction resolution
+		return { outcome: "pending" };
 	} else if (target.bossImmunityTurns > 0) {
-		return { outcome: "negated", negatedBy: "immunity" }; // no blood money
+		return { outcome: "negated", negatedBy: "immunity" };
 	} else if (target.hasLifeInsurance) {
 		target.bossHp = 1;
 		consumeLifeInsuranceProtecting(state, target);
@@ -533,9 +525,7 @@ export function resolveStrikeOrExecute(
 	return result;
 }
 
-// gives cash to every enemy with the blood money passive whenever the
-// striker performs a strike, covering class-action strikes and
-// card-driven strikes.
+// blood money: enemies with the passive get cash when a striker declares a strike
 export function applyBloodMoneyOnStrike(
 	state: FaceturnServerState,
 	striker: FaceturnServerPlayer,
@@ -547,9 +537,7 @@ export function applyBloodMoneyOnStrike(
 	}
 }
 
-// grants cash to the team whenever any collector class action resolves
-// somewhere, for every living player with the supply drop passive who
-// shares a team with the collector.
+// supply drop: team-wide cash on any collector class action resolution
 export function applySupplyDropOnCollect(
 	state: FaceturnServerState,
 	collector: FaceturnServerPlayer,
@@ -567,7 +555,7 @@ export function applySupplyDropOnCollect(
 	}
 }
 
-// trickle-down economics
+// trickle-down economics: mirrors cash gained by a watched collector
 export function applyTrickleDownOnCollect(
 	state: FaceturnServerState,
 	collector: FaceturnServerPlayer,
@@ -583,8 +571,6 @@ export function applyTrickleDownOnCollect(
 	}
 }
 
-// resolves a strike via the unified resolver, returning the outcome so
-// callers can build a lastResolution.
 export function performStrike(
 	ctx: EffectContext,
 ): StrikeOrExecuteOutcome | null {
@@ -600,8 +586,6 @@ export function performStrike(
 	);
 }
 
-// centralised helper so every place that constructs a ResolutionResult
-// answers "did this action execute someone's boss?" identically.
 export function executedPlayerIdFrom(
 	outcome: StrikeOrExecuteOutcome | null | undefined,
 	targetPlayerId: string,
@@ -609,7 +593,133 @@ export function executedPlayerIdFrom(
 	return outcome?.outcome === "executed" ? targetPlayerId : null;
 }
 
-// passive recompute
+// all passive stats are derived; this resets them and re-accumulates from every source
+// also prunes incoming poison from eliminated/inactive sources
+export function recomputePassives(
+	player: FaceturnServerPlayer,
+	state: FaceturnServerState,
+): void {
+	player.cashGainPerTurn = 0;
+	player.drawPerTurn = 0;
+	player.cashOnEnemyMoveOrStrike = 0;
+	player.healOnMovePlayed = 0;
+	player.crewSkillsDisabled = false;
+	player.damageBonusFlat = 0;
+	player.damageReductionPercent = 0;
+	player.shieldPerTurn = 0;
+	player.moveBaseCostReduction = 0;
+	player.burstMoveCostReduction = 0;
+	player.enemyMoveCostSurcharge = 0;
+	player.hasBastionPassive = false;
+	player.hasVoidArms = false;
+	player.hasSupplyDrop = false;
+	player.supplyDropCashAmount = 0;
+	player.hasLifeInsurance = false;
+	player.hasFalseFlag = false;
+	player.hasVoidLegsChoice = false;
+	player.voidLegsDiscardCost = 0;
+	player.voidLegsDamage = 0;
+	player.hasBackgroundCheck = false;
+	player.hasPrankCall = false;
+	player.prankCallBonusAmount = 0;
+	player.hasTerminalStrikeBlock = false;
+	player.crewClassOverrides.clear();
+
+	// clean up inbound poison from eliminated or inactive sources
+	const playersWithActivePoisonSource = new Set<string>();
+	for (const p of state.players.values()) {
+		const hasPoisonFromCrew = p.crewIds.some((crewId, i) => {
+			if (!crewId || !p.crewTurned[i as 0 | 1]) return false;
+			if (p.crewSkillsDisabled || p.disabledPassiveSlots.has(i as 0 | 1))
+				return false;
+			return getCrew(crewId).passiveEffects.some((e) => {
+				const eff = isConditionalEffect(e) ? e.effect : e;
+				return eff.type === "passive_poison_per_round";
+			});
+		});
+		const hasPoisonFromMove = p.activeMoves.some((moveId) => {
+			if (!moveId) return false;
+			return getMove(moveId).effects.some((e) => {
+				const eff = isConditionalEffect(e) ? e.effect : e;
+				return eff.type === "passive_poison_per_round";
+			});
+		});
+		if (hasPoisonFromCrew || hasPoisonFromMove) {
+			playersWithActivePoisonSource.add(p.playerId);
+		}
+	}
+	for (const [sourceId] of [...player.incomingPoison]) {
+		if (!playersWithActivePoisonSource.has(sourceId)) {
+			player.incomingPoison.delete(sourceId);
+		}
+	}
+
+	// resolve crewSkillsDisabled before collecting passive sources so blackmail is fully resolved
+	const crewSkillsDisabledNow = hasActiveCrewSkillsDisableSource(player, state);
+	player.crewSkillsDisabled = crewSkillsDisabledNow;
+
+	const passiveSources: readonly (readonly CardEffect[])[] = [
+		...(player.bossId ? [getBoss(player.bossId).passiveEffects] : []),
+		...player.crewIds.flatMap((crewId, i) => {
+			const slot = i as 0 | 1;
+			if (!crewId || !player.crewTurned[slot]) return [];
+			if (crewSkillsDisabledNow) return [];
+			if (player.disabledPassiveSlots.has(slot)) return [];
+			return [getCrew(crewId).passiveEffects];
+		}),
+		...player.activeMoves.flatMap((moveId) => {
+			if (!moveId) return [];
+			return [getMove(moveId).effects];
+		}),
+	];
+
+	// lotus/cristatella: class overrides are slot-scoped and only live while the granting crew is face-up
+	for (let i = 0; i < 2; i++) {
+		const slot = i as 0 | 1;
+		const crewId = player.crewIds[slot];
+		if (!crewId || !player.crewTurned[slot]) continue;
+		if (crewSkillsDisabledNow) continue;
+		if (player.disabledPassiveSlots.has(slot)) continue;
+		for (const cardEffect of getCrew(crewId).passiveEffects) {
+			const effect = isConditionalEffect(cardEffect)
+				? cardEffect.effect
+				: cardEffect;
+			if (effect.type !== "become_also_striker" && effect.type !== "become_also_turner")
+				continue;
+			const grantedClass = effect.type === "become_also_striker" ? "striker" : "turner";
+			const existing = player.crewClassOverrides.get(slot) ?? new Set();
+			existing.add(grantedClass);
+			player.crewClassOverrides.set(slot, existing);
+		}
+	}
+
+	for (const source of passiveSources) {
+		for (const cardEffect of source) {
+			if (isConditionalEffect(cardEffect)) {
+				const ce = cardEffect;
+				const passes = evaluateConditionForRecompute(
+					ce.condition,
+					player,
+					state,
+				);
+				const shouldRun = ce.negated ? !passes : passes;
+				if (!shouldRun) continue;
+				recomputePassiveSwitch(ce.effect, player, state);
+				continue;
+			}
+			const effect = cardEffect;
+			// poison is handled at round end via incomingPoison, not as a derived stat
+			if (effect.type === "passive_poison_per_round") continue;
+			recomputePassiveSwitch(effect, player, state);
+		}
+	}
+
+	// life insurance: derived from other players' maps, not from the player's own active moves
+	const insuranceCandidates = [player, ...getTeammates(state, player.playerId)];
+	player.hasLifeInsurance = insuranceCandidates.some((candidate) =>
+		[...candidate.lifeInsuranceTargets.values()].includes(player.playerId),
+	);
+}
 
 function recomputePassiveSwitch(
 	effect: EffectPrimitive,
@@ -632,8 +742,8 @@ function recomputePassiveSwitch(
 		case "passive_shield_per_turn":
 			player.shieldPerTurn += effect.amount;
 			break;
-		case "passive_damage_multiplier":
-			player.damageMultiplier *= effect.multiplier;
+		case "passive_flat_damage_bonus":
+			player.damageBonusFlat += effect.amount;
 			break;
 		case "passive_negate_damage_percent":
 			player.damageReductionPercent = Math.max(
@@ -643,6 +753,15 @@ function recomputePassiveSwitch(
 			break;
 		case "passive_reduce_all_move_costs":
 			player.moveBaseCostReduction += effect.reduction;
+			break;
+		case "passive_reduce_burst_move_costs":
+			player.burstMoveCostReduction += effect.reduction;
+			break;
+		case "passive_increase_enemy_move_costs":
+			player.enemyMoveCostSurcharge += effect.amount;
+			break;
+		case "passive_cash_on_damage_taken_or_crew_turned":
+			player.hasBastionPassive = true;
 			break;
 		case "passive_block_strikes_above_half_hp":
 			player.hasTerminalStrikeBlock = true;
@@ -674,133 +793,24 @@ function recomputePassiveSwitch(
 		case "passive_watcher_unturn_on_challenge_win":
 			player.hasWatcherPassive = true;
 			break;
-		// event-triggered / once-per-game / interaction-driven passives
-		// don't accumulate a derived stat — their presence is checked live
-		// at the trigger site. nothing to do here.
+		// event-triggered or interaction-driven passives: no derived stat needed
 		case "passive_mirror_enemy_collect_cash":
 		case "passive_poison_per_round":
 		case "passive_shield_on_enemy_striker_turned":
-		case "passive_full_heal_on_sixth_discard_once":
+		case "passive_shield_on_discard":
 		case "passive_draw_on_hand_empty_once_per_turn":
 		case "passive_unturn_self_on_first_successful_challenge_call":
 		case "passive_optional_strike_on_successful_challenge":
+		case "passive_suppress_enemy_turned_effects":
+			break;
+		// lotus/cristatella: handled in recomputePassives, not here
+		case "become_also_striker":
+		case "become_also_turner":
 			break;
 	}
 }
 
-// all passive stats are derived — reset then re-accumulate from every source
-// also scans every OTHER living player's state twice
-export function recomputePassives(
-	player: FaceturnServerPlayer,
-	state: FaceturnServerState,
-): void {
-	player.cashGainPerTurn = 0;
-	player.drawPerTurn = 0;
-	player.cashOnEnemyMoveOrStrike = 0;
-	player.healOnMovePlayed = 0;
-	player.crewSkillsDisabled = false;
-	player.damageMultiplier = 1;
-	player.damageReductionPercent = 0;
-	player.shieldPerTurn = 0;
-	player.moveBaseCostReduction = 0;
-	player.hasVoidArms = false;
-	player.hasSupplyDrop = false;
-	player.supplyDropCashAmount = 0;
-	player.hasLifeInsurance = false;
-	player.hasFalseFlag = false;
-	player.hasVoidLegsChoice = false;
-	player.voidLegsDiscardCost = 0;
-	player.voidLegsDamage = 0;
-	player.hasBackgroundCheck = false;
-	player.hasPrankCall = false;
-	player.prankCallBonusAmount = 0;
-	player.hasTerminalStrikeBlock = false;
-
-	// clean up inbound poison from eliminated or inactive sources
-	const playersWithActivePoisonSource = new Set<string>();
-	for (const p of state.players.values()) {
-		const hasPoisonFromCrew = p.crewIds.some((crewId, i) => {
-			if (!crewId || !p.crewTurned[i as 0 | 1]) return false;
-			if (p.crewSkillsDisabled || p.disabledPassiveSlots.has(i as 0 | 1))
-				return false;
-			return getCrew(crewId).passiveEffects.some((e) => {
-				const eff = isConditionalEffect(e) ? e.effect : e;
-				return eff.type === "passive_poison_per_round";
-			});
-		});
-		const hasPoisonFromMove = p.activeMoves.some((moveId) => {
-			if (!moveId) return false;
-			return getMove(moveId).effects.some((e) => {
-				const eff = isConditionalEffect(e) ? e.effect : e;
-				return eff.type === "passive_poison_per_round";
-			});
-		});
-		if (hasPoisonFromCrew || hasPoisonFromMove) {
-			playersWithActivePoisonSource.add(p.playerId);
-		}
-	}
-	for (const [sourceId] of [...player.incomingPoison]) {
-		if (!playersWithActivePoisonSource.has(sourceId)) {
-			player.incomingPoison.delete(sourceId);
-		}
-	}
-
-	// resolve crewSkillsDisabled before building passiveSources: crew
-	// passives must be filtered by the fully-resolved value, not by a flag
-	// a later entry in this same pass (e.g. Blackmail) hasn't set yet.
-	const crewSkillsDisabledNow = hasActiveCrewSkillsDisableSource(player, state);
-	player.crewSkillsDisabled = crewSkillsDisabledNow;
-
-	const passiveSources: readonly (readonly CardEffect[])[] = [
-		...(player.bossId ? [getBoss(player.bossId).passiveEffects] : []),
-		...player.crewIds.flatMap((crewId, i) => {
-			const slot = i as 0 | 1;
-			if (!crewId || !player.crewTurned[slot]) return [];
-			if (crewSkillsDisabledNow) return [];
-			// lighthouse: skip this slot's passive contribution entirely while
-			// disabled, even though the crew is otherwise face-up and legal.
-			if (player.disabledPassiveSlots.has(slot)) return [];
-			return [getCrew(crewId).passiveEffects];
-		}),
-		...player.activeMoves.flatMap((moveId) => {
-			if (!moveId) return [];
-			return [getMove(moveId).effects];
-		}),
-	];
-
-	for (const source of passiveSources) {
-		for (const cardEffect of source) {
-			if (isConditionalEffect(cardEffect)) {
-				const ce = cardEffect;
-				const passes = evaluateConditionForRecompute(
-					ce.condition,
-					player,
-					state,
-				);
-				const shouldRun = ce.negated ? !passes : passes;
-				if (!shouldRun) continue;
-				recomputePassiveSwitch(ce.effect, player, state);
-				continue;
-			}
-			const effect = cardEffect;
-			// passive_poison_per_round is applied at round end via
-			// incomingPoison, never as a derived stat — skip it here.
-			if (effect.type === "passive_poison_per_round") continue;
-			recomputePassiveSwitch(effect, player, state);
-		}
-	}
-
-	// life insurance: derived from OTHER players' lifeInsuranceTargets maps,
-	// not from the player's own activeMoves — the caster and the protected
-	// ally can differ (teams mode). check self, then every living teammate.
-	const insuranceCandidates = [player, ...getTeammates(state, player.playerId)];
-	player.hasLifeInsurance = insuranceCandidates.some((candidate) =>
-		[...candidate.lifeInsuranceTargets.values()].includes(player.playerId),
-	);
-}
-
-// applies n poison from `source` onto `victim`'s incomingPoison map,
-// stacking additively with any existing poison from the same source.
+// stacks incoming poison from a source onto a victim's map
 export function applyPoisonToVictim(
 	state: FaceturnServerState,
 	source: FaceturnServerPlayer,
@@ -813,14 +823,8 @@ export function applyPoisonToVictim(
 	victim.incomingPoison.set(source.playerId, existing + damage);
 }
 
-// primitive handlers
-//
-// a handler may return `false` to signal "this primitive fizzled — do not
-// run the next unconditional primitive in this same effects array." this is
-// how "discard n. if you do, <payoff>" cards (black fist, cash out) work:
-// the discard handler returns false when it couldn't discard the full
-// requested amount, and resolveEffects skips exactly the next entry.
-
+// a handler may return false to signal "this primitive fizzled, skip the next unconditional primitive"
+// used by cards like black fist or cash out where a discard must fully succeed to get the payoff
 type Handler = (effect: EffectPrimitive, ctx: EffectContext) => boolean | void;
 
 const handlers: Partial<Record<EffectPrimitive["type"], Handler>> = {
@@ -993,7 +997,7 @@ const handlers: Partial<Record<EffectPrimitive["type"], Handler>> = {
 			if (actor.crewTurned[slot]) faceUpSlots.push(slot);
 			else faceDownSlots.push(slot);
 		}
-		if (faceUpSlots.length === 0 || faceDownSlots.length === 0) return; // fizzle
+		if (faceUpSlots.length === 0 || faceDownSlots.length === 0) return;
 		ctx.state.pendingInteraction = {
 			type: "switch_up_pick",
 			actorId: actor.playerId,
@@ -1002,24 +1006,12 @@ const handlers: Partial<Record<EffectPrimitive["type"], Handler>> = {
 		} satisfies PendingInteraction;
 	},
 
-	offer_optional_ally_unturn_choice(_effect, ctx) {
-		// handles: both slots are guaranteed face-up here (the
-		// another_ally_is_turned condition wrapping this primitive already
-		// confirmed the other slot is face-up, and this primitive only runs
-		// as handles' own turned effect — meaning handles' own slot, the one
-		// that triggered this, is also face-up by definition). still genuinely
-		// offer both slots rather than assuming which one the player wants
-		// turned down.
-		const actor = ctx.actor;
-		const eligibleSlots = ([0, 1] as const).filter(
-			(i) => actor.crewIds[i] !== null && actor.crewTurned[i],
-		);
-		if (eligibleSlots.length === 0) return; // defensive fizzle
-		ctx.state.pendingInteraction = {
-			type: "handles_unturn_offer",
-			actorId: actor.playerId,
-			eligibleSlots,
-		} satisfies PendingInteraction;
+	// handles: fires only when the negated 'another_ally_is_turned' condition holds
+	unturn_self(_effect, ctx) {
+		const slot = ctx.targetAllySlot;
+		if (slot === undefined) return;
+		unturnCrewAtSlot(ctx.actor, slot as 0 | 1);
+		recomputePassives(ctx.actor, ctx.state);
 	},
 
 	swap_crew_with_teammate(_effect, ctx) {
@@ -1075,14 +1067,13 @@ const handlers: Partial<Record<EffectPrimitive["type"], Handler>> = {
 			ctx.state.lastEnemyHandDiscardCount = 0;
 			return;
 		}
-		const beforeCount = target.totalCardsDiscarded;
 		const discarded = target.hand.splice(0);
 		target.discardPile.push(...discarded);
 		target.totalCardsDiscarded += discarded.length;
 		for (const id of discarded) target.costOverrides.delete(id);
 		ctx.state.lastEnemyHandDiscardCount = discarded.length;
+		// doctor norman does not trigger here: enemy forced this discard, not the discarding player
 		if (discarded.length > 0) {
-			maybeTriggerDoctorNorman(target, beforeCount);
 			checkVanessaDrawTrigger(target, ctx.state);
 		}
 	},
@@ -1119,7 +1110,7 @@ const handlers: Partial<Record<EffectPrimitive["type"], Handler>> = {
 	},
 
 	return_one_from_discard_to_hand(_effect, ctx) {
-		if (ctx.actor.discardPile.length === 0) return; // fizzle
+		if (ctx.actor.discardPile.length === 0) return;
 		if (ctx.actor.discardPile.length === 1) {
 			const only = ctx.actor.discardPile.pop()!;
 			if (ctx.actor.hand.length < C.HAND_LIMIT) {
@@ -1155,7 +1146,7 @@ const handlers: Partial<Record<EffectPrimitive["type"], Handler>> = {
 		if (actor.hand.length >= C.HAND_LIMIT) return;
 		actor.deck.splice(idx, 1);
 		actor.hand.push(effect.cardId);
-		actor.costOverrides.set(effect.cardId, 0);
+		actor.costOverrides.set(effect.cardId, effect.costOverride ?? 0);
 		actor.deck = shuffle(actor.deck);
 	},
 
@@ -1184,6 +1175,26 @@ const handlers: Partial<Record<EffectPrimitive["type"], Handler>> = {
 		const stolen = Math.min(effect.amount, target.cash);
 		target.cash -= stolen;
 		ctx.actor.cash += stolen;
+	},
+
+	redistribute_cash_to_poorest(effect, ctx) {
+		if (effect.type !== "redistribute_cash_to_poorest") return;
+		const team = [ctx.actor, ...getTeammates(ctx.state, ctx.actor.playerId)];
+
+		let lowestCash = Infinity;
+		let poorest: FaceturnServerPlayer[] = [];
+		for (const member of team) {
+			if (member.cash < lowestCash) {
+				lowestCash = member.cash;
+				poorest = [member];
+			} else if (member.cash === lowestCash) {
+				poorest.push(member);
+			}
+		}
+
+		const recipient = poorest.length === 1 ? poorest[0]! : pickRandom(poorest);
+		recipient.cash += effect.cashAmount;
+		drawCards(recipient, effect.drawAmount);
 	},
 
 	set_both_cash_zero_then_draw(effect, ctx) {
@@ -1265,7 +1276,7 @@ const handlers: Partial<Record<EffectPrimitive["type"], Handler>> = {
 		const eligibleSlots = ([0, 1] as const).filter(
 			(i) => target.crewIds[i] !== null && !target.crewTurned[i],
 		);
-		if (eligibleSlots.length === 0) return; // fizzle: no face-down crew
+		if (eligibleSlots.length === 0) return;
 		ctx.state.pendingInteraction = {
 			type: "truth_serum_reveal",
 			actorId: ctx.actor.playerId,
@@ -1274,15 +1285,24 @@ const handlers: Partial<Record<EffectPrimitive["type"], Handler>> = {
 		} satisfies PendingInteraction;
 	},
 
-	// replace a face-up ally crew with the player's reserved (draft-time)
-	// crew card; new crew enters face-down, no turned effects. purely a
-	// descriptive marker in commandEffects — the real logic is
-	// special-cased in engine.ts's use_boss_command dispatch (boss.id ===
-	// "the-dealer"), same pattern as command_guess_crew_class_turn_if_correct.
+	// the dealer's command is special-cased in engine.ts; command_replace_crew_from_reserve is a descriptive marker
 	negate_enemy_slow_move() {},
 	reflect_slow_move_base_damage() {},
 
-	// passives
+	// bastion command: gain shield, deal damage equal to new shield total, then empty shield regardless
+	command_gain_shield_then_deal_damage_equal_to_shield(effect, ctx) {
+		if (effect.type !== "command_gain_shield_then_deal_damage_equal_to_shield")
+			return;
+		const target = resolveTarget(ctx);
+		ctx.actor.bossShield += effect.shieldAmount;
+		ctx.actor.hasShieldedBossThisGame = true;
+		const totalShield = ctx.actor.bossShield;
+		ctx.actor.bossShield = 0;
+		if (!target || totalShield <= 0) return;
+		applyDamage(ctx.state, target, totalShield, ctx.actor, false, false);
+	},
+
+	// passives (most are stat accumulators handled during recompute or checked live at trigger sites)
 	passive_poison_per_round(effect, ctx) {
 		if (effect.type !== "passive_poison_per_round") return;
 
@@ -1322,68 +1342,50 @@ const handlers: Partial<Record<EffectPrimitive["type"], Handler>> = {
 	passive_heal_on_move_played() {},
 	passive_shield_per_turn() {},
 	passive_optional_discard_for_damage_per_turn() {},
-	passive_damage_multiplier() {},
+	passive_flat_damage_bonus() {},
 	passive_negate_damage_percent() {},
 	passive_reduce_all_move_costs() {},
+	passive_reduce_burst_move_costs() {},
+	passive_increase_enemy_move_costs() {},
+	passive_cash_on_damage_taken_or_crew_turned() {},
 	passive_disable_all_crew_skills() {},
 	passive_defender_chooses_crew_to_turn() {},
 	passive_background_check() {},
 	passive_bonus_cash_on_first_bluff_per_round() {},
 	passive_team_cash_on_ally_collect() {},
 	passive_life_insurance(_effect, ctx) {
-		// life insurance active-move target lock-in. the cast-time target
-		// (self or teammate) is stored in lifeInsuranceTargets, keyed by the
-		// slot this card just landed in.
+		// stores the protected target in lifeInsuranceTargets, keyed by the slot this card lands in
 		if (!ctx.moveId) return;
 		const slot = ctx.actor.activeMoves.indexOf(ctx.moveId) as 0 | 1 | 2 | -1;
-		if (slot === -1) return; // defensive
+		if (slot === -1) return;
 		const protectedAlly = resolveAllyTarget(ctx);
 		ctx.actor.lifeInsuranceTargets.set(slot, protectedAlly.playerId);
 	},
 	passive_mirror_enemy_collect_cash(_effect, ctx) {
-		// trickle-down economics active-move target lock-in, mirrors
-		// passive_life_insurance's pattern: the cast-time enemy target is
-		// stored in trickleDownTargets, keyed by the slot this card just
-		// landed in.
+		// mirrors life insurance target pattern: stores watched enemy in trickleDownTargets
 		if (!ctx.moveId) return;
 		const slot = ctx.actor.activeMoves.indexOf(ctx.moveId) as 0 | 1 | 2 | -1;
-		if (slot === -1) return; // defensive
-		if (!ctx.targetPlayerId) return; // fizzle: no enemy targeted at cast time
+		if (slot === -1) return;
+		if (!ctx.targetPlayerId) return;
 		const target = ctx.state.players.get(ctx.targetPlayerId);
 		if (!target || ctx.state.eliminatedPlayers.has(ctx.targetPlayerId)) return;
 		ctx.actor.trickleDownTargets.set(slot, ctx.targetPlayerId);
 	},
 	passive_false_flag() {},
 	passive_block_strikes_above_half_hp() {},
-	passive_full_heal_on_sixth_discard_once() {},
+	passive_shield_on_discard() {},
 	passive_draw_on_hand_empty_once_per_turn() {},
 	passive_watcher_unturn_on_challenge_win() {},
 	passive_unturn_self_on_first_successful_challenge_call() {},
 	passive_optional_strike_on_successful_challenge() {},
+	passive_suppress_enemy_turned_effects() {},
 
 	// win conditions
 	win_if_void_pieces_assembled(_effect, ctx) {
-		// fizzle if not assembled, but the card is still discarded
 		if (!checkVoidPiecesAssembled(ctx.actor)) return;
 		ctx.state.winnerId = ctx.actor.playerId;
 		ctx.state.winCondition = "void_assembly";
 		ctx.state.phase = "finished";
-	},
-
-	become_also_striker(_effect, ctx) {
-		const slot = (ctx.targetAllySlot ?? 0) as 0 | 1;
-		const existing = ctx.actor.crewClassOverrides.get(slot) ?? new Set();
-		existing.add("striker");
-		ctx.actor.crewClassOverrides.set(slot, existing);
-		recomputePassives(ctx.actor, ctx.state);
-	},
-
-	become_also_turner(_effect, ctx) {
-		const slot = (ctx.targetAllySlot ?? 0) as 0 | 1;
-		const existing = ctx.actor.crewClassOverrides.get(slot) ?? new Set();
-		existing.add("turner");
-		ctx.actor.crewClassOverrides.set(slot, existing);
-		recomputePassives(ctx.actor, ctx.state);
 	},
 
 	transform_andrew_into_wolfman(_effect, ctx) {
@@ -1403,7 +1405,6 @@ const handlers: Partial<Record<EffectPrimitive["type"], Handler>> = {
 		recomputePassives(actor, ctx.state);
 	},
 
-	// newly-required primitives
 	disable_target_crew_passive(_effect, ctx) {
 		let target: FaceturnServerPlayer | null = null;
 		let slot: 0 | 1 | null = null;
@@ -1434,7 +1435,7 @@ const handlers: Partial<Record<EffectPrimitive["type"], Handler>> = {
 		const hasFaceUpCrew = target.crewIds.some(
 			(id, i) => id !== null && target.crewTurned[i as 0 | 1],
 		);
-		if (!hasFaceUpCrew) return; // no interaction opens
+		if (!hasFaceUpCrew) return;
 
 		const eligibleSlots = ([0, 1] as const).filter(
 			(i) => target.crewIds[i] !== null && target.crewTurned[i],
@@ -1450,7 +1451,7 @@ const handlers: Partial<Record<EffectPrimitive["type"], Handler>> = {
 	discard_then_reactivate_ally_turned_effect(effect, ctx) {
 		if (effect.type !== "discard_then_reactivate_ally_turned_effect") return;
 		const discarded = discardFromHand(ctx.actor, effect.discardCost, ctx.state);
-		if (discarded.length !== effect.discardCost) return; // not enough cards, fizzle
+		if (discarded.length !== effect.discardCost) return;
 
 		const eligibleSlots: number[] = [];
 		for (let i = 0; i < 2; i++) {
@@ -1486,7 +1487,7 @@ const handlers: Partial<Record<EffectPrimitive["type"], Handler>> = {
 	},
 };
 
-// exported resolutions
+// exported resolution helpers for pending interactions
 
 export function resolveVoidLegsChoice(
 	state: FaceturnServerState,
@@ -1550,14 +1551,14 @@ export function resolveDigDeepPick(
 	const actuallyPicked: string[] = [];
 	for (const cardId of picks) {
 		const count = availableCounts.get(cardId) ?? 0;
-		if (count <= 0) continue; // not present (or already consumed), skip
+		if (count <= 0) continue;
 		availableCounts.set(cardId, count - 1);
 		actuallyPicked.push(cardId);
 	}
 
-	if (actuallyPicked.length === 0) return; // nothing valid picked, fizzle
+	if (actuallyPicked.length === 0) return;
 
-	actor.deck.splice(0, lookCount); // remove the looked-at cards from the deck
+	actor.deck.splice(0, lookCount);
 
 	const remaining: string[] = [];
 	for (const [id, count] of availableCounts) {
@@ -1568,7 +1569,7 @@ export function resolveDigDeepPick(
 		if (actor.hand.length < C.HAND_LIMIT) {
 			actor.hand.push(cardId);
 		} else {
-			remaining.push(cardId); // hand full — shuffle it back too rather than lose it
+			remaining.push(cardId); // hand full, shuffle back
 		}
 	}
 
@@ -1600,25 +1601,33 @@ export function resolveTacticalSupportUnturn(
 	slot: number | null,
 	eligibleSlots: readonly number[],
 ): void {
-	if (slot === null) return; // actor declined
+	if (slot === null) return; // declined
 	if (!eligibleSlots.includes(slot)) return;
 	unturnCrewAtSlot(target, slot as 0 | 1);
 	recomputePassives(target, state);
 }
 
-// kept as a separate named function so the dispatch stays
-// self-documenting about which card is firing, matching the pattern for
-// tactical support.
-export function resolveHandlesUnturnOffer(
+// watcher passive: unturns a face-up crew of the actor or a teammate, from a server-computed allowlist
+export function resolveWatcherUnturn(
 	state: FaceturnServerState,
 	actor: FaceturnServerPlayer,
+	targetPlayerId: string | null,
 	slot: number | null,
-	eligibleSlots: readonly number[],
+	eligibleTargets: readonly { playerId: string; slot: number }[],
 ): void {
-	if (slot === null) return; // actor declined — "may" honored
-	if (!eligibleSlots.includes(slot)) return;
-	unturnCrewAtSlot(actor, slot as 0 | 1);
-	recomputePassives(actor, state);
+	if (slot === null) return;
+	const resolvedPlayerId = targetPlayerId ?? actor.playerId;
+	const isEligible = eligibleTargets.some(
+		(t) => t.playerId === resolvedPlayerId && t.slot === slot,
+	);
+	if (!isEligible) return;
+	const target =
+		resolvedPlayerId === actor.playerId
+			? actor
+			: state.players.get(resolvedPlayerId);
+	if (!target) return;
+	unturnCrewAtSlot(target, slot as 0 | 1);
+	recomputePassives(target, state);
 }
 
 export function resolveTagOutPick(
@@ -1671,13 +1680,12 @@ export function resolveLighthouseDisablePick(
 	if (!target) return;
 	const crewSlot = slot as 0 | 1;
 	if (!target.crewIds[crewSlot]) return;
-	if (!target.crewTurned[crewSlot]) return; // must still be face-up
+	if (!target.crewTurned[crewSlot]) return;
 	target.disabledPassiveSlots.add(crewSlot);
 	recomputePassives(target, state);
 }
 
-// gathers every currently face-up crew slot across every living player,
-// for lighthouse's eligible-target pool.
+// gathers every face-up crew slot across all living players for silencer's target pool
 function gatherFaceUpCrewSlots(
 	state: FaceturnServerState,
 ): { playerId: string; slot: 0 | 1 }[] {
@@ -1692,11 +1700,24 @@ function gatherFaceUpCrewSlots(
 	return result;
 }
 
-// truth serum's resolution. a face-down crew can never have
-// crewClassOverrides active yet (overrides are only granted inside
-// turnedEffects, which only run once a crew turns face-up), so the crew's
-// base getCrew(id).class is always the correct and complete answer here;
-// resolveCrewClass's broader override-aware logic isn't needed.
+// checks every enemy for a face-up, un-suppressed lighthouse; if one exists, turned effects are suppressed
+function isTurnedEffectSuppressedByEnemyLighthouse(
+	state: FaceturnServerState,
+	player: FaceturnServerPlayer,
+): boolean {
+	for (const enemy of getEnemies(state, player.playerId)) {
+		if (enemy.crewSkillsDisabled) continue;
+		for (const i of [0, 1] as const) {
+			if (enemy.crewIds[i] !== CARD_IDS.CREW.LIGHTHOUSE) continue;
+			if (!enemy.crewTurned[i]) continue;
+			if (enemy.disabledPassiveSlots.has(i)) continue;
+			return true;
+		}
+	}
+	return false;
+}
+
+// truth serum always reveals the base class from the card data; overrides can't be active on a face-down crew
 export function resolveTruthSerumReveal(
 	state: FaceturnServerState,
 	target: FaceturnServerPlayer,
@@ -1711,14 +1732,7 @@ export function resolveTruthSerumReveal(
 	return { revealedSlot: slot, revealedClass };
 }
 
-// too big's once-per-game optional self-unturn. chains into bear bones:
-// both passives trigger off the same event and the engine only supports
-// one pendingInteraction at a time. too big resolves first (simpler
-// yes/no, closer to "self"); if the same player also has bear bones
-// face-up, this function opens bear_bones_bonus_strike immediately after,
-// rather than silently dropping it. this ordering is a deliberate choice,
-// not a limitation — if a player ever has both, too big's offer always
-// comes first.
+// too big's self-unturn resolves first, then chains into bear bones' optional strike
 export function resolveTooBigUnturnOffer(
 	state: FaceturnServerState,
 	actor: FaceturnServerPlayer,
@@ -1726,7 +1740,7 @@ export function resolveTooBigUnturnOffer(
 	defeatedPlayerId: string,
 ): void {
 	if (!actor.tooBigUnturnUsed) {
-		actor.tooBigUnturnUsed = true; // once-per-game, consumed regardless of answer
+		actor.tooBigUnturnUsed = true;
 		if (confirmed) {
 			const slot = actor.crewIds.findIndex(
 				(id) => id === CARD_IDS.CREW.TOO_BIG,
@@ -1743,8 +1757,7 @@ export function resolveTooBigUnturnOffer(
 
 const BEAR_BONES_STRIKE_CASH_COST = 1;
 
-// opens bear bones' bonus-strike offer if the actor has it face-up, isn't
-// skill-disabled, and can afford the strike's cash cost.
+// opens the bear bones bonus strike offer if the actor has it face-up and can afford it
 export function maybeOpenBearBonesOffer(
 	state: FaceturnServerState,
 	actor: FaceturnServerPlayer,
@@ -1787,14 +1800,12 @@ export function resolveBearBonesBonusStrike(
 	turnCrewAtSlot(target, slot);
 	recomputePassives(target, state);
 	triggerCrewTurnedEffects(state, target, slot);
-	// per blood money's scoping rule: a bonus strike is still a strike.
+	// a bonus strike still counts as a strike for blood money
 	applyBloodMoneyOnStrike(state, actor);
 	return { outcome: "crew_turned", slot };
 }
 
-// background check resolution: the challenger guesses a class for one of
-// the challenged player's face-down crew slots. wrong guess auto-turns
-// one of the guesser's own crew.
+// background check resolution: wrong guess auto-turns one of the guesser's own crew
 export function resolveBackgroundCheckGuess(
 	state: FaceturnServerState,
 	challenger: FaceturnServerPlayer,
@@ -1818,9 +1829,7 @@ export function resolveBackgroundCheckGuess(
 	return { correct: matches };
 }
 
-// mama mercy's on‑turn shield trigger fires here; everything else routes
-// through the crew's own turnedEffects/passiveEffects arrays via
-// resolveEffects.
+// mama mercy's shield trigger lives here; all other effects route through resolveEffects
 export function triggerCrewTurnedEffects(
 	state: FaceturnServerState,
 	player: FaceturnServerPlayer,
@@ -1829,9 +1838,6 @@ export function triggerCrewTurnedEffects(
 	const crewId = player.crewIds[slotIndex];
 	if (!crewId) return;
 	if (player.crewSkillsDisabled) return;
-	// lighthouse-disabled: turned effects still fire (disabling a passive
-	// doesn't suppress the one-time turned trigger) — only the passive
-	// contribution is skipped, handled by recomputePassives, not here.
 
 	const crew = getCrew(crewId);
 	const ctx: EffectContext = {
@@ -1842,20 +1848,17 @@ export function triggerCrewTurnedEffects(
 
 	resolveEffects(crew.passiveEffects, ctx);
 
-	// lighthouse: disable_target_crew_passive can't be resolved generically
-	// — it needs a real player choice spanning all face-up crew (ally or
-	// enemy), not just "the slot that's already in context" like every
-	// other turnedEffect. handle it here, then run the rest of lighthouse's
-	// turnedEffects (currently none) through the normal path.
-	const isLighthouse = crewId === CARD_IDS.CREW.LIGHTHOUSE;
-	const turnedEffectsToResolve = isLighthouse
+	// silencer's disable_target_crew_passive needs a player choice across all face-up crew,
+	// not a slot-in-context; handle it here, then run the rest through the normal path
+	const isSilencer = crewId === CARD_IDS.CREW.SILENCER;
+	const turnedEffectsToResolve = isSilencer
 		? crew.turnedEffects.filter((e) => {
 				const eff = isConditionalEffect(e) ? e.effect : e;
 				return eff.type !== "disable_target_crew_passive";
 			})
 		: crew.turnedEffects;
 
-	if (isLighthouse) {
+	if (isSilencer) {
 		const eligibleTargets = gatherFaceUpCrewSlots(state);
 		if (eligibleTargets.length <= 2) {
 			for (const t of eligibleTargets) {
@@ -1876,11 +1879,17 @@ export function triggerCrewTurnedEffects(
 		}
 	}
 
-	resolveEffects(turnedEffectsToResolve, ctx);
+	// lighthouse suppresses enemy crew turned effects, but not silencer's special disable pick
+	const suppressedByLighthouse = isTurnedEffectSuppressedByEnemyLighthouse(
+		state,
+		player,
+	);
 
-	// mama mercy: whenever an enemy striker turns face-up, every enemy of the
-	// turned player who has mama mercy face-up (and not skill-disabled) gets
-	// shield.
+	if (!suppressedByLighthouse) {
+		resolveEffects(turnedEffectsToResolve, ctx);
+	}
+
+	// mama mercy: grant shield to every enemy with a face-up mama mercy when a striker turns
 	if (resolveCrewClass(player, slotIndex, "striker") === true) {
 		const mamaShieldAmount = findEffectAmount(
 			getCrew(CARD_IDS.CREW.MAMA_MERCY).passiveEffects,
@@ -1903,16 +1912,17 @@ export function triggerCrewTurnedEffects(
 		}
 	}
 
+	// bastion: crew turned trigger shares the once-per-turn cap with damage taken
+	maybeTriggerBastionCashBonus(player);
+
 	recomputePassives(player, state);
 }
-
-// round-end passives
 
 export function triggerRoundEndPassives(state: FaceturnServerState): void {
 	const living = getLivingPlayers(state);
 
 	for (const player of living) {
-		// inbound poison ticks
+		// tick incoming poison
 		for (const [sourceId, damage] of player.incomingPoison) {
 			if (state.eliminatedPlayers.has(sourceId)) {
 				player.incomingPoison.delete(sourceId);
@@ -1927,11 +1937,12 @@ export function triggerRoundEndPassives(state: FaceturnServerState): void {
 			player.bossImmunityTurns--;
 		}
 
-		// reset per‑turn / per‑round flags
+		// reset per-turn/round flags
 		player.playedMoveThisTurn = false;
 		player.classActionUsedThisTurn = false;
 		player.vanessaDrawUsedThisTurn = false;
 		player.prankCallBonusUsedThisRound = false;
+		player.bastionCashBonusUsedThisTurn = false;
 	}
 }
 
@@ -1968,16 +1979,8 @@ export function resolveEffects(
 	}
 }
 
-// reverse card's resolution. finds the targeted slow move's base
-// deal_damage primitive (if any), applies it back at the move's own
-// caster through that caster's own defenses — reduction%, immunity,
-// shield all apply normally, since this is not unblockable; only the
-// original caster's damageMultiplier is skipped (cannotBeMultiplied:
-// true), matching "reflect its base damage."
-//
-// only the first deal_damage primitive on the move is reflected. every
-// current slow move with damage (backstab, kamikaze) has at most one
-// deal_damage entry.
+// reverse card: reflects the first deal_damage primitive from a slow move back at its caster
+// damage passes through the caster's own defenses; skips the original caster's damage bonus (cannotBeMultiplied)
 export function resolveReflectedSlowMoveDamage(
 	state: FaceturnServerState,
 	reflectedMoveId: string,
