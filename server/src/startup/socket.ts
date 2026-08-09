@@ -14,7 +14,7 @@ export function createSocketServer(
 ): IO {
 	const io: IO = new Server(httpServer, {
 		cors: {
-			origin: env.NODE_ENV === "development" ? true : env.CLIENT_URL,
+			origin: env.NODE_ENV === "development" ? true : env.allowedOrigins,
 			methods: ["GET", "POST"],
 		},
 		transports: ["websocket", "polling"],

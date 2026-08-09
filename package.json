@@ -12,6 +12,7 @@
 		"dev": "concurrently --names server,client --prefix-colors cyan,magenta -k --success first \"npm run dev -w server\" \"npm run dev -w client\"",
 		"build": "npm run build -w server && npm run build -w client",
 		"install:all": "npm install",
+		"postinstall": "node scripts/setup-env.mjs",
 		"lint": "eslint ."
 	},
 	"devDependencies": {

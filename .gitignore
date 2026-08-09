@@ -26,6 +26,4 @@ prisma/dev.db
 
 *.py
 
-harness.ts
-results.json
-cash.json
+.env

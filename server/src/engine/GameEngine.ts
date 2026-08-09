@@ -44,7 +44,3 @@ export interface GameEngine {
 export interface GameEngineWithSecrets extends GameEngine {
 	getPlayerSecret(ctx: GameContext, playerId: string): Awaitable<unknown>;
 }
-
-export interface GameEngineWithSecrets extends GameEngine {
-	getPlayerSecret(ctx: GameContext, playerId: string): Awaitable<unknown>;
-}

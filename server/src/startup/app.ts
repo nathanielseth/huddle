@@ -1,5 +1,6 @@
 import express, { type Application } from "express";
 import cors from "cors";
+import { env } from "../env";
 import type { RoomRegistry } from "../room/registry";
 import type { GameRunner } from "../engine/GameRunner";
 
@@ -9,7 +10,11 @@ export function createApp(
 ): Application {
 	const app = express();
 
-	app.use(cors());
+	app.use(
+		cors({
+			origin: env.NODE_ENV === "development" ? true : env.allowedOrigins,
+		}),
+	);
 	app.use(express.json());
 
 	app.get("/health", (_req, res) => {

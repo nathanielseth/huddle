@@ -1,7 +1,7 @@
 import { z } from "zod";
 
 const EnvSchema = z.object({
-	CLIENT_URL: z.url().default("http://localhost:3000"),
+	CLIENT_URL: z.string().default("http://localhost:3000"),
 	PORT: z.coerce.number().int().positive().default(3001),
 	NODE_ENV: z
 		.enum(["development", "production", "test"])
@@ -16,4 +16,11 @@ if (!parsed.success) {
 	process.exit(1);
 }
 
-export const env = parsed.data;
+const allowedOrigins = parsed.data.CLIENT_URL.split(",")
+	.map((origin) => origin.trim())
+	.filter(Boolean);
+
+export const env = {
+	...parsed.data,
+	allowedOrigins,
+};
