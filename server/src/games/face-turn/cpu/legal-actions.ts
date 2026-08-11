@@ -335,8 +335,7 @@ function legalMoveChainActions(
 ): FaceturnsAction[] {
 	const chain = state.moveChain;
 	if (!chain) return [];
-	const [p1, p2] = chain.participants;
-	if (seat !== p1 && seat !== p2) return [];
+	if (seat !== chain.responderId) return [];
 
 	const actions: FaceturnsAction[] = [{ type: "chain_pass" }];
 	const seenMoveIds = new Set<string>();
@@ -589,12 +588,6 @@ function legalInteractionActions(
 			}
 			return actions;
 		}
-
-		case "too_big_unturn_offer":
-			return [
-				{ type: "resolve_too_big_unturn_offer", confirmed: false },
-				{ type: "resolve_too_big_unturn_offer", confirmed: true },
-			];
 
 		case "void_legs_choice":
 			return [

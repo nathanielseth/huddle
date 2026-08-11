@@ -7,12 +7,23 @@ import { cloneServerState } from "./determinize";
 
 const SIM_TIMER_DURATION_MS = 30_000;
 
-// builds a throwaway Room with every field populated
-// if a future engine reads a new field, this will fail loudly instead of simulating wrong
-function buildSimRoom(
+let cachedRoom: Room | null = null;
+let cachedSeatsKey = "";
+
+function seatIdsOf(state: FaceturnServerState): string[] {
+	return [...state.players.keys()];
+}
+
+function getSimRoom(
 	state: FaceturnServerState,
 	seatIds: readonly string[],
 ): Room {
+	const seatsKey = seatIds.join(",");
+	if (cachedRoom && cachedSeatsKey === seatsKey) {
+		cachedRoom.gamePayload = state;
+		return cachedRoom;
+	}
+
 	const players = new Map<string, RoomPlayer>();
 	for (const seatId of seatIds) {
 		players.set(seatId, {
@@ -21,10 +32,11 @@ function buildSimRoom(
 			name: seatId,
 			score: 0,
 			isConnected: true,
+			isCpu: false,
 		});
 	}
 
-	return {
+	cachedRoom = {
 		code: "SIM",
 		hostPlayerId: seatIds[0] ?? "",
 		hostSocketId: "",
@@ -42,20 +54,18 @@ function buildSimRoom(
 		pauseReason: null,
 		hostReconnectDeadline: null,
 	};
+	cachedSeatsKey = seatsKey;
+	return cachedRoom;
 }
 
-function seatIdsOf(state: FaceturnServerState): string[] {
-	return [...state.players.keys()];
-}
-
-// applies action on a clone so callers (ismcts) can branch from the same parent state
+// applies action on a clone so callers can branch from the same parent state
 export function applyAction(
 	state: FaceturnServerState,
 	seat: string,
 	action: FaceturnsAction,
 ): FaceturnServerState {
 	const working = cloneServerState(state);
-	const room = buildSimRoom(working, seatIdsOf(working));
+	const room = getSimRoom(working, seatIdsOf(working));
 	const ctx: GameContext = { room };
 
 	const result = faceturnsEngine.onAction(ctx, seat, action);
@@ -76,7 +86,7 @@ export function applyTimerExpired(
 	state: FaceturnServerState,
 ): FaceturnServerState {
 	const working = cloneServerState(state);
-	const room = buildSimRoom(working, seatIdsOf(working));
+	const room = getSimRoom(working, seatIdsOf(working));
 	const ctx: GameContext = { room };
 
 	const result = faceturnsEngine.onTimerExpired(ctx);

@@ -14,7 +14,7 @@ const WEIGHTS = {
 	cashFraction: 0.08,
 	handFraction: 0.06,
 	faceUpCrewThreat: 0.05,
-	faceDownCrewInfoValue: 0.03,
+	executionRisk: 0.35,
 	poisonExposure: 0.04,
 	activeMoveValue: 0.02,
 	voidPieceProgress: 0.12,
@@ -84,7 +84,7 @@ function playerScore(
 	score += WEIGHTS.handFraction * handFraction;
 
 	score += WEIGHTS.faceUpCrewThreat * faceUpCrewThreatValue(state, player);
-	score += WEIGHTS.faceDownCrewInfoValue * faceDownCrewCount(player);
+	score += WEIGHTS.executionRisk * executionRiskValue(player);
 	score -= WEIGHTS.poisonExposure * poisonExposureValue(state, player);
 	score += WEIGHTS.activeMoveValue * activeMoveCount(player);
 	score += WEIGHTS.voidPieceProgress * voidPieceProgress(player);
@@ -113,14 +113,15 @@ function faceUpCrewThreatValue(
 	return value;
 }
 
-// hidden crew slots have bluff value and unknown class, so count equally
-function faceDownCrewCount(player: FaceturnServerPlayer): number {
-	let count = 0;
+function executionRiskValue(player: FaceturnServerPlayer): number {
+	let hidden = 0;
 	for (let i = 0; i < 2; i++) {
 		const slot = i as 0 | 1;
-		if (player.crewIds[slot] && !player.crewTurned[slot]) count += 1;
+		if (player.crewIds[slot] && !player.crewTurned[slot]) hidden += 1;
 	}
-	return count / 2;
+	if (hidden === 0) return -1;
+	if (hidden === 1) return -0.25;
+	return 0.05;
 }
 
 function poisonExposureValue(

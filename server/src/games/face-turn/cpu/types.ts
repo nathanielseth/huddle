@@ -1,13 +1,10 @@
 import type { FaceturnsAction } from "../../../../../shared/games/face-turn/schemas";
 import type { FaceturnServerState } from "../types";
 
-export type CpuDifficulty = "normal" | "hard" | "brutal";
-
 export interface CpuTuning {
 	readonly iterations: number;
 	readonly rolloutDepth: number;
 	readonly actionTemperature: number;
-	readonly challengeAccuracy: number;
 	readonly thinkMs: readonly [min: number, max: number];
 }
 
@@ -21,7 +18,6 @@ export interface SeatedAction {
 export interface CpuDecisionContext {
 	readonly state: FaceturnServerState;
 	readonly seat: string;
-	readonly difficulty: CpuDifficulty;
 }
 
 // kept as a plain number because every evaluation call site already knows the perspective
