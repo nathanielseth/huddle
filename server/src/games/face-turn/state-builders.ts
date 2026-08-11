@@ -229,9 +229,6 @@ function buildPendingInteractionView(
 				cashCost: pi.cashCost,
 			};
 
-		case "too_big_unturn_offer":
-			return { type: "too_big_unturn_offer", actorId: pi.actorId };
-
 		case "void_legs_choice":
 			return {
 				type: "void_legs_choice",

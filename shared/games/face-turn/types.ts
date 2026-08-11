@@ -10,7 +10,7 @@ export type FaceturnsPhase =
 	| "active_turn"
 	| "move_chain_window"
 	| "challenge_window"
-	| "block_window" // for ambush and future blockable-burst cards
+	| "block_window"
 	| "block_declared"
 	| "block_challenge_window"
 	| "finished";
@@ -114,7 +114,7 @@ export type PendingActionType =
 	| "class_action_collect"
 	| "class_action_unturn"
 	| "class_action_block"
-	| "card_strike"; // burst-move blockable strike (ambush)
+	| "card_strike"; // burst-move blockable strike
 
 export interface PendingAction {
 	readonly type: PendingActionType;
@@ -200,7 +200,6 @@ export type PendingInteractionView =
 			actorId: string;
 			maxPicks?: number;
 	  }
-	| { type: "handles_unturn_offer"; actorId: string; eligibleSlots: number[] }
 	| {
 			type: "switch_up_pick";
 			actorId: string;
@@ -219,7 +218,6 @@ export type PendingInteractionView =
 			eligibleTargetIds: string[];
 			cashCost: number;
 	  }
-	| { type: "too_big_unturn_offer"; actorId: string }
 	| {
 			type: "void_legs_choice";
 			actorId: string;
@@ -234,7 +232,7 @@ export type PendingInteractionView =
 	| {
 			type: "watcher_unturn_offer";
 			actorId: string;
-			eligibleSlots: number[];
+			eligibleTargets: readonly { playerId: string; slot: number }[];
 	  }
 	| {
 			type: "lighthouse_disable_pick";
@@ -286,7 +284,8 @@ export interface FaceturnsState {
 }
 
 export type WinCondition =
-	| "boss_hp_zero"
+	| "boss_hp_zero_execution"
+	| "boss_hp_zero_damage"
 	| "void_assembly"
 	| "round_limit"
 	| "draw";

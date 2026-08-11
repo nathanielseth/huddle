@@ -1,6 +1,5 @@
 import { z } from "zod";
 
-// config
 export const FaceturnsConfigPayloadSchema = z.object({
 	mode: z.enum(["duel", "ffa", "teams"]),
 	teamChoices: z.record(z.string(), z.enum(["A", "B"])),
@@ -23,7 +22,6 @@ export const FaceturnsConfigActionSchema = z.discriminatedUnion("kind", [
 ]);
 export type FaceturnsConfigAction = z.infer<typeof FaceturnsConfigActionSchema>;
 
-// draft
 const SelectBossSchema = z.object({
 	type: z.literal("select_boss"),
 	bossId: z.string(),
@@ -53,19 +51,27 @@ const LockDraftSchema = z.object({
 	type: z.literal("lock_draft"),
 });
 
-// mulligan
+const RandomizeDraftSchema = z.object({
+	type: z.literal("randomize_draft"),
+});
+
+const LoadDraftSchema = z.object({
+	type: z.literal("load_draft"),
+	bossId: z.string().nullable(),
+	crewIds: z.array(z.string()),
+	moveIds: z.array(z.string()),
+});
+
 const MulliganSchema = z.object({
 	type: z.literal("mulligan"),
 	redraw: z.boolean(),
 });
 
-// rps
 const RpsChoiceSchema = z.object({
 	type: z.literal("rps_choice"),
 	choice: z.enum(["rock", "paper", "scissors"]),
 });
 
-// active turn
 const PlayMoveSchema = z.object({
 	type: z.literal("play_move"),
 	moveId: z.string(),
@@ -74,7 +80,7 @@ const PlayMoveSchema = z.object({
 	targetPlayerId: z.string().optional(),
 });
 
-// strike targets enemy crew, unturn targets the player's own face-up crew
+// strike targets enemy crew; unturn targets the player's own face-up crew
 const DeclareClassActionSchema = z.object({
 	type: z.literal("declare_class_action"),
 	action: z.enum(["strike", "collect", "unturn"]),
@@ -83,7 +89,7 @@ const DeclareClassActionSchema = z.object({
 	targetPlayerId: z.string().optional(),
 });
 
-// handles both The Razor and The Dealer boss commands
+// shared by the razor and dealer boss commands
 const UseBossCommandSchema = z.object({
 	type: z.literal("use_boss_command"),
 	guessClass: z.enum(["striker", "blocker", "collector", "turner"]).optional(),
@@ -102,7 +108,6 @@ const EndTurnSchema = z.object({
 	type: z.literal("end_turn"),
 });
 
-// challenge / response windows
 const ChallengeSchema = z.object({
 	type: z.literal("challenge"),
 });
@@ -115,7 +120,6 @@ const PassChallengeSchema = z.object({
 	type: z.literal("pass_challenge"),
 });
 
-// move chain window
 const ChainPlayBurstSchema = z.object({
 	type: z.literal("chain_play_burst"),
 	moveId: z.string(),
@@ -136,17 +140,15 @@ const ChainPassSchema = z.object({
 	type: z.literal("chain_pass"),
 });
 
-// accepts the block, ending the challenge
+// accepting the block ends the challenge
 const AcceptBlockSchema = z.object({
 	type: z.literal("accept_block"),
 });
 
-// counter-challenges the block
 const ChallengeBlockSchema = z.object({
 	type: z.literal("challenge_block"),
 });
 
-// sub-action responses
 const ResolvePeekDiscardSchema = z.object({
 	type: z.literal("resolve_peek_discard"),
 	discardMoveId: z.string(),
@@ -172,39 +174,38 @@ const ResolveChooseCrewToTurnSchema = z.object({
 	crewSlot: z.number().int().min(0).max(1),
 });
 
-// Empty The Clip: player picks how many cards (0..maxCount) to discard
+// empty the clip: player picks how many cards to discard (0 to max)
 const ResolveChooseDiscardCountSchema = z.object({
 	type: z.literal("resolve_choose_discard_count"),
 	count: z.number().int().min(0),
 });
 
-// Take It Back: player picks one card from their own discard pile
+// take it back: player picks one card from their own discard pile
 const ResolveChooseFromDiscardSchema = z.object({
 	type: z.literal("resolve_choose_from_discard"),
 	cardId: z.string(),
 });
 
-// Dig Deep: player picks one of the revealed top-of-deck cards to draw
+// dig deep: player picks one of the revealed top-of-deck cards to draw
 const ResolveDigDeepPickSchema = z.object({
 	type: z.literal("resolve_dig_deep_pick"),
 	cardIds: z.array(z.string()).min(1),
 });
 
-// Switch Up: picks a face-up slot to unturn and a DIFFERENT face-down slot to turn
+// switch up: picks a face-up slot to unturn and a different face-down slot to turn
 const ResolveSwitchUpPickSchema = z.object({
 	type: z.literal("resolve_switch_up_pick"),
 	unturnSlot: z.number().int().min(0).max(1),
 	turnSlot: z.number().int().min(0).max(1),
 });
 
-// Tactical Support: actor optionally unturns a target ally's face-up Crew
-// slot omitted when the actor declines
+// tactical support: optionally unturns an ally's face-up crew; omit slot to decline
 const ResolveTacticalSupportUnturnOfferSchema = z.object({
 	type: z.literal("resolve_tactical_support_unturn_offer"),
 	slot: z.number().int().min(0).max(1).optional(),
 });
 
-// Bear Bones: optional bonus strike after a successful challenge call
+// bear bones: optional bonus strike after a successful challenge call
 const ResolveBearBonesBonusStrikeSchema = z.object({
 	type: z.literal("resolve_bear_bones_bonus_strike"),
 	confirmed: z.boolean(),
@@ -212,38 +213,25 @@ const ResolveBearBonesBonusStrikeSchema = z.object({
 	targetCrewSlot: z.number().int().min(0).max(1).optional(),
 });
 
-// Too Big: once-per-game optional self-unturn after a successful challenge call
-const ResolveTooBigUnturnOfferSchema = z.object({
-	type: z.literal("resolve_too_big_unturn_offer"),
-	confirmed: z.boolean(),
-});
-
-// Void Legs: at start of turn, may discard 1 card for 5 damage
+// void legs: at start of turn, may discard 1 card for 5 damage
 const ResolveVoidLegsChoiceSchema = z.object({
 	type: z.literal("resolve_void_legs_choice"),
 	confirmed: z.boolean(),
 });
 
-// Background Check: before a challenge resolves, the CHALLENGER declares
-// the class of one of the challenged player's face-down Crew
+// background check: challenger guesses class of a face-down crew before challenge resolves
 const ResolveBackgroundCheckGuessSchema = z.object({
 	type: z.literal("resolve_background_check_guess"),
 	targetCrewSlot: z.number().int().min(0).max(1),
 	guessClass: z.enum(["striker", "blocker", "collector", "turner"]),
 });
 
-// The Watcher passive: optional unturn offer to the challenger after winning
-// a challenge; slot omitted when the actor declines
+// watcher passive: optional unturn after challenge win; omit slot to decline.
+// targetPlayerId picks teammate (teams) or self.
 const ResolveWatcherUnturnOfferSchema = z.object({
 	type: z.literal("resolve_watcher_unturn_offer"),
 	slot: z.number().int().min(0).max(1).optional(),
-});
-
-// Handles: may turn one face-up ally Crew face down
-// slot omitted when the actor declines
-const ResolveHandlesUnturnOfferSchema = z.object({
-	type: z.literal("resolve_handles_unturn_offer"),
-	slot: z.number().int().min(0).max(1).optional(),
+	targetPlayerId: z.string().optional(),
 });
 
 const ResolveLighthouseDisablePickSchema = z.object({
@@ -259,50 +247,43 @@ const ResolveLighthouseDisablePickSchema = z.object({
 		.max(2),
 });
 
-// Tag Out: swap one own Crew slot with a teammate's (teams mode only)
+// tag out: swap one own crew slot with a teammate's (teams mode only)
 const ResolveTagOutPickSchema = z.object({
 	type: z.literal("resolve_tag_out_pick"),
 	ownSlot: z.number().int().min(0).max(1),
 	teammateSlot: z.number().int().min(0).max(1),
 });
 
-// Truth Serum: the TARGET (not the actor) picks which of their face-down
-// Crew to reveal
+// truth serum: the target (not the actor) picks which face-down crew to reveal
 const ResolveTruthSerumRevealSchema = z.object({
 	type: z.literal("resolve_truth_serum_reveal"),
 	crewSlot: z.number().int().min(0).max(1),
 });
 
 export const FaceturnsActionSchema = z.discriminatedUnion("type", [
-	// draft
 	SelectBossSchema,
 	SelectCrewSchema,
 	DeselectCrewSchema,
 	SelectMoveSchema,
 	DeselectMoveSchema,
 	LockDraftSchema,
-	// mulligan
+	RandomizeDraftSchema,
+	LoadDraftSchema,
 	MulliganSchema,
-	// rps
 	RpsChoiceSchema,
-	// active turn
 	PlayMoveSchema,
 	DeclareClassActionSchema,
 	UseBossCommandSchema,
 	UseFaceTurnSchema,
 	EndTurnSchema,
-	// challenge windows
 	ChallengeSchema,
 	BlockSchema,
 	PassChallengeSchema,
-	// move chain window
 	ChainPlayBurstSchema,
 	ChainPlaySlowSchema,
 	ChainPassSchema,
-	// block challenge
 	AcceptBlockSchema,
 	ChallengeBlockSchema,
-	// sub-action responses
 	ResolvePeekDiscardSchema,
 	ResolveCrewReactivateSchema,
 	DiscardActiveMoveSchema,
@@ -314,14 +295,12 @@ export const FaceturnsActionSchema = z.discriminatedUnion("type", [
 	ResolveSwitchUpPickSchema,
 	ResolveTacticalSupportUnturnOfferSchema,
 	ResolveBearBonesBonusStrikeSchema,
-	ResolveTooBigUnturnOfferSchema,
 	ResolveVoidLegsChoiceSchema,
 	ResolveBackgroundCheckGuessSchema,
 	ResolveWatcherUnturnOfferSchema,
 	ResolveTagOutPickSchema,
 	ResolveTruthSerumRevealSchema,
 	ResolveLighthouseDisablePickSchema,
-	ResolveHandlesUnturnOfferSchema,
 ]);
 
 export type FaceturnsAction = z.infer<typeof FaceturnsActionSchema>;

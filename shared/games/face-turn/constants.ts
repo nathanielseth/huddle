@@ -1,9 +1,9 @@
 export const FACETURN_CONSTANTS = {
 	MAX_DECK_SIZE: 24,
 	CREW_SLOTS: 2,
-	MOVES_PER_DECK: 21, // 1 boss + 2 crew + 21 moves = 24 total
+	MOVES_PER_DECK: 20,
 	OPENING_HAND_SIZE: 3,
-	HAND_LIMIT: 6,
+	HAND_LIMIT: 7,
 
 	DRAFTING_DURATION_MS: 5 * 60 * 1_000,
 	RPS_DURATION_MS: 30 * 1_000,
@@ -12,7 +12,7 @@ export const FACETURN_CONSTANTS = {
 	CHALLENGE_WINDOW_MS: 15 * 1_000,
 	MOVE_CHAIN_WINDOW_MS: 15 * 1_000,
 	BLOCK_DECLARED_MS: 15 * 1_000,
-	BLOCK_WINDOW_MS: 15 * 1_000, // target's window to declare a block against a card_strike
+	BLOCK_WINDOW_MS: 15 * 1_000,
 	BLOCK_CHALLENGE_MS: 15 * 1_000,
 	RESOLUTION_DISPLAY_MS: 3 * 1_000,
 
@@ -25,6 +25,8 @@ export const FACETURN_CONSTANTS = {
 
 	COLLECT_CASH_GAIN: 2,
 
+	PASSIVE_CASH_CAP: 10,
+
 	BOSS_DEFAULT_HP: 100,
 	MAX_ACTIVE_MOVE_SLOTS: 3,
 
@@ -32,9 +34,21 @@ export const FACETURN_CONSTANTS = {
 	ROUND_LIMIT_TEAMS: 18,
 	ROUND_LIMIT_FFA: 20,
 
-	MAX_PLAYERS: 4,
-	MIN_PLAYERS: 2,
 	TEAM_SIZE: 3,
 	FFA_MIN_PLAYERS: 3,
 	FFA_MAX_PLAYERS: 6,
 } as const;
+
+export function getFaceturnSeatBounds(
+	mode: "duel" | "ffa" | "teams",
+): { min: number; max: number } {
+	if (mode === "duel") return { min: 2, max: 2 };
+	if (mode === "teams") {
+		const size = FACETURN_CONSTANTS.TEAM_SIZE;
+		return { min: size * 2 - (size - 1), max: size * 2 };
+	}
+	return {
+		min: FACETURN_CONSTANTS.FFA_MIN_PLAYERS,
+		max: FACETURN_CONSTANTS.FFA_MAX_PLAYERS,
+	};
+}

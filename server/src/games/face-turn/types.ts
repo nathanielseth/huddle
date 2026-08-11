@@ -27,6 +27,8 @@ export interface FaceturnServerPlayer {
 	// decrements at round end; exact in duels, approximate in ffa/teams. also blocks face turn and strike execute
 	bossImmunityTurns: number;
 	bossCommandUsed: boolean;
+	// tags how bossHp last reached 0
+	lastHpZeroCause: "execution" | "damage" | null;
 
 	crewIds: [string | null, string | null];
 	crewTurned: [boolean, boolean];
@@ -57,6 +59,7 @@ export interface FaceturnServerPlayer {
 	drawPerTurn: number;
 	cashOnEnemyMoveOrStrike: number;
 	healOnMovePlayed: number;
+	damageRandomEnemyOnMovePlayed: number;
 	crewSkillsDisabled: boolean;
 	// flat bonus applied once per effect resolution; not scaled by effect amount. see applyDamage
 	damageBonusFlat: number;
@@ -75,7 +78,7 @@ export interface FaceturnServerPlayer {
 
 	mulliganDecided: boolean;
 
-	// blocks strikes and face turn when bossHp > 50; attempt fizzles
+	// blocks strikes and face turn when bossHp > 60; attempt fizzles
 	hasTerminalStrikeBlock: boolean;
 
 	hasVoidArms: boolean;
@@ -91,9 +94,7 @@ export interface FaceturnServerPlayer {
 	// failed challenge discards the false flag active move instead of turning crew
 	hasFalseFlag: boolean;
 	// per-turn flag; reset in startTurn.
-	vanessaDrawUsedThisTurn: boolean;
-	// once-per-game flag for too big's self-unturn
-	tooBigUnturnUsed: boolean;
+	ratQueenDrawUsedThisTurn: boolean;
 	// crew slots with disabled passives; cleared when crew unturns
 	disabledPassiveSlots: Set<0 | 1>;
 	// per-round; reset at round end.
@@ -172,6 +173,10 @@ export interface FaceturnServerState {
 	winnerId: string | null;
 	winCondition: WinCondition | null;
 
+	// target with no face-down crew left, regardless of whether it ends the game
+	executionAttempts: number;
+	executionsSurvivedViaLifeInsurance: number;
+
 	// one-shot scratch for monkey-man; consumed by next primitive. never persist.
 	lastEnemyHandDiscardCount?: number | undefined;
 
@@ -208,6 +213,8 @@ export type PendingInteraction =
 			isStrike: boolean;
 			// true when this is a challenge-loss penalty deferred behind the original pending action
 			deferredActionPending?: boolean;
+			// true when an enemy (not the crew's own owner) caused this turn;
+			causedByEnemy: boolean;
 	  }
 	| {
 			// empty the clip: choose discard count. target locked at play time
@@ -250,11 +257,6 @@ export type PendingInteraction =
 			actorId: string;
 			eligibleTargetIds: string[];
 			cashCost: number;
-	  }
-	| {
-			// too big: optional self-unturn after challenge win (once per game)
-			type: "too_big_unturn_offer";
-			actorId: string;
 	  }
 	| {
 			// void legs: at turn start, discard for damage

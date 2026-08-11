@@ -1,9 +1,12 @@
 import type {
 	GameEngine,
 	GameEngineWithSecrets,
+	GameEngineWithCpuSeats,
 	GameContext,
 	EngineResult,
 } from "../../engine/GameEngine";
+import { decideAction } from "./cpu/cpu-player";
+import { getLegalActions, type EngineHelpers } from "./cpu/legal-actions";
 import type { FaceturnsSecret } from "../../../../shared/games/face-turn/types";
 import type {
 	FaceturnServerState,
@@ -13,6 +16,7 @@ import type {
 } from "./types";
 import { FACETURN_CONSTANTS as C } from "./types";
 import { FaceturnsActionSchema, FaceturnsConfigActionSchema } from "./schemas";
+import { getFaceturnSeatBounds } from "../../../../shared/games/face-turn/constants";
 import type { FaceturnsAction } from "./schemas";
 import {
 	makeServerPlayer,
@@ -68,7 +72,6 @@ import {
 	resolveTacticalSupportUnturn,
 	resolveWatcherUnturn,
 	resolveTagOutPick,
-	resolveTooBigUnturnOffer,
 	resolveBearBonesBonusStrike,
 	resolveBackgroundCheckGuess,
 	resolveLighthouseDisablePick,
@@ -81,7 +84,13 @@ import {
 } from "./effects";
 import type { ResolutionResult } from "../../../../shared/games/face-turn/types";
 import { getCachedPublicState, buildPrivatePayloads } from "./state-builders";
-import { applyConfigAction, buildGameConfig } from "./config";
+import {
+	applyConfigAction,
+	buildGameConfig,
+	getMaxSeats,
+	validateStart,
+	onPlayerRemoved,
+} from "./config";
 
 import {
 	getCrew,
@@ -265,12 +274,18 @@ function removeCardFromFirstHolder(
 	return null;
 }
 
-export const faceturnsEngine: GameEngine & GameEngineWithSecrets = {
+export const faceturnsEngine: GameEngine &
+	GameEngineWithSecrets &
+	GameEngineWithCpuSeats = {
 	gameId: "face-turn",
 	actionSchema: FaceturnsActionSchema,
 	configActionSchema: FaceturnsConfigActionSchema,
 	applyConfigAction,
 	buildGameConfig,
+	supportsCpuSeats: true,
+	getMaxSeats,
+	validateStart,
+	onPlayerRemoved,
 
 	getInitialState(): FaceturnServerState {
 		return {
@@ -294,6 +309,8 @@ export const faceturnsEngine: GameEngine & GameEngineWithSecrets = {
 			rpsResult: null,
 			winnerId: null,
 			winCondition: null,
+			executionAttempts: 0,
+			executionsSurvivedViaLifeInsurance: 0,
 			_publicStateCacheValid: false,
 			_cachedPublicState: null,
 		};
@@ -308,16 +325,10 @@ export const faceturnsEngine: GameEngine & GameEngineWithSecrets = {
 		};
 		state.mode = config.mode;
 
-		const { min, max } =
-			config.mode === "duel"
-				? { min: 2, max: 2 }
-				: config.mode === "teams"
-					? { min: C.TEAM_SIZE * 2 - (C.TEAM_SIZE - 1), max: C.TEAM_SIZE * 2 }
-					: { min: C.FFA_MIN_PLAYERS, max: C.FFA_MAX_PLAYERS };
-
+		const { min, max } = getFaceturnSeatBounds(config.mode);
 		if (roomPlayers.length < min || roomPlayers.length > max) {
 			throw new Error(
-				`[face-turn] ${config.mode} requires ${min}–${max} players.`,
+				`[face-turn] ${config.mode} requires ${String(min)}–${String(max)} players.`,
 			);
 		}
 
@@ -564,7 +575,12 @@ export const faceturnsEngine: GameEngine & GameEngineWithSecrets = {
 
 				turnCrewAtSlot(target, slot);
 				recomputePassives(target, state);
-				triggerCrewTurnedEffects(state, target, slot);
+				triggerCrewTurnedEffects(
+					state,
+					target,
+					slot,
+					interaction.causedByEnemy,
+				);
 
 				if (interaction.isStrike) {
 					const striker = state.players.get(interaction.actorId);
@@ -708,26 +724,6 @@ export const faceturnsEngine: GameEngine & GameEngineWithSecrets = {
 				state.pendingAction = null;
 				state.phase = "active_turn";
 				return afterAction(state);
-			}
-
-			if (interaction.type === "too_big_unturn_offer") {
-				if (action.type !== "resolve_too_big_unturn_offer") return noOp();
-				const defeatedPlayerId = state.pendingAction?.actorId ?? null;
-				state.pendingInteraction = null;
-				if (defeatedPlayerId) {
-					resolveTooBigUnturnOffer(
-						state,
-						player,
-						action.confirmed,
-						defeatedPlayerId,
-					);
-				}
-				if (state.pendingInteraction !== null) {
-					return makeResult(state, ctx.room.timer?.duration ?? null, {
-						privatePayloads: buildPrivatePayloads(state),
-					});
-				}
-				return finalizeResolvedChallenge(state, defeatedPlayerId);
 			}
 
 			if (interaction.type === "bear_bones_bonus_strike") {
@@ -1091,6 +1087,11 @@ export const faceturnsEngine: GameEngine & GameEngineWithSecrets = {
 							? state.players.get(action.targetPlayerId)
 							: getEnemies(state, playerId)[0];
 						if (!targetPlayer) return noOp();
+
+						const targetIsEnemy = getEnemies(state, playerId).some(
+							(e) => e.playerId === targetPlayer.playerId,
+						);
+						if (!targetIsEnemy) return noOp();
 
 						const slot = action.targetCrewSlot as 0 | 1;
 						const targetId = targetPlayer.crewIds[slot];
@@ -1633,7 +1634,12 @@ export const faceturnsEngine: GameEngine & GameEngineWithSecrets = {
 					const ccSlot = interaction.eligibleSlots[0] as 0 | 1;
 					turnCrewAtSlot(ccTarget, ccSlot);
 					recomputePassives(ccTarget, state);
-					triggerCrewTurnedEffects(state, ccTarget, ccSlot);
+					triggerCrewTurnedEffects(
+						state,
+						ccTarget,
+						ccSlot,
+						interaction.causedByEnemy,
+					);
 
 					if (interaction.isStrike) {
 						const striker = state.players.get(interaction.actorId);
@@ -1769,15 +1775,6 @@ export const faceturnsEngine: GameEngine & GameEngineWithSecrets = {
 					);
 				}
 				state.pendingAction = null;
-			} else if (interaction.type === "too_big_unturn_offer") {
-				const tbDefeated = state.pendingAction?.actorId ?? null;
-				const tbActor = state.players.get(interaction.actorId)!;
-				if (tbDefeated) {
-					resolveTooBigUnturnOffer(state, tbActor, false, tbDefeated);
-				}
-				if (state.pendingInteraction === null) {
-					state.pendingAction = null;
-				}
 			} else if (interaction.type === "bear_bones_bonus_strike") {
 				const bbActor = state.players.get(interaction.actorId)!;
 				resolveBearBonesBonusStrike(state, bbActor, false, null, null);
@@ -1927,6 +1924,39 @@ export const faceturnsEngine: GameEngine & GameEngineWithSecrets = {
 			default:
 				return makeResult(state, null);
 		}
+	},
+
+	isCpuSeat(ctx: GameContext, playerId: string): boolean {
+		return ctx.room.players.get(playerId)?.isCpu ?? false;
+	},
+
+	getCpuSeatToAct(ctx: GameContext): string | null {
+		const state = ctx.room.gamePayload as FaceturnServerState;
+		const helpers: EngineHelpers = {
+			getMoveCost,
+			getClassActionCost,
+			computeActorWasBluffing,
+		};
+
+		for (const [playerId, player] of ctx.room.players) {
+			if (!player.isCpu) continue;
+			if (!state.players.has(playerId)) continue;
+			if (state.eliminatedPlayers.has(playerId)) continue;
+			if (getLegalActions(state, playerId, helpers).length > 0) {
+				return playerId;
+			}
+		}
+		return null;
+	},
+
+	actForCpuSeat(ctx: GameContext, playerId: string): EngineResult {
+		const state = ctx.room.gamePayload as FaceturnServerState;
+		const action = decideAction(state, playerId, Math.random, undefined);
+		if (!action) {
+			return makeResult(state, ctx.room.timer?.duration ?? null);
+		}
+
+		return faceturnsEngine.onAction(ctx, playerId, action) as EngineResult;
 	},
 
 	getPlayerSecret(ctx: GameContext, playerId: string): FaceturnsSecret | null {

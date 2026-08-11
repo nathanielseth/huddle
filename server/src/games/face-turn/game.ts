@@ -38,11 +38,13 @@ import {
 	resolveStrikeOrExecute,
 	performStrike,
 	resolveReflectedSlowMoveDamage,
-	checkVanessaDrawTrigger,
+	checkRatQueenDrawTrigger,
 	maybeOpenBearBonesOffer,
 	applySupplyDropOnCollect,
 	applyTrickleDownOnCollect,
+	applyCoolGuyDamageOnMovePlayed,
 	executedPlayerIdFrom,
+	unturnCrewAtSlot,
 } from "./effects";
 import type { StrikeOrExecuteOutcome } from "./effects";
 import { shuffle } from "../lib/random";
@@ -64,6 +66,7 @@ export function makeServerPlayer(
 		bossShield: 0,
 		bossImmunityTurns: 0,
 		bossCommandUsed: false,
+		lastHpZeroCause: null,
 		crewIds: [null, null],
 		crewTurned: [false, false],
 		crewClassOverrides: new Map(),
@@ -84,6 +87,7 @@ export function makeServerPlayer(
 		drawPerTurn: 0,
 		cashOnEnemyMoveOrStrike: 0,
 		healOnMovePlayed: 0,
+		damageRandomEnemyOnMovePlayed: 0,
 		crewSkillsDisabled: false,
 		damageBonusFlat: 0,
 		damageReductionPercent: 0,
@@ -106,8 +110,7 @@ export function makeServerPlayer(
 		supplyDropCashAmount: 0,
 		hasPrankCall: false,
 		prankCallBonusAmount: 0,
-		vanessaDrawUsedThisTurn: false,
-		tooBigUnturnUsed: false,
+		ratQueenDrawUsedThisTurn: false,
 		disabledPassiveSlots: new Set(),
 		prankCallBonusUsedThisRound: false,
 		bastionCashBonusUsedThisTurn: false,
@@ -427,19 +430,26 @@ export function resolveRps(
 	return "player2";
 }
 
+function addPassiveCash(player: FaceturnServerPlayer, gain: number): void {
+	player.cash = Math.max(
+		player.cash,
+		Math.min(player.cash + gain, C.PASSIVE_CASH_CAP),
+	);
+}
+
 export function startTurn(state: FaceturnServerState, playerId: string): void {
 	state.activePlayerId = playerId;
 	state.pendingAction = null;
 
 	const player = state.players.get(playerId)!;
 	player.classActionUsedThisTurn = false;
-	player.vanessaDrawUsedThisTurn = false;
+	player.ratQueenDrawUsedThisTurn = false;
 
 	drawCards(player, 1);
-	player.cash += 1;
+	addPassiveCash(player, 1);
 
 	if (player.cashGainPerTurn > 0) {
-		player.cash += player.cashGainPerTurn;
+		addPassiveCash(player, player.cashGainPerTurn);
 	}
 	if (player.drawPerTurn > 0) {
 		drawCards(player, player.drawPerTurn);
@@ -449,7 +459,7 @@ export function startTurn(state: FaceturnServerState, playerId: string): void {
 		player.hasShieldedBossThisGame = true;
 	}
 
-	checkVanessaDrawTrigger(player, state);
+	checkRatQueenDrawTrigger(player, state);
 
 	// void legs offer: only opens if there is a card to discard
 	if (player.hasVoidLegsChoice && player.hand.length > 0) {
@@ -607,7 +617,10 @@ export function checkWinConditions(
 		if (player.bossHp <= 0) {
 			toEliminate.push({
 				playerId: player.playerId,
-				winCondition: "boss_hp_zero",
+				winCondition:
+					player.lastHpZeroCause === "execution"
+						? "boss_hp_zero_execution"
+						: "boss_hp_zero_damage",
 			});
 		}
 	}
@@ -771,42 +784,19 @@ export function resolveChallenge(
 			strikeOutcome.outcome === "crew_turned" ? strikeOutcome.slot : null;
 	}
 
-	// too big once-per-game optional self-unturn
+	// the watcher: the challenger also gets this if they just won the challenge
+	if (state.pendingInteraction === null && challenger.hasWatcherPassive) {
+		const eligibleTargets = watcherEligibleTargets(state, challenger);
+		if (eligibleTargets.length > 0) {
+			state.pendingInteraction = {
+				type: "watcher_unturn_offer",
+				actorId: challenger.playerId,
+				eligibleTargets,
+			};
+		}
+	}
 	if (state.pendingInteraction === null) {
-		if (challenger.tooBigUnturnUsed === false) {
-			const hasTooBig = challenger.crewIds.some(
-				(id) => id === CARD_IDS.CREW.TOO_BIG,
-			);
-			if (hasTooBig && !challenger.crewSkillsDisabled) {
-				const slot = challenger.crewIds.findIndex(
-					(id) => id === CARD_IDS.CREW.TOO_BIG,
-				);
-				if (
-					slot !== -1 &&
-					challenger.crewTurned[slot as 0 | 1] &&
-					!challenger.disabledPassiveSlots.has(slot as 0 | 1)
-				) {
-					state.pendingInteraction = {
-						type: "too_big_unturn_offer",
-						actorId: challenger.playerId,
-					};
-				}
-			}
-		}
-		// the watcher: the challenger also gets this if they just won the challenge
-		if (state.pendingInteraction === null && challenger.hasWatcherPassive) {
-			const eligibleTargets = watcherEligibleTargets(state, challenger);
-			if (eligibleTargets.length > 0) {
-				state.pendingInteraction = {
-					type: "watcher_unturn_offer",
-					actorId: challenger.playerId,
-					eligibleTargets,
-				};
-			}
-		}
-		if (state.pendingInteraction === null) {
-			maybeOpenBearBonesOffer(state, challenger, pending.actorId);
-		}
+		maybeOpenBearBonesOffer(state, challenger, pending.actorId);
 	}
 
 	return {
@@ -853,7 +843,7 @@ export function executePendingAction(
 			});
 		}
 		case "class_action_collect": {
-			actor.cash += C.COLLECT_CASH_GAIN;
+			addPassiveCash(actor, C.COLLECT_CASH_GAIN);
 			applySupplyDropOnCollect(state, actor);
 			applyTrickleDownOnCollect(state, actor, C.COLLECT_CASH_GAIN);
 			return null;
@@ -866,7 +856,7 @@ export function executePendingAction(
 				(pending.targetAllySlot as 0 | 1 | null) ??
 				firstTurnedSlot(unturnTarget);
 			if (slot !== null && unturnTarget.crewIds[slot]) {
-				unturnTarget.crewTurned[slot] = false;
+				unturnCrewAtSlot(state, unturnTarget, slot);
 				recomputePassives(unturnTarget, state);
 			}
 			return null;
@@ -919,6 +909,8 @@ export function executeMove(
 			actor.bossMaxHp,
 		);
 	}
+
+	applyCoolGuyDamageOnMovePlayed(state, actor);
 
 	const enemies = getEnemies(state, actor.playerId);
 	for (const enemy of enemies) {
