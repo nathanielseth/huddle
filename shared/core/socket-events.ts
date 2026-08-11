@@ -28,4 +28,6 @@ export interface ClientToServerEvents {
 	pause_game: () => void;
 	resume_game: () => void;
 	kick_player: (payload: { playerId: string }) => void;
+	add_cpu_seat: () => void;
+	remove_cpu_seat: (payload: { playerId: string }) => void;
 }

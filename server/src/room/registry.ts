@@ -8,10 +8,11 @@ import type {
 
 export interface RoomPlayer {
 	playerId: string;
-	socketId: string;
+	socketId: string | null;
 	name: string;
 	score: number;
 	isConnected: boolean;
+	isCpu: boolean;
 }
 
 export interface Room {
@@ -54,6 +55,7 @@ export class RoomRegistry {
 			this.socketToCode.delete(room.hostSocketId);
 			this.socketToPlayerId.delete(room.hostSocketId);
 			for (const p of room.players.values()) {
+				if (p.socketId === null) continue; // CPU seat: never tracked
 				this.socketToCode.delete(p.socketId);
 				this.socketToPlayerId.delete(p.socketId);
 			}
@@ -156,8 +158,43 @@ export function addPlayer(
 		name,
 		score: 0,
 		isConnected: true,
+		isCpu: false,
 	});
 	return "joined";
+}
+
+const CPU_ID_PREFIX = "cpu::";
+
+const CPU_NAMES = [
+	"Bot Dre",
+	"Bot Nate",
+	"Bot Waks",
+	"Bot Cze",
+	"Bot Arman",
+	"Bot Jaen",
+] as const;
+
+export function isCpuPlayerId(playerId: string): boolean {
+	return playerId.startsWith(CPU_ID_PREFIX);
+}
+
+export function addCpuSeat(room: Room, name?: string): string {
+	let n = 0;
+	let playerId = `${CPU_ID_PREFIX}${String(n)}`;
+	while (room.players.has(playerId)) {
+		n++;
+		playerId = `${CPU_ID_PREFIX}${String(n)}`;
+	}
+	const displayName = name ?? `CPU ${CPU_NAMES[n % CPU_NAMES.length]}`;
+	room.players.set(playerId, {
+		playerId,
+		socketId: null,
+		name: displayName,
+		score: 0,
+		isConnected: true,
+		isCpu: true,
+	});
+	return playerId;
 }
 
 export function rejoinPlayer(
@@ -181,6 +218,10 @@ export function removePlayer(room: Room, socketId: string): void {
 	}
 }
 
+export function removePlayerById(room: Room, playerId: string): void {
+	room.players.delete(playerId);
+}
+
 export function markDisconnected(room: Room, socketId: string): void {
 	for (const player of room.players.values()) {
 		if (player.socketId === socketId) {
@@ -200,6 +241,7 @@ export function getPublicState(room: Room): GameState {
 		name: p.name,
 		score: p.score,
 		isConnected: p.isConnected,
+		isCpu: p.isCpu,
 	}));
 	return {
 		roomCode: room.code,

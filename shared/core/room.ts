@@ -15,6 +15,7 @@ export interface Player {
 	name: string;
 	score: number;
 	isConnected: boolean;
+	isCpu: boolean;
 }
 
 export interface GameTimer {

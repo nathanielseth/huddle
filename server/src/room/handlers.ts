@@ -1,8 +1,10 @@
 import {
 	createRoom,
 	addPlayer,
+	addCpuSeat,
 	rejoinPlayer,
 	removePlayer,
+	removePlayerById,
 	markDisconnected,
 	isHostSocket,
 	getPublicState,
@@ -15,9 +17,12 @@ import {
 	JoinRoomSchema,
 	RejoinRoomSchema,
 	KickPlayerSchema,
+	RemoveCpuSeatSchema,
 } from "./schemas";
 import type { GameRunner } from "../engine/GameRunner";
 import type { IO, ClientSocket } from "../types";
+
+const DEFAULT_MAX_SEATS = 8;
 
 const HOST_GRACE_MS = 45_000;
 const ACTION_RATE_LIMIT_MS = 100;
@@ -48,6 +53,7 @@ function closeRoom(
 	clearHostGrace(room.code);
 	runner.cancelTimer(room.code);
 	runner.cancelHostReconnectTimer(room.code);
+	runner.cancelCpuTurnTimer(room.code);
 	runner.clearQueue(room.code);
 	io.to(room.code).emit("room_closed");
 	store.delete(room.code);
@@ -69,6 +75,7 @@ function handleIntentionalLeave(
 	}
 	removePlayer(room, socket.id);
 	void socket.leave(room.code);
+	runner.notifyPlayerRemoved(room);
 	broadcast(io, room);
 }
 
@@ -234,7 +241,9 @@ export function registerHandlers(
 		}
 
 		const existing = room.players.get(playerId);
-		if (existing) store.untrackSocket(existing.socketId);
+		if (existing?.socketId !== null && existing !== undefined) {
+			store.untrackSocket(existing.socketId);
+		}
 
 		const ok = rejoinPlayer(room, playerId, socket.id);
 		if (!ok) {
@@ -265,10 +274,50 @@ export function registerHandlers(
 		const partyLeaderId = room.players.keys().next().value;
 		if (result.data.playerId === partyLeaderId) return;
 
-		io.to(target.socketId).emit("kicked");
-		io.in(target.socketId).socketsLeave(room.code);
-		store.untrackSocket(target.socketId);
-		removePlayer(room, target.socketId);
+		if (target.socketId !== null) {
+			io.to(target.socketId).emit("kicked");
+			io.in(target.socketId).socketsLeave(room.code);
+			store.untrackSocket(target.socketId);
+		}
+		removePlayerById(room, target.playerId);
+		runner.notifyPlayerRemoved(room);
+		broadcast(io, room);
+	});
+
+	socket.on("add_cpu_seat", () => {
+		const room = store.findBySocket(socket.id);
+		if (!room || !isHostSocket(room, socket.id) || room.phase !== "lobby")
+			return;
+		// at least one human (the party leader) must exist fore CPU seat
+		if (room.players.size === 0) return;
+
+		const engine = runner.getEngine(room.gameId);
+		if (!engine?.supportsCpuSeats) return;
+
+		const maxSeats = engine.getMaxSeats?.(room.configPayload) ?? DEFAULT_MAX_SEATS;
+		if (room.players.size >= maxSeats) {
+			socket.emit("room_error", "Room is full.");
+			return;
+		}
+
+		addCpuSeat(room);
+		touchRoom(room);
+		broadcast(io, room);
+	});
+
+	socket.on("remove_cpu_seat", (payload) => {
+		const result = RemoveCpuSeatSchema.safeParse(payload);
+		if (!result.success) return;
+
+		const room = store.findBySocket(socket.id);
+		if (!room || !isHostSocket(room, socket.id) || room.phase !== "lobby")
+			return;
+
+		const target = room.players.get(result.data.playerId);
+		if (!target?.isCpu) return;
+
+		removePlayerById(room, target.playerId);
+		runner.notifyPlayerRemoved(room);
 		broadcast(io, room);
 	});
 
@@ -282,6 +331,11 @@ export function registerHandlers(
 		if (!isHost && !isPartyLeader) return;
 		if (!runner.hasEngine(room.gameId)) {
 			socket.emit("room_error", "Unknown game.");
+			return;
+		}
+		const validationError = runner.validateStart(room);
+		if (validationError) {
+			socket.emit("room_error", validationError);
 			return;
 		}
 		runner.startGame(room, io, store);
