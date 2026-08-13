@@ -15,11 +15,18 @@ export interface RoomPlayer {
 	isCpu: boolean;
 }
 
+export interface RoomSpectator {
+	socketId: string;
+	name: string;
+	joinedAt: number;
+}
+
 export interface Room {
 	code: string;
 	hostPlayerId: string;
 	hostSocketId: string;
 	players: Map<string, RoomPlayer>;
+	spectators: Map<string, RoomSpectator>; // keyed by socketId
 	phase: RoomPhase;
 	gameId: string | null;
 	createdAt: number;
@@ -40,6 +47,7 @@ export class RoomRegistry {
 	private rooms = new Map<string, Room>();
 	private socketToCode = new Map<string, string>();
 	private socketToPlayerId = new Map<string, string>();
+	private socketToSpectatorCode = new Map<string, string>();
 
 	get(code: string): Room | undefined {
 		return this.rooms.get(code);
@@ -58,6 +66,9 @@ export class RoomRegistry {
 				if (p.socketId === null) continue; // CPU seat: never tracked
 				this.socketToCode.delete(p.socketId);
 				this.socketToPlayerId.delete(p.socketId);
+			}
+			for (const s of room.spectators.values()) {
+				this.socketToSpectatorCode.delete(s.socketId);
 			}
 		}
 		this.rooms.delete(code);
@@ -97,6 +108,19 @@ export class RoomRegistry {
 		this.socketToPlayerId.delete(socketId);
 	}
 
+	trackSpectatorSocket(socketId: string, roomCode: string): void {
+		this.socketToSpectatorCode.set(socketId, roomCode);
+	}
+
+	untrackSpectatorSocket(socketId: string): void {
+		this.socketToSpectatorCode.delete(socketId);
+	}
+
+	findSpectatorBySocket(socketId: string): Room | null {
+		const code = this.socketToSpectatorCode.get(socketId);
+		return code !== undefined ? (this.rooms.get(code) ?? null) : null;
+	}
+
 	generateCode(): string {
 		let code: string;
 		do {
@@ -121,6 +145,7 @@ export function createRoom(
 		hostPlayerId,
 		hostSocketId,
 		players: new Map(),
+		spectators: new Map(),
 		phase: "lobby",
 		gameId,
 		createdAt: now,
@@ -174,18 +199,36 @@ const CPU_NAMES = [
 	"Bot Jaen",
 ] as const;
 
+function getRandomCpuName(room: Room): string {
+	const usedNames = new Set(
+		[...room.players.values()]
+			.filter((player) => player.isCpu)
+			.map((player) => player.name),
+	);
+
+	const availableNames = CPU_NAMES.filter((name) => !usedNames.has(name));
+
+	const names = availableNames.length > 0 ? availableNames : CPU_NAMES;
+	const index = Math.floor(Math.random() * names.length);
+
+	return names[index]!;
+}
+
 export function isCpuPlayerId(playerId: string): boolean {
 	return playerId.startsWith(CPU_ID_PREFIX);
 }
 
 export function addCpuSeat(room: Room, name?: string): string {
 	let n = 0;
-	let playerId = `${CPU_ID_PREFIX}${String(n)}`;
+	let playerId = `${CPU_ID_PREFIX}${n}`;
+
 	while (room.players.has(playerId)) {
 		n++;
-		playerId = `${CPU_ID_PREFIX}${String(n)}`;
+		playerId = `${CPU_ID_PREFIX}${n}`;
 	}
-	const displayName = name ?? `CPU ${CPU_NAMES[n % CPU_NAMES.length]}`;
+
+	const displayName = name ?? getRandomCpuName(room);
+
 	room.players.set(playerId, {
 		playerId,
 		socketId: null,
@@ -194,6 +237,7 @@ export function addCpuSeat(room: Room, name?: string): string {
 		isConnected: true,
 		isCpu: true,
 	});
+
 	return playerId;
 }
 
@@ -222,6 +266,14 @@ export function removePlayerById(room: Room, playerId: string): void {
 	room.players.delete(playerId);
 }
 
+export function addSpectator(room: Room, socketId: string, name: string): void {
+	room.spectators.set(socketId, { socketId, name, joinedAt: Date.now() });
+}
+
+export function removeSpectator(room: Room, socketId: string): void {
+	room.spectators.delete(socketId);
+}
+
 export function markDisconnected(room: Room, socketId: string): void {
 	for (const player of room.players.values()) {
 		if (player.socketId === socketId) {
@@ -248,6 +300,7 @@ export function getPublicState(room: Room): GameState {
 		gameId: room.gameId,
 		phase: room.phase,
 		players,
+		spectatorCount: room.spectators.size,
 		timer: room.timer,
 		gamePayload: room.publicPayload,
 		configPayload: room.configPayload,

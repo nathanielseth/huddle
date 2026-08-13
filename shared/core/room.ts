@@ -28,6 +28,7 @@ export interface GameState {
 	gameId: string | null;
 	phase: RoomPhase;
 	players: Player[];
+	spectatorCount: number;
 	timer: GameTimer | null;
 	gamePayload: unknown; // typed per-game, cast where used
 	configPayload: unknown;

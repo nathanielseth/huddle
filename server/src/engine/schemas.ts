@@ -1,5 +1,6 @@
 import { z } from "zod";
 import type { GameTimer, RoomPhase } from "../../../shared/core/room";
+import { logger } from "../lib/logger";
 
 const GameTimerSchema: z.ZodType<GameTimer> = z.object({
 	startsAt: z.number(),
@@ -42,10 +43,10 @@ export function parsePlayerAction<T extends z.ZodTypeAny>(
 ): z.infer<T> | null {
 	const result = schema.safeParse(action);
 	if (!result.success) {
-		console.warn(
-			`[engine:${engineId}] Rejected invalid action:`,
-			z.treeifyError(result.error),
-		);
+		logger.warn("rejected invalid action", {
+			engineId,
+			issues: z.treeifyError(result.error),
+		});
 		return null;
 	}
 	return result.data;

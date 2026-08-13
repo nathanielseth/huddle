@@ -10,6 +10,7 @@
 	],
 	"scripts": {
 		"dev": "concurrently --names server,client --prefix-colors cyan,magenta -k --success first \"npm run dev -w server\" \"npm run dev -w client\"",
+		"dev:remote": "node scripts/tunnel.mjs",
 		"build": "npm run build -w server && npm run build -w client",
 		"install:all": "npm install",
 		"postinstall": "node scripts/setup-env.mjs",

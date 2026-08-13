@@ -2,6 +2,8 @@ import {
 	createRoom,
 	addPlayer,
 	addCpuSeat,
+	addSpectator,
+	removeSpectator,
 	rejoinPlayer,
 	removePlayer,
 	removePlayerById,
@@ -15,18 +17,23 @@ import {
 import {
 	CreateRoomSchema,
 	JoinRoomSchema,
+	SpectateRoomSchema,
 	RejoinRoomSchema,
 	KickPlayerSchema,
 	RemoveCpuSeatSchema,
 } from "./schemas";
 import type { GameRunner } from "../engine/GameRunner";
 import type { IO, ClientSocket } from "../types";
+import { createCooldown } from "../lib/rate-limit";
+import { logger } from "../lib/logger";
 
 const DEFAULT_MAX_SEATS = 8;
 
 const HOST_GRACE_MS = 45_000;
 const ACTION_RATE_LIMIT_MS = 100;
+const ROOM_LIFECYCLE_RATE_LIMIT_MS = 1_000;
 const MAX_ROOMS = 100;
+const MAX_SPECTATORS_PER_ROOM = 10;
 
 const hostGraceTimers = new Map<string, ReturnType<typeof setTimeout>>();
 
@@ -57,7 +64,22 @@ function closeRoom(
 	runner.clearQueue(room.code);
 	io.to(room.code).emit("room_closed");
 	store.delete(room.code);
-	console.log(`[room] ${room.code} closed — ${reason}`);
+	logger.info("room closed", { roomCode: room.code, reason });
+}
+
+function joinAsSpectator(
+	io: IO,
+	socket: ClientSocket,
+	store: RoomRegistry,
+	room: Room,
+	name: string,
+	reason: "room_full" | "requested",
+): void {
+	addSpectator(room, socket.id, name);
+	store.trackSpectatorSocket(socket.id, room.code);
+	void socket.join(room.code);
+	socket.emit("joined_as_spectator", { reason });
+	broadcast(io, room);
 }
 
 function handleIntentionalLeave(
@@ -66,6 +88,15 @@ function handleIntentionalLeave(
 	store: RoomRegistry,
 	runner: GameRunner,
 ): void {
+	const spectatorRoom = store.findSpectatorBySocket(socket.id);
+	if (spectatorRoom) {
+		store.untrackSpectatorSocket(socket.id);
+		removeSpectator(spectatorRoom, socket.id);
+		void socket.leave(spectatorRoom.code);
+		broadcast(io, spectatorRoom);
+		return;
+	}
+
 	const room = store.findBySocket(socket.id);
 	if (!room) return;
 	store.untrackSocket(socket.id);
@@ -86,20 +117,32 @@ function handleDisconnect(
 	reason: string,
 	runner: GameRunner,
 ): void {
+	const spectatorRoom = store.findSpectatorBySocket(socket.id);
+	if (spectatorRoom) {
+		store.untrackSpectatorSocket(socket.id);
+		removeSpectator(spectatorRoom, socket.id);
+		broadcast(io, spectatorRoom);
+		return;
+	}
+
 	const room = store.findBySocket(socket.id);
 	if (!room) return;
 	store.untrackSocket(socket.id);
 
 	if (isHostSocket(room, socket.id)) {
 		if (room.phase === "in_game" || room.phase === "paused") {
-			console.log(
-				`[room] host disconnected from ${room.code} (${reason}) — pausing game, 5-min reconnect window`,
-			);
+			logger.info("host disconnected — pausing game", {
+				roomCode: room.code,
+				reason,
+				reconnectWindowMs: HOST_GRACE_MS,
+			});
 			runner.onHostDisconnect(room, io, store);
 		} else {
-			console.log(
-				`[room] host disconnected from ${room.code} (${reason}) — starting ${String(HOST_GRACE_MS / 1_000)}s grace period`,
-			);
+			logger.info("host disconnected — starting grace period", {
+				roomCode: room.code,
+				reason,
+				graceMs: HOST_GRACE_MS,
+			});
 			io.to(room.code).emit(
 				"room_error",
 				"Host disconnected. Waiting for them to reconnect…",
@@ -116,9 +159,10 @@ function handleDisconnect(
 
 	const found = store.findPlayerBySocket(socket.id);
 	if (!found) {
-		console.log(
-			`[room] ignoring stale disconnect for ${socket.id} in ${room.code} — player already rejoined`,
-		);
+		logger.info("ignoring stale disconnect — player already rejoined", {
+			socketId: socket.id,
+			roomCode: room.code,
+		});
 		return;
 	}
 
@@ -132,9 +176,14 @@ export function registerHandlers(
 	store: RoomRegistry,
 	runner: GameRunner,
 ): void {
-	let lastActionAt = 0;
+	const actionCooldown = createCooldown(ACTION_RATE_LIMIT_MS);
+	const createRoomCooldown = createCooldown(ROOM_LIFECYCLE_RATE_LIMIT_MS);
+	const joinRoomCooldown = createCooldown(ROOM_LIFECYCLE_RATE_LIMIT_MS);
+	const rejoinRoomCooldown = createCooldown(ROOM_LIFECYCLE_RATE_LIMIT_MS);
 
 	socket.on("create_room", (payload) => {
+		if (!createRoomCooldown.ready()) return;
+
 		const result = CreateRoomSchema.safeParse(payload);
 		if (!result.success) {
 			socket.emit("room_error", "Invalid payload.");
@@ -143,9 +192,9 @@ export function registerHandlers(
 
 		if (store.size >= MAX_ROOMS) {
 			socket.emit("room_error", "Server is full right now. Try again later.");
-			console.log(
-				`[room] create_room rejected — at capacity (${String(MAX_ROOMS)})`,
-			);
+			logger.warn("create_room rejected — at capacity", {
+				maxRooms: MAX_ROOMS,
+			});
 			return;
 		}
 
@@ -155,13 +204,19 @@ export function registerHandlers(
 		store.save(room);
 		store.trackSocket(socket.id, code);
 		void socket.join(code);
-		console.log(
-			`[room] created ${code} — host ${socket.id} (${String(store.size)}/${String(MAX_ROOMS)} rooms)`,
-		);
+		logger.info("room created", {
+			roomCode: code,
+			socketId: socket.id,
+			gameId,
+			roomCount: store.size,
+			maxRooms: MAX_ROOMS,
+		});
 		broadcast(io, room);
 	});
 
 	socket.on("join_room", (payload) => {
+		if (!joinRoomCooldown.ready()) return;
+
 		const result = JoinRoomSchema.safeParse(payload);
 		if (!result.success) {
 			socket.emit("room_error", "Invalid payload.");
@@ -186,15 +241,61 @@ export function registerHandlers(
 			socket.emit("room_error", "That name is already taken in this room.");
 			return;
 		}
+
+		const engine = runner.getEngine(room.gameId);
+		const maxSeats =
+			engine?.getMaxSeats?.(room.configPayload) ?? DEFAULT_MAX_SEATS;
+		if (room.players.size >= maxSeats) {
+			joinAsSpectator(io, socket, store, room, name, "room_full");
+			console.log(`[room] ${name} joined ${code} as spectator (room full)`);
+			return;
+		}
+
 		const outcome = addPlayer(room, playerId, socket.id, name);
 		store.trackSocket(socket.id, code, playerId);
 		void socket.join(code);
 		touchRoom(room);
-		console.log(`[room] ${name} ${outcome} ${code}`);
+		logger.info("player " + outcome, { name, roomCode: code });
 		broadcast(io, room);
 	});
 
+	socket.on("spectate_room", (payload) => {
+		const result = SpectateRoomSchema.safeParse(payload);
+		if (!result.success) {
+			socket.emit("room_error", "Invalid payload.");
+			return;
+		}
+		const { code } = result.data;
+		const name = result.data.name?.trim() || "Spectator";
+
+		if (
+			store.findBySocket(socket.id) ||
+			store.findSpectatorBySocket(socket.id)
+		) {
+			// this socket is already seated as host/player/spectator somewhere
+			socket.emit("room_error", "Already in a room.");
+			return;
+		}
+
+		const room = store.get(code);
+		if (!room) {
+			socket.emit("room_error", "Room not found.");
+			return;
+		}
+		if (room.spectators.size >= MAX_SPECTATORS_PER_ROOM) {
+			socket.emit("room_error", "Too many spectators in this room.");
+			return;
+		}
+
+		joinAsSpectator(io, socket, store, room, name, "requested");
+		console.log(
+			`[room] "${name}" spectating ${code} (${String(room.spectators.size)} watching)`,
+		);
+	});
+
 	socket.on("rejoin_room", (payload) => {
+		if (!rejoinRoomCooldown.ready()) return;
+
 		const result = RejoinRoomSchema.safeParse(payload);
 		if (!result.success) {
 			socket.emit("rejoin_failed");
@@ -215,9 +316,9 @@ export function registerHandlers(
 
 			if (hostGraceTimers.has(room.code)) {
 				clearHostGrace(room.code);
-				console.log(
-					`[room] host rejoined ${room.code} within lobby grace period`,
-				);
+				logger.info("host rejoined within lobby grace period", {
+					roomCode: room.code,
+				});
 			}
 
 			store.untrackSocket(room.hostSocketId);
@@ -225,11 +326,11 @@ export function registerHandlers(
 			store.trackSocket(socket.id, code);
 			void socket.join(code);
 			touchRoom(room);
-			console.log(`[room] host rejoined ${code}`);
+			logger.info("host rejoined", { roomCode: code });
 
 			if (room.phase === "paused" && room.pauseReason === "host_disconnected") {
 				runner.onHostReconnect(room, io, store);
-				console.log(`[room] host reconnected — resuming ${code}`);
+				logger.info("host reconnected — resuming", { roomCode: code });
 			} else {
 				broadcast(io, room);
 			}
@@ -253,7 +354,7 @@ export function registerHandlers(
 		store.trackSocket(socket.id, code, playerId);
 		void socket.join(code);
 		touchRoom(room);
-		console.log(`[room] player ${playerId} rejoined ${code}`);
+		logger.info("player rejoined", { playerId, roomCode: code });
 		broadcast(io, room);
 		if (room.phase === "in_game") {
 			void runner.resendSecret(room, playerId, io);
@@ -342,9 +443,7 @@ export function registerHandlers(
 	});
 
 	socket.on("player_action", (payload) => {
-		const now = Date.now();
-		if (now - lastActionAt < ACTION_RATE_LIMIT_MS) return;
-		lastActionAt = now;
+		if (!actionCooldown.ready()) return;
 
 		const found = store.findPlayerBySocket(socket.id);
 		if (!found) return;

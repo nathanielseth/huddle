@@ -12,8 +12,8 @@ export default defineConfig({
 	],
 	resolve: {
 		alias: {
-			"@shared": path.resolve(__dirname, "../shared"),
-			"@": path.resolve(__dirname, "src"),
+			"@shared": path.resolve(import.meta.dirname, "../shared"),
+			"@": path.resolve(import.meta.dirname, "src"),
 		},
 		dedupe: ["react", "react-dom"],
 	},
@@ -21,6 +21,7 @@ export default defineConfig({
 		port: 3000,
 		host: true,
 		strictPort: true,
+		allowedHosts: [".trycloudflare.com"],
 		proxy: {
 			"/api": {
 				target: "http://localhost:3001",

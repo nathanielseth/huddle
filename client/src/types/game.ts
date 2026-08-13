@@ -19,6 +19,7 @@ export interface Game {
 	duration: number;
 	comingSoon?: boolean;
 	beta?: boolean;
+	supportsCpuSeats?: boolean;
 }
 
 export interface Pack {

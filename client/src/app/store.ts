@@ -43,6 +43,8 @@ interface GameStore {
 	pauseGame: () => void;
 	resumeGame: () => void;
 	kickPlayer: (playerId: string) => void;
+	addCpuSeat: () => void;
+	removeCpuSeat: (playerId: string) => void;
 	_syncState: (state: GameState) => void;
 	_setStatus: (status: ConnectionStatus) => void;
 	_setError: (message: string) => void;
@@ -167,6 +169,16 @@ export const useGameStore = create<GameStore>((set, get) => ({
 	kickPlayer: (playerId) => {
 		if (get().status !== "connected") return;
 		socket.emit("kick_player", { playerId });
+	},
+
+	addCpuSeat: () => {
+		if (get().status !== "connected") return;
+		socket.emit("add_cpu_seat");
+	},
+
+	removeCpuSeat: (playerId) => {
+		if (get().status !== "connected") return;
+		socket.emit("remove_cpu_seat", { playerId });
 	},
 
 	_syncState: (state) => {

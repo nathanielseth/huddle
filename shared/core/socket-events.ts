@@ -8,6 +8,7 @@ export interface ServerToClientEvents {
 	kicked: () => void;
 	rejoin_failed: () => void;
 	player_secret: (payload: unknown) => void;
+	joined_as_spectator: (payload: { reason: "room_full" | "requested" }) => void;
 }
 
 export interface ClientToServerEvents {
@@ -17,6 +18,7 @@ export interface ClientToServerEvents {
 		name: string;
 		playerId: string;
 	}) => void;
+	spectate_room: (payload: { code: string; name?: string }) => void;
 	rejoin_room: (payload: {
 		code: string;
 		playerId: string;

@@ -7,6 +7,9 @@ import type { RoomRegistry } from "../room/registry";
 import type { GameRunner } from "../engine/GameRunner";
 import type { IO } from "../types";
 
+// need 5 mb for squadoodle...
+const MAX_HTTP_BUFFER_SIZE = 5 * 1024 * 1024;
+
 export function createSocketServer(
 	httpServer: HttpServer,
 	registry: RoomRegistry,
@@ -20,6 +23,7 @@ export function createSocketServer(
 		transports: ["websocket", "polling"],
 		pingTimeout: 10_000,
 		pingInterval: 25_000,
+		maxHttpBufferSize: MAX_HTTP_BUFFER_SIZE,
 	});
 
 	io.on("connection", (socket) => {

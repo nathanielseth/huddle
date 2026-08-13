@@ -31,6 +31,17 @@ export interface GameEngine {
 		configPayload: unknown,
 		playerIds: string[],
 	) => unknown;
+	readonly supportsCpuSeats?: boolean;
+	readonly getMaxSeats?: (configPayload: unknown) => number;
+	readonly validateStart?: (
+		configPayload: unknown,
+		playerIds: string[],
+	) => string | null;
+
+	readonly onPlayerRemoved?: (
+		configPayload: unknown,
+		remainingPlayerIds: string[],
+	) => unknown;
 	getInitialState(): unknown;
 	onAction(
 		ctx: GameContext,
@@ -43,4 +54,19 @@ export interface GameEngine {
 
 export interface GameEngineWithSecrets extends GameEngine {
 	getPlayerSecret(ctx: GameContext, playerId: string): Awaitable<unknown>;
+}
+
+export interface GameEngineWithCpuSeats extends GameEngine {
+	isCpuSeat(ctx: GameContext, playerId: string): boolean;
+	getCpuSeatToAct(ctx: GameContext): string | null;
+	actForCpuSeat(ctx: GameContext, playerId: string): Awaitable<EngineResult>;
+}
+
+export function hasCpuSeats(
+	engine: GameEngine,
+): engine is GameEngineWithCpuSeats {
+	return (
+		"getCpuSeatToAct" in engine &&
+		typeof (engine as GameEngineWithCpuSeats).getCpuSeatToAct === "function"
+	);
 }
