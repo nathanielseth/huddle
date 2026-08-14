@@ -13,7 +13,7 @@ export type EffectPrimitive =
 			type: "deal_damage";
 			target: "enemy_boss";
 			amount: number;
-			unblockable?: boolean;
+			undefendable?: boolean;
 			cannotBeMultiplied?: boolean;
 	  }
 	| {
@@ -32,7 +32,7 @@ export type EffectPrimitive =
 			cannotBeMultiplied?: boolean;
 	  }
 	| {
-			type: "deal_damage_ignore_shield";
+			type: "deal_damage_ignore_armor";
 			amount: number;
 	  }
 	// player chooses discard count; damage = count * damagePerCard
@@ -50,14 +50,14 @@ export type EffectPrimitive =
 	  }
 	| {
 			type: "strike_enemy_crew";
-			unblockable?: boolean;
+			undefendable?: boolean;
 	  }
 	| {
-			type: "strike_enemy_crew_unblockable_with_cash_cost";
+			type: "strike_enemy_crew_undefendable_with_cash_cost";
 			cashCost: number;
 	  }
 	| {
-			type: "strike_enemy_crew_blockable";
+			type: "strike_enemy_crew_defendable";
 	  }
 	| { type: "turn_enemy_crew"; targetSlot?: number }
 	| { type: "turn_ally_crew"; targetSlot?: number }
@@ -79,6 +79,9 @@ export type EffectPrimitive =
 	  }
 	| {
 			type: "swap_crew_with_teammate";
+	  }
+	| {
+			type: "swap_with_any_face_up_crew";
 	  }
 	| { type: "draw_cards"; amount: number }
 	| { type: "discard_cards_from_hand"; amount: number }
@@ -129,9 +132,9 @@ export type EffectPrimitive =
 			drawAmount: number;
 	  }
 	| { type: "heal_boss"; amount: number }
-	| { type: "shield_boss"; amount: number }
-	| { type: "shield_all_ally_bosses"; amount: number }
-	| { type: "remove_all_shields"; target: "enemy_boss" | "ally_boss" }
+	| { type: "armor_boss"; amount: number }
+	| { type: "armor_all_ally_bosses"; amount: number }
+	| { type: "remove_all_armor"; target: "enemy_boss" | "ally_boss" }
 	| {
 			type: "immunity_until_next_turn";
 			turns?: number;
@@ -167,10 +170,10 @@ export type EffectPrimitive =
 	| {
 			type: "command_replace_crew_from_reserve";
 	  }
-	// damage equals new shield total; actor's shield emptied after, regardless of target/damage
+	// damage equals new armor total; actor's armor emptied after, regardless of target/damage
 	| {
-			type: "command_gain_shield_then_deal_damage_equal_to_shield";
-			shieldAmount: number;
+			type: "command_gain_armor_then_deal_damage_equal_to_armor";
+			armorAmount: number;
 	  }
 	| {
 			type: "negate_enemy_slow_move";
@@ -195,17 +198,21 @@ export type EffectPrimitive =
 	  }
 	| { type: "passive_heal_on_move_played"; amount: number }
 	| { type: "passive_damage_random_enemy_on_move_played"; amount: number }
-	| { type: "passive_shield_per_turn"; amount: number }
+	| { type: "passive_armor_per_turn"; amount: number }
 	| {
 			type: "passive_optional_discard_for_damage_per_turn";
 			discardCost: number;
 			damage: number;
 	  }
 	| {
+			type: "passive_sell_moves_for_cash";
+			cashAmount: number;
+	  }
+	| {
 			type: "passive_watcher_unturn_on_challenge_win";
 	  }
 	| {
-			type: "passive_shield_on_ally_crew_turn";
+			type: "passive_armor_on_ally_crew_turn";
 			amount: number;
 	  }
 	// applies to all damage sources; scoping to moves only is a known approximation
@@ -213,7 +220,7 @@ export type EffectPrimitive =
 			type: "passive_negate_damage_percent";
 			percent: number;
 	  }
-	// added once per effect resolution; skipped when unblockable or cannotBeMultiplied
+	// added once per effect resolution; skipped when undefendable or cannotBeMultiplied
 	| {
 			type: "passive_flat_damage_bonus";
 			amount: number;
@@ -237,9 +244,9 @@ export type EffectPrimitive =
 	| {
 			type: "passive_false_flag";
 	  }
-	// blocks strike targeting while hp > 50; strike fizzles, no crew turn; does not affect other damage
+	// defends strike targeting while hp > 50; strike fizzles, no crew turn; does not affect other damage
 	| {
-			type: "passive_block_strikes_above_half_hp";
+			type: "passive_defend_strikes_above_half_hp";
 	  }
 	// suppresses enemy turnedEffects on face-up; resolved structurally, not via effect dispatch; type exists for declaration
 	| {
@@ -247,7 +254,7 @@ export type EffectPrimitive =
 	  }
 	// resolved structurally in discardFromHand; type exists for declaration
 	| {
-			type: "passive_shield_on_discard";
+			type: "passive_armor_on_discard";
 	  }
 	// triggers once per turn when hand becomes empty; flag resets at startTurn
 	| {
@@ -261,13 +268,26 @@ export type EffectPrimitive =
 	| {
 			type: "passive_strike_on_self_turned_ally";
 	  }
+	// fires whenever the holder kills an enemy crew (strike/execute-adjacent kill of an already face-up slot); turns the holder's own slot face-down
+	| {
+			type: "passive_turn_self_down_on_enemy_crew_kill";
+	  }
+	// all damage this player deals (any source) is treated as piercing: bypasses armor, still respects immunity/reduction%
+	| {
+			type: "passive_all_damage_is_piercing";
+	  }
+	// monkey man: steals cash from the enemy boss whenever this player deals damage to it
+	| {
+			type: "passive_steal_cash_on_damage_dealt";
+			amount: number;
+	  }
 	| {
 			type: "win_if_void_pieces_assembled";
 			requiredPieceIds: readonly string[];
 	  }
 	| { type: "become_also_striker" }
-	| { type: "become_also_turner" }
-	| { type: "become_also_blocker" }
+	| { type: "become_also_unturner" }
+	| { type: "become_also_defender" }
 	| { type: "transform_andrew_into_wolfman" }
 	| {
 			type: "passive_reduce_all_move_costs";
@@ -276,6 +296,11 @@ export type EffectPrimitive =
 	// only reduces burst move costs; summed independently with reduce_all_move_costs
 	| {
 			type: "passive_reduce_burst_move_costs";
+			reduction: number;
+	  }
+	// flat reduction to strike/defend/collect/unturn class action costs
+	| {
+			type: "passive_reduce_class_action_costs";
 			reduction: number;
 	  }
 	// surcharge read live from this player via getEnemies, not accumulated on target
@@ -310,6 +335,40 @@ export type EffectPrimitive =
 	  }
 	| {
 			type: "passive_mirror_enemy_collect_cash";
+	  }
+	// marks a face-down enemy crew (locked in at cast time, by slot + crewId)
+	| {
+			type: "mark_enemy_crew_for_delayed_turn";
+	  }
+	// lasting counter while active, consumed structurally in triggerCrewTurnedEffects
+	| {
+			type: "passive_cease_and_desist";
+	  }
+	// ctx.targetActiveMoveSlot (0-2), a dedicated targeting field
+	| {
+			type: "discard_targeted_enemy_active_move";
+	  }
+	| {
+			type: "passive_cash_on_challenge_win";
+			amount: number;
+	  }
+	| {
+			type: "shuffle_discard_into_deck_then_draw";
+	  }
+	| {
+			type: "passive_self_damage_and_cash_per_turn";
+			damage: number;
+			cashAmount: number;
+	  }
+	// self-discards immediately on resolution
+	| {
+			type: "choose_red_herring_crew";
+	  }
+	// never defaults to self, requires a genuine living teammate
+	| {
+			type: "gain_cash_and_draw_ally";
+			cashAmount: number;
+			drawAmount: number;
 	  };
 
 // wraps a condition and a primitive; negated means fire when condition is false
@@ -319,7 +378,7 @@ export type EffectCondition =
 	| { when: "has_turned_ally_crew_this_game" }
 	| { when: "ally_class_is_turned"; class: CrewClass }
 	| { when: "self_class_is_turned"; class: CrewClass }
-	| { when: "has_shielded_boss" }
+	| { when: "has_armored_boss" }
 	| { when: "enemy_has_more_cash" }
 	| { when: "void_pieces_assembled" }
 	| { when: "no_face_up_crew" }
@@ -367,22 +426,17 @@ const BOSS_MECHANICS: Record<
 	},
 	"the-dealer": {
 		commandEffects: [{ type: "command_replace_crew_from_reserve" }],
-		passiveEffects: [
-			when(
-				{ when: "no_face_up_crew" },
-				{ type: "passive_draw_per_turn", amount: 1 },
-			),
-		],
+		passiveEffects: [{ type: "passive_sell_moves_for_cash", cashAmount: 1 }],
 	},
 	"the-razor": {
 		commandEffects: [{ type: "command_guess_crew_class_turn_if_correct" }],
-		passiveEffects: [{ type: "passive_flat_damage_bonus", amount: 5 }],
+		passiveEffects: [{ type: "passive_flat_damage_bonus", amount: 6 }],
 	},
 	"the-bastion": {
 		commandEffects: [
 			{
-				type: "command_gain_shield_then_deal_damage_equal_to_shield",
-				shieldAmount: 15,
+				type: "command_gain_armor_then_deal_damage_equal_to_armor",
+				armorAmount: 15,
 			},
 		],
 		passiveEffects: [{ type: "passive_cash_on_damage_taken", amount: 1 }],
@@ -399,11 +453,11 @@ const CREW_MECHANICS: Record<
 	Pick<CrewCard, "turnedEffects" | "passiveEffects">
 > = {
 	pektus: {
-		turnedEffects: [{ type: "deal_damage", target: "enemy_boss", amount: 25 }],
-		passiveEffects: [],
+		turnedEffects: [{ type: "deal_damage_ignore_armor", amount: 25 }],
+		passiveEffects: [{ type: "passive_all_damage_is_piercing" }],
 	},
 	shrike: {
-		turnedEffects: [{ type: "strike_enemy_crew" }],
+		turnedEffects: [{ type: "strike_enemy_crew_defendable" }],
 		passiveEffects: [],
 	},
 	"g-rone": {
@@ -411,11 +465,8 @@ const CREW_MECHANICS: Record<
 		passiveEffects: [{ type: "passive_poison_per_round", damagePerRound: 10 }],
 	},
 	"monkey-man": {
-		turnedEffects: [
-			{ type: "discard_all_enemy_hand" },
-			{ type: "deal_damage_per_enemy_hand_discarded", damagePerCard: 5 },
-		],
-		passiveEffects: [],
+		turnedEffects: [{ type: "steal_random_card" }],
+		passiveEffects: [{ type: "passive_steal_cash_on_damage_dealt", amount: 1 }],
 	},
 	"berto-lopez": {
 		turnedEffects: [
@@ -429,16 +480,12 @@ const CREW_MECHANICS: Record<
 				true,
 			),
 		],
-		passiveEffects: [],
+		passiveEffects: [{ type: "passive_turn_self_down_on_enemy_crew_kill" }],
 	},
 	"hot-girl": {
 		turnedEffects: [
-			{
-				type: "deal_damage_percent_current_hp",
-				target: "enemy_boss",
-				percent: 35,
-				cannotBeMultiplied: true,
-			},
+			{ type: "discard_all_enemy_hand" },
+			{ type: "deal_damage_per_enemy_hand_discarded", damagePerCard: 5 },
 		],
 		passiveEffects: [],
 	},
@@ -456,13 +503,13 @@ const CREW_MECHANICS: Record<
 				baseAmount: 3,
 				reducedAmount: 1,
 			},
-			{ type: "strike_enemy_crew", unblockable: true },
+			{ type: "strike_enemy_crew", undefendable: true },
 		],
 		passiveEffects: [],
 	},
 	"rilla-gorilla": {
 		turnedEffects: [
-			{ type: "shield_boss", amount: 30 },
+			{ type: "armor_boss", amount: 30 },
 			{ type: "deal_damage", target: "enemy_boss", amount: 10 },
 		],
 		passiveEffects: [],
@@ -473,7 +520,7 @@ const CREW_MECHANICS: Record<
 	},
 	"mama-mercy": {
 		turnedEffects: [],
-		passiveEffects: [{ type: "passive_shield_on_ally_crew_turn", amount: 20 }],
+		passiveEffects: [{ type: "passive_armor_on_ally_crew_turn", amount: 20 }],
 	},
 	lighthouse: {
 		turnedEffects: [{ type: "deal_damage_all_enemy_bosses", amount: 10 }],
@@ -481,9 +528,9 @@ const CREW_MECHANICS: Record<
 	},
 	glob: {
 		turnedEffects: [
-			when({ when: "has_shielded_boss" }, { type: "shield_boss", amount: 40 }),
+			when({ when: "has_armored_boss" }, { type: "armor_boss", amount: 40 }),
 			when(
-				{ when: "has_shielded_boss" },
+				{ when: "has_armored_boss" },
 				{ type: "steal_cash", amount: 1 },
 				true,
 			),
@@ -491,12 +538,12 @@ const CREW_MECHANICS: Record<
 		passiveEffects: [],
 	},
 	silencer: {
-		turnedEffects: [{ type: "shield_all_ally_bosses", amount: 10 }],
+		turnedEffects: [{ type: "armor_all_ally_bosses", amount: 10 }],
 		passiveEffects: [{ type: "passive_disable_all_enemy_crew_passives" }],
 	},
 	"doctor-norman": {
 		turnedEffects: [],
-		passiveEffects: [{ type: "passive_shield_on_discard" }],
+		passiveEffects: [{ type: "passive_armor_on_discard" }],
 	},
 	lotus: {
 		turnedEffects: [],
@@ -510,7 +557,7 @@ const CREW_MECHANICS: Record<
 		passiveEffects: [],
 	},
 	"too-big": {
-		turnedEffects: [{ type: "steal_cash", amount: 1 }],
+		turnedEffects: [{ type: "swap_with_any_face_up_crew" }],
 		passiveEffects: [],
 	},
 	"claw-machine": {
@@ -519,7 +566,7 @@ const CREW_MECHANICS: Record<
 	},
 	cristatella: {
 		turnedEffects: [],
-		passiveEffects: [{ type: "become_also_blocker" }],
+		passiveEffects: [{ type: "become_also_defender" }],
 	},
 	"cool-guy": {
 		turnedEffects: [],
@@ -528,8 +575,10 @@ const CREW_MECHANICS: Record<
 		],
 	},
 	belladonna: {
-		turnedEffects: [{ type: "heal_boss", amount: 20 }],
-		passiveEffects: [],
+		turnedEffects: [],
+		passiveEffects: [
+			{ type: "passive_reduce_class_action_costs", reduction: 1 },
+		],
 	},
 	"rat-queen": {
 		turnedEffects: [],
@@ -560,14 +609,14 @@ const CREW_MECHANICS: Record<
 				{ type: "unturn_other_ally_crew" },
 			),
 		],
-		passiveEffects: [],
+		passiveEffects: [{ type: "passive_armor_per_turn", amount: 10 }],
 	},
 	terminal: {
 		turnedEffects: [],
-		passiveEffects: [{ type: "passive_block_strikes_above_half_hp" }],
+		passiveEffects: [{ type: "passive_defend_strikes_above_half_hp" }],
 	},
 	suplex: {
-		turnedEffects: [],
+		turnedEffects: [{ type: "deal_damage", target: "enemy_boss", amount: 10 }],
 		passiveEffects: [{ type: "passive_strike_on_self_turned_ally" }],
 	},
 	retro: {
@@ -648,7 +697,7 @@ const MOVE_MECHANICS: Record<string, Pick<MoveCard, "effects">> = {
 		],
 	},
 	"void-torso": {
-		effects: [{ type: "passive_shield_per_turn", amount: 5 }],
+		effects: [{ type: "passive_armor_per_turn", amount: 5 }],
 	},
 	"big-voucher": {
 		effects: [{ type: "passive_reduce_all_move_costs", reduction: 1 }],
@@ -675,7 +724,7 @@ const MOVE_MECHANICS: Record<string, Pick<MoveCard, "effects">> = {
 		effects: [
 			when(
 				{ when: "no_face_up_crew" },
-				{ type: "passive_shield_per_turn", amount: 10 },
+				{ type: "passive_armor_per_turn", amount: 10 },
 				true,
 			),
 		],
@@ -701,7 +750,7 @@ const MOVE_MECHANICS: Record<string, Pick<MoveCard, "effects">> = {
 		effects: [{ type: "deal_damage", target: "enemy_boss", amount: 30 }],
 	},
 	ambush: {
-		effects: [{ type: "strike_enemy_crew_blockable" }],
+		effects: [{ type: "strike_enemy_crew_defendable" }],
 	},
 	devastate: {
 		effects: [
@@ -714,7 +763,7 @@ const MOVE_MECHANICS: Record<string, Pick<MoveCard, "effects">> = {
 		],
 	},
 	"bulletproof-vest": {
-		effects: [{ type: "shield_boss", amount: 10 }],
+		effects: [{ type: "armor_boss", amount: 10 }],
 	},
 	"job-application": {
 		effects: [{ type: "set_both_cash_zero_then_draw", drawAmount: 3 }],
@@ -755,7 +804,7 @@ const MOVE_MECHANICS: Record<string, Pick<MoveCard, "effects">> = {
 		],
 	},
 	ratatatat: {
-		effects: [{ type: "deal_damage_ignore_shield", amount: 20 }],
+		effects: [{ type: "deal_damage_ignore_armor", amount: 20 }],
 	},
 	"dig-deep": {
 		effects: [
@@ -764,7 +813,7 @@ const MOVE_MECHANICS: Record<string, Pick<MoveCard, "effects">> = {
 	},
 	reinforcements: {
 		effects: [
-			{ type: "shield_boss", amount: 15 },
+			{ type: "armor_boss", amount: 15 },
 			{ type: "draw_cards", amount: 1 },
 		],
 	},
@@ -850,8 +899,8 @@ const MOVE_MECHANICS: Record<string, Pick<MoveCard, "effects">> = {
 	"unfinished-business": {
 		effects: [
 			when(
-				{ when: "ally_class_is_turned", class: "blocker" },
-				{ type: "strike_enemy_crew", unblockable: true },
+				{ when: "ally_class_is_turned", class: "defender" },
+				{ type: "strike_enemy_crew", undefendable: true },
 			),
 		],
 	},
@@ -875,7 +924,7 @@ const MOVE_MECHANICS: Record<string, Pick<MoveCard, "effects">> = {
 	},
 	"strip-em-down": {
 		effects: [
-			{ type: "remove_all_shields", target: "enemy_boss" },
+			{ type: "remove_all_armor", target: "enemy_boss" },
 			{ type: "draw_cards", amount: 1 },
 		],
 	},
@@ -888,6 +937,44 @@ const MOVE_MECHANICS: Record<string, Pick<MoveCard, "effects">> = {
 	"ayuda-slip": {
 		effects: [
 			{ type: "redistribute_cash_to_poorest", cashAmount: 3, drawAmount: 1 },
+		],
+	},
+	"warrant-of-arrest": {
+		effects: [{ type: "mark_enemy_crew_for_delayed_turn" }],
+	},
+	"cease-and-desist": {
+		effects: [{ type: "passive_cease_and_desist" }],
+	},
+	sabotage: {
+		effects: [{ type: "discard_targeted_enemy_active_move" }],
+	},
+	extortion: {
+		effects: [{ type: "passive_cash_on_challenge_win", amount: 3 }],
+	},
+	restock: {
+		effects: [{ type: "shuffle_discard_into_deck_then_draw" }],
+	},
+	"sell-out": {
+		effects: [
+			{
+				type: "passive_self_damage_and_cash_per_turn",
+				damage: 5,
+				cashAmount: 2,
+			},
+		],
+	},
+	"red-herring": {
+		effects: [{ type: "choose_red_herring_crew" }],
+	},
+	"my-treat": {
+		effects: [
+			{ type: "gain_cash_and_draw_ally", cashAmount: 2, drawAmount: 1 },
+		],
+	},
+	"to-the-death": {
+		effects: [
+			{ type: "turn_ally_crew" },
+			{ type: "strike_enemy_crew", undefendable: true },
 		],
 	},
 };
@@ -932,31 +1019,34 @@ export function getMoveTargetScope(move: MoveCard): MoveTargetScope {
 		"deal_damage",
 		"deal_damage_per_face_up_ally",
 		"deal_damage_percent_current_hp",
-		"deal_damage_ignore_shield",
+		"deal_damage_ignore_armor",
 		"deal_damage_per_discarded_variable",
 		"deal_damage_per_enemy_hand_discarded",
 		"strike_enemy_crew",
-		"strike_enemy_crew_unblockable_with_cash_cost",
-		"strike_enemy_crew_blockable",
+		"strike_enemy_crew_undefendable_with_cash_cost",
+		"strike_enemy_crew_defendable",
 		"turn_enemy_crew",
 		"steal_cash",
 		"discard_all_enemy_hand",
 		"peek_enemy_hand_then_gain_cash",
 		"peek_two_random_enemy_cards_discard_one",
 		"reveal_enemy_crew_class",
-		"remove_all_shields",
+		"remove_all_armor",
 		"set_both_cash_zero_then_draw",
 		"mutual_discard_hand_then_redraw_same_count",
 		"passive_mirror_enemy_collect_cash",
+		"mark_enemy_crew_for_delayed_turn",
+		"discard_targeted_enemy_active_move",
 	]);
 
 	const ALLY_SCOPED_TYPES = new Set<EffectPrimitive["type"]>([
 		"heal_boss",
-		"shield_boss",
+		"armor_boss",
 		"set_ally_boss_hp_gain_cash_draw",
 		"give_ally_cash_then_optional_unturn",
 		"swap_crew_with_teammate",
 		"passive_life_insurance",
+		"gain_cash_and_draw_ally", // my treat
 	]);
 
 	let sawEnemy = false;
@@ -994,7 +1084,7 @@ export const CARD_IDS = {
 		HOT_GIRL: "hot-girl",
 		BLACK_FIST: "black-fist",
 		WHISPER: "whisper",
-		// blockers
+		// defenders
 		RILLA_GORILLA: "rilla-gorilla",
 		FRONTLINE: "frontline",
 		MAMA_MERCY: "mama-mercy",
@@ -1012,7 +1102,7 @@ export const CARD_IDS = {
 		BELLADONNA: "belladonna",
 		RAT_QUEEN: "rat-queen",
 		BEAR_BONES: "bear-bones",
-		// turners
+		// unturners
 		HANDLES: "handles",
 		HIDER: "hider",
 		TERMINAL: "terminal",
@@ -1085,6 +1175,15 @@ export const CARD_IDS = {
 		WHEEL_OF_FORTUNE: "wheel-of-fortune",
 		TRUTH_SERUM: "truth-serum",
 		AYUDA_SLIP: "ayuda-slip",
+		WARRANT_OF_ARREST: "warrant-of-arrest",
+		CEASE_AND_DESIST: "cease-and-desist",
+		SABOTAGE: "sabotage",
+		EXTORTION: "extortion",
+		RESTOCK: "restock",
+		SELL_OUT: "sell-out",
+		RED_HERRING: "red-herring",
+		MY_TREAT: "my-treat",
+		TO_THE_DEATH: "to-the-death",
 	},
 } as const;
 

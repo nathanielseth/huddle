@@ -45,11 +45,11 @@ export const BOSS_DISPLAY: readonly BossCardDisplay[] = [
 		id: "the-watcher",
 		name: "The Watcher",
 		effectText: {
-			faceTurn: "I deliver an unblockable, unchallengeable strike.",
+			faceTurn: "Pay 6 Cash. I deliver an unstoppable Strike.",
 			command:
 				"Take 1 random card from an enemy's hand, then steal 3 Cash from them.",
 			passive:
-				"Whenever you win a challenge, you may turn one of your face-up Crew face-down.",
+				"Whenever you win a challenge, draw 2 cards, and you may turn one of your face-up Crew face-down.",
 		},
 		flavorText: "",
 		maxHp: 100,
@@ -58,10 +58,10 @@ export const BOSS_DISPLAY: readonly BossCardDisplay[] = [
 		id: "the-dealer",
 		name: "The Dealer",
 		effectText: {
-			faceTurn: "I deliver an unblockable, unchallengeable strike.",
+			faceTurn: "Pay 6 Cash. I deliver an unstoppable Strike.",
 			command:
 				"Replace one of your face-up Crew with your reserved Crew, face-down.",
-			passive: "If you have no face-up Crew, draw 1 at the start of your turn.",
+			passive: "On your turn, you may discard a Move to gain 1 Cash.",
 		},
 		flavorText: "",
 		maxHp: 100,
@@ -71,10 +71,10 @@ export const BOSS_DISPLAY: readonly BossCardDisplay[] = [
 		id: "the-razor",
 		name: "The Razor",
 		effectText: {
-			faceTurn: "I deliver an unblockable, unchallengeable strike.",
+			faceTurn: "Pay 6 Cash. I deliver an unstoppable Strike.",
 			command:
 				"Guess the class of one face-down enemy Crew. If correct, turn it face-up.",
-			passive: "Damage you deal is increased by 5.",
+			passive: "Damage you deal is increased by 6.",
 		},
 		flavorText: "",
 		maxHp: 100,
@@ -84,10 +84,10 @@ export const BOSS_DISPLAY: readonly BossCardDisplay[] = [
 		id: "the-bastion",
 		name: "The Bastion",
 		effectText: {
-			faceTurn: "I deliver an unblockable, unchallengeable strike.",
+			faceTurn: "I deliver an undefendable, unchallengeable strike.",
 			command:
-				"I gain 15 Shield, then deal damage to an enemy Boss equal to my current Shield. My Shield is then emptied.",
-			passive: "Whenever I take damage, you gain 1 Cash. (Once per turn.)",
+				"I gain 15 Armor, then deal damage to an enemy Boss equal to my current Armor. My Armor is then emptied.",
+			passive: "Whenever I take damage, you gain 1 Cash.",
 		},
 		flavorText: "",
 		maxHp: 100,
@@ -102,7 +102,10 @@ export const CREW_DISPLAY: readonly CrewCardDisplay[] = [
 		id: "pektus",
 		name: "Pektus",
 		class: "striker",
-		effectText: { turned: "I deal 25 damage to the enemy Boss." },
+		effectText: {
+			turned: "I deal 25 piercing damage to the enemy Boss.",
+			passive: "All damage you deal is piercing.",
+		},
 		flavorText: "",
 	},
 	{
@@ -110,7 +113,7 @@ export const CREW_DISPLAY: readonly CrewCardDisplay[] = [
 		name: "Shrike",
 		class: "striker",
 		effectText: {
-			turned: "I Strike an enemy Crew.",
+			turned: "I Strike an enemy Crew. This can be defended against.",
 		},
 		flavorText: "",
 	},
@@ -128,8 +131,9 @@ export const CREW_DISPLAY: readonly CrewCardDisplay[] = [
 		name: "Monkey-Man",
 		class: "striker",
 		effectText: {
-			turned:
-				"An enemy discards their hand. I deal 5 damage to their Boss for each card discarded this way.",
+			turned: "Take 1 random card from an enemy's hand.",
+			passive:
+				"Whenever you deal damage to an enemy Boss, steal 1 Cash from them.",
 		},
 		flavorText: "",
 	},
@@ -140,6 +144,7 @@ export const CREW_DISPLAY: readonly CrewCardDisplay[] = [
 		effectText: {
 			turned:
 				"I deal 15 damage to an enemy Boss. If my partner Crew is face-up, deal 35 damage instead.",
+			passive: "Whenever you kill an enemy Crew, turn me face-down.",
 		},
 		flavorText: "",
 	},
@@ -148,7 +153,8 @@ export const CREW_DISPLAY: readonly CrewCardDisplay[] = [
 		name: "Hot Girl",
 		class: "striker",
 		effectText: {
-			turned: "I deal damage equal to 35% of an enemy Boss's current HP.",
+			turned:
+				"An enemy discards their hand. I deal 5 damage to their Boss for each card discarded this way.",
 		},
 		flavorText: "",
 	},
@@ -167,7 +173,7 @@ export const CREW_DISPLAY: readonly CrewCardDisplay[] = [
 		class: "striker",
 		effectText: {
 			turned:
-				"Discard 3 cards. If you do, I do an unblockable Strike on an enemy Crew. If you have successfully called a bluff this game, discard 1 instead.",
+				"Discard 3 cards. If you do, I do an undefendable Strike on an enemy Crew. If you have successfully called a bluff this game, discard 1 instead.",
 		},
 		flavorText: "",
 	},
@@ -181,22 +187,22 @@ export const CREW_DISPLAY: readonly CrewCardDisplay[] = [
 		draftable: false,
 	},
 
-	// blockers
+	// defenders
 
 	{
 		id: "rilla-gorilla",
 		name: "Rilla Gorilla",
-		class: "blocker",
+		class: "defender",
 		effectText: {
 			turned:
-				"I give 30 Shield to my Boss, then deal 10 damage to an enemy Boss.",
+				"I give 30 Armor to my Boss, then deal 10 damage to an enemy Boss.",
 		},
 		flavorText: "",
 	},
 	{
 		id: "frontline",
 		name: "Frontline",
-		class: "blocker",
+		class: "defender",
 		effectText: {
 			turned: "My Boss cannot be damaged or struck for 2 turns.",
 		},
@@ -205,17 +211,17 @@ export const CREW_DISPLAY: readonly CrewCardDisplay[] = [
 	{
 		id: "mama-mercy",
 		name: "Mama Mercy",
-		class: "blocker",
+		class: "defender",
 		effectText: {
 			passive:
-				"Whenever the team turns a Crew face-up or face-down, I give my Boss 20 Shield.",
+				"Whenever the team turns a Crew face-up or face-down, I give my Boss 20 Armor.",
 		},
 		flavorText: "",
 	},
 	{
 		id: "lighthouse",
 		name: "Lighthouse",
-		class: "blocker",
+		class: "defender",
 		effectText: {
 			turned: "I deal 10 damage to all enemy Bosses.",
 			passive: "All enemy Turned Effects are disabled.",
@@ -225,19 +231,19 @@ export const CREW_DISPLAY: readonly CrewCardDisplay[] = [
 	{
 		id: "glob",
 		name: "Glob",
-		class: "blocker",
+		class: "defender",
 		effectText: {
 			turned:
-				"If my Boss has any Shield, I give it 40 more Shield. If my Boss has no Shield, I steal 1 Cash from an enemy instead.",
+				"If my Boss has any Armor, I give it 40 more Armor. If my Boss has no Armor, steal 1 Cash from an enemy instead.",
 		},
 		flavorText: "",
 	},
 	{
 		id: "silencer",
 		name: "Silencer",
-		class: "blocker",
+		class: "defender",
 		effectText: {
-			turned: "I give 10 Shield to all allied Bosses.",
+			turned: "I give 10 Armor to all allied Bosses.",
 			passive: "All enemy Crew Passives are disabled.",
 		},
 		flavorText: "",
@@ -245,19 +251,19 @@ export const CREW_DISPLAY: readonly CrewCardDisplay[] = [
 	{
 		id: "doctor-norman",
 		name: "Doctor Norman",
-		class: "blocker",
+		class: "defender",
 		effectText: {
 			passive:
-				"Whenever you discard, I give my Boss 10 Shield for each card discarded.",
+				"Whenever you discard, I give my Boss 10 Armor for each card discarded.",
 		},
 		flavorText: "",
 	},
 	{
 		id: "lotus",
 		name: "Lotus",
-		class: "blocker",
+		class: "defender",
 		effectText: {
-			passive: "I can also perform Strike actions.",
+			passive: "I can Strike.",
 		},
 		flavorText: "",
 	},
@@ -276,7 +282,7 @@ export const CREW_DISPLAY: readonly CrewCardDisplay[] = [
 		name: "Too Big",
 		class: "collector",
 		effectText: {
-			turned: "You steal 1 Cash from an enemy.",
+			turned: "Swap this card with any other face-up crew card.",
 		},
 		flavorText: "",
 	},
@@ -292,7 +298,7 @@ export const CREW_DISPLAY: readonly CrewCardDisplay[] = [
 		name: "Cristatella",
 		class: "collector",
 		effectText: {
-			passive: "I can also perform Block actions.",
+			passive: "I can Defend.",
 		},
 		flavorText: "",
 	},
@@ -311,7 +317,7 @@ export const CREW_DISPLAY: readonly CrewCardDisplay[] = [
 		name: "Belladonna",
 		class: "collector",
 		effectText: {
-			turned: "I heal my Boss for 20 HP.",
+			passive: "Class actions cost 1 less Cash.",
 		},
 		flavorText: "",
 	},
@@ -336,12 +342,12 @@ export const CREW_DISPLAY: readonly CrewCardDisplay[] = [
 		flavorText: "",
 	},
 
-	// turners
+	// unturners
 
 	{
 		id: "handles",
 		name: "Handles",
-		class: "turner",
+		class: "unturner",
 		effectText: {
 			turned:
 				"If my partner Crew is face-up, turn me face-down and deal 10 damage to my Boss.",
@@ -351,16 +357,17 @@ export const CREW_DISPLAY: readonly CrewCardDisplay[] = [
 	{
 		id: "hider",
 		name: "Hider",
-		class: "turner",
+		class: "unturner",
 		effectText: {
 			turned: "If my partner crew is face-up, I turn it face-down.",
+			passive: "At the start of your turn, your Boss gains 10 Armor.",
 		},
 		flavorText: "",
 	},
 	{
 		id: "terminal",
 		name: "Terminal",
-		class: "turner",
+		class: "unturner",
 		effectText: {
 			passive: "My Boss cannot be Striked while its HP is greater than 60.",
 		},
@@ -369,8 +376,9 @@ export const CREW_DISPLAY: readonly CrewCardDisplay[] = [
 	{
 		id: "suplex",
 		name: "Suplex",
-		class: "turner",
+		class: "unturner",
 		effectText: {
+			turned: "I deal 10 damage to an enemy Boss.",
 			passive:
 				"Whenever the team turns a Crew face-up or face-down, I Strike an enemy Crew.",
 		},
@@ -379,7 +387,7 @@ export const CREW_DISPLAY: readonly CrewCardDisplay[] = [
 	{
 		id: "retro",
 		name: "Retro",
-		class: "turner",
+		class: "unturner",
 		effectText: {
 			turned:
 				"Chronotrix costs 3. Search your deck for Chronotrix, then shuffle your deck.",
@@ -389,7 +397,7 @@ export const CREW_DISPLAY: readonly CrewCardDisplay[] = [
 	{
 		id: "andrew",
 		name: "Andrew",
-		class: "turner",
+		class: "unturner",
 		effectText: {
 			passive: "Draw 1 card at the start of your turn.",
 		},
@@ -398,7 +406,7 @@ export const CREW_DISPLAY: readonly CrewCardDisplay[] = [
 	{
 		id: "zednem",
 		name: "Zednem",
-		class: "turner",
+		class: "unturner",
 		effectText: {
 			turned: "Draw 1 card.",
 			passive: "Your Burst Moves cost 1 less Cash.",
@@ -408,7 +416,7 @@ export const CREW_DISPLAY: readonly CrewCardDisplay[] = [
 	{
 		id: "keeper",
 		name: "Keeper",
-		class: "turner",
+		class: "unturner",
 		effectText: {
 			turned: "Take 1 random card from an enemy's hand.",
 			passive: "Enemy Moves cost 1 more Cash.",
@@ -504,7 +512,7 @@ export const MOVE_DISPLAY: readonly MoveCardDisplay[] = [
 		name: "The Iterated Void's Torso",
 		baseCost: 1,
 		moveType: "active",
-		effectText: "At the start of your turn, give 5 Shield to your Boss.",
+		effectText: "At the start of your turn, give 5 Armor to your Boss.",
 		flavorText: "",
 	},
 	{
@@ -564,7 +572,7 @@ export const MOVE_DISPLAY: readonly MoveCardDisplay[] = [
 		baseCost: 1,
 		moveType: "active",
 		effectText:
-			"At the start of your turn, if your team has a face-up Crew, give your Boss 10 Shield.",
+			"At the start of your turn, if your team has a face-up Crew, give your Boss 10 Armor.",
 		flavorText: "",
 	},
 	{
@@ -617,7 +625,7 @@ export const MOVE_DISPLAY: readonly MoveCardDisplay[] = [
 		name: "Ambush",
 		baseCost: 4,
 		moveType: "slow",
-		effectText: "Strike an enemy Crew. This can be blocked.",
+		effectText: "Strike an enemy Crew. This can be defended against.",
 		flavorText: "",
 	},
 	{
@@ -633,7 +641,7 @@ export const MOVE_DISPLAY: readonly MoveCardDisplay[] = [
 		name: "Bulletproof Vest",
 		baseCost: 1,
 		moveType: "burst",
-		effectText: "Give 10 Shield to an allied Boss.",
+		effectText: "Give 10 Armor to an allied Boss.",
 		flavorText: "",
 	},
 	{
@@ -684,7 +692,7 @@ export const MOVE_DISPLAY: readonly MoveCardDisplay[] = [
 		name: "Ratatatat!",
 		baseCost: 2,
 		moveType: "slow",
-		effectText: "Deal 20 damage to an enemy Boss. This damage ignores Shield.",
+		effectText: "Deal 20 piercing damage to an enemy Boss.",
 		flavorText: "",
 	},
 	{
@@ -701,7 +709,7 @@ export const MOVE_DISPLAY: readonly MoveCardDisplay[] = [
 		name: "Reinforcements",
 		baseCost: 2,
 		moveType: "burst",
-		effectText: "Give 15 Shield to an allied Boss. Draw 1 card.",
+		effectText: "Give 15 Armor to an allied Boss. Draw 1 card.",
 		flavorText: "",
 	},
 	{
@@ -884,7 +892,7 @@ export const MOVE_DISPLAY: readonly MoveCardDisplay[] = [
 		baseCost: 3,
 		moveType: "slow",
 		effectText:
-			"If you or an ally has a face-up Blocker, perform an unblockable Strike on an enemy Crew.",
+			"If you or an ally has a face-up Defender, perform an undefendable Strike on an enemy Crew.",
 		flavorText: "",
 	},
 	{
@@ -935,7 +943,7 @@ export const MOVE_DISPLAY: readonly MoveCardDisplay[] = [
 		name: "Strip 'Em Down",
 		baseCost: 1,
 		moveType: "slow",
-		effectText: "Remove all Shield from an enemy Boss. Draw 1 card.",
+		effectText: "Remove all Armor from an enemy Boss. Draw 1 card.",
 		flavorText: "",
 	},
 	{
@@ -964,12 +972,90 @@ export const MOVE_DISPLAY: readonly MoveCardDisplay[] = [
 			"Whoever has the least Cash on your team gains 3 Cash and draws 1 card. If tied, random.",
 		flavorText: "",
 	},
+	{
+		id: "warrant-of-arrest",
+		name: "Warrant of Arrest",
+		baseCost: 2,
+		moveType: "active",
+		effectText:
+			"Mark a face-down enemy Crew. At the start of your 2nd turn after this resolves, if that Crew is still face-down, turn it face-up.",
+		flavorText: "",
+	},
+	{
+		id: "cease-and-desist",
+		name: "Cease & Desist",
+		baseCost: 1,
+		moveType: "active",
+		effectText:
+			"The next time an enemy Crew would resolve its Turned Effect, prevent it instead. Then discard this Move.",
+		flavorText: "",
+	},
+	{
+		id: "extortion",
+		name: "Extortion",
+		baseCost: 2,
+		moveType: "active",
+		effectText: "Whenever you win a challenge, gain 3 Cash.",
+		flavorText: "",
+	},
+	{
+		id: "sell-out",
+		name: "Sell Out",
+		baseCost: 1,
+		moveType: "active",
+		effectText:
+			"At the start of your turn, deal 5 damage to your Boss. Then gain 2 Cash.",
+		flavorText: "",
+	},
+	{
+		id: "red-herring",
+		name: "Red Herring",
+		baseCost: 1,
+		moveType: "active",
+		effectText:
+			"Choose one of your face-down Crew. The next Strike or Face Turn attempt against you must target that Crew. Then discard this Move.",
+		flavorText: "",
+	},
+	{
+		id: "sabotage",
+		name: "Sabotage",
+		baseCost: 2,
+		moveType: "burst",
+		effectText: "Choose an Active Move in an enemy's active zone. Discard it.",
+		flavorText: "",
+	},
+	{
+		id: "restock",
+		name: "Restock",
+		baseCost: 1,
+		moveType: "burst",
+		effectText: "Shuffle your discard pile into your deck. Draw 1 card.",
+		flavorText: "",
+	},
+	{
+		id: "my-treat",
+		name: "My Treat",
+		baseCost: 2,
+		moveType: "burst",
+		effectText: "An allied player gains 2 Cash and draws 1 card.",
+		flavorText: "",
+	},
+	{
+		id: "to-the-death",
+		name: "To The Death",
+		baseCost: 3,
+		moveType: "slow",
+		effectText: "Strike one of your Crew. Then perform an unstoppable Strike.",
+		flavorText: "",
+	},
 ];
 
 export const SELF_CREW_SLOT_MOVE_IDS = new Set<string>([
 	"kamikaze",
 	"heel-turn",
 	"pull-counter",
+	"red-herring",
+	"to-the-death",
 ]);
 
 export function needsSelfCrewSlot(move: MoveCardDisplay): boolean {
@@ -982,6 +1068,7 @@ export const MOVE_TARGET_SCOPE: Readonly<Record<string, "ally" | "ally_self">> =
 		"life-insurance": "ally_self",
 		"tactical-support": "ally_self",
 		"trickle-down-economics": "ally_self",
+		"my-treat": "ally_self",
 	};
 
 export function getMoveTargetScope(

@@ -39,6 +39,7 @@ import {
 	executePendingAction,
 	executeMove,
 	getMoveCost,
+	effectiveCost,
 	getClassActionCost,
 	computeActorWasBluffing,
 	computeChallengeEligible,
@@ -72,18 +73,25 @@ import {
 	resolveTacticalSupportUnturn,
 	resolveWatcherUnturn,
 	resolveTagOutPick,
+	resolveTooBigSwapPick,
 	resolveBearBonesBonusStrike,
 	resolveBackgroundCheckGuess,
+	sellMoveFromHand,
 	resolveLighthouseDisablePick,
 	applyPoisonToVictim,
 	performStrike,
 	resolveStrikeOrExecute,
-	isStrikeBlockedByTerminal,
+	isStrikeDefendedByTerminal,
 	type StrikeOrExecuteOutcome,
 	getLivingPlayers,
+	moveHasLegalTarget,
 } from "./effects";
 import type { ResolutionResult } from "../../../../shared/games/face-turn/types";
-import { getCachedPublicState, buildPrivatePayloads } from "./state-builders";
+import {
+	getCachedPublicState,
+	buildPrivatePayloads,
+	computePlayableMoveIds,
+} from "./state-builders";
 import {
 	applyConfigAction,
 	buildGameConfig,
@@ -121,6 +129,23 @@ function buildStrikeResolution(
 			via,
 			outcome: "crew_turned",
 			crewTurnedSlot: outcome.slot,
+			crewKilledSlot: null,
+			crewRefilledFromReserve: false,
+			negatedBy: null,
+			survivedViaLifeInsurance: false,
+		};
+	}
+
+	if (outcome.outcome === "crew_killed") {
+		return {
+			type: "strike_or_execute_resolved",
+			attackerId,
+			targetPlayerId,
+			via,
+			outcome: "crew_killed",
+			crewTurnedSlot: null,
+			crewKilledSlot: outcome.slot,
+			crewRefilledFromReserve: outcome.refilledFromReserve,
 			negatedBy: null,
 			survivedViaLifeInsurance: false,
 		};
@@ -134,6 +159,8 @@ function buildStrikeResolution(
 			via,
 			outcome: "executed",
 			crewTurnedSlot: null,
+			crewKilledSlot: null,
+			crewRefilledFromReserve: false,
 			negatedBy: null,
 			survivedViaLifeInsurance: outcome.survivedViaLifeInsurance,
 		};
@@ -147,6 +174,8 @@ function buildStrikeResolution(
 		via,
 		outcome: "negated",
 		crewTurnedSlot: null,
+		crewKilledSlot: null,
+		crewRefilledFromReserve: false,
 		negatedBy: outcome.negatedBy,
 		survivedViaLifeInsurance: false,
 	};
@@ -195,6 +224,10 @@ function afterAction(
 		return makeResult(state, null, { roomPhase: "ended" });
 	}
 
+	if (tryOpenQueuedDefendableStrike(state)) {
+		return makeResult(state, C.DEFEND_WINDOW_MS);
+	}
+
 	return makeResult(
 		state,
 		fallback.duration ?? C.ACTIVE_TURN_DURATION_MS,
@@ -202,6 +235,43 @@ function afterAction(
 			? { privatePayloads: buildPrivatePayloads(state) }
 			: {},
 	);
+}
+
+// opens a defend window for the next queued turned‑effect strike (e.g. Shrike)
+function tryOpenQueuedDefendableStrike(state: FaceturnServerState): boolean {
+	if (state.pendingAction !== null) return false;
+	if (state.pendingInteraction !== null) return false;
+
+	let next = state.pendingDefendableStrikes.shift();
+	while (next) {
+		const actor = state.players.get(next.actorId);
+		const target = state.players.get(next.targetPlayerId);
+		const actorValid = actor && !state.eliminatedPlayers.has(next.actorId);
+		const targetValid =
+			target && !state.eliminatedPlayers.has(next.targetPlayerId);
+
+		if (actorValid && targetValid) {
+			state.pendingAction = {
+				type: "card_strike",
+				actorId: next.actorId,
+				targetCrewSlot: next.targetCrewSlot,
+				targetAllySlot: null,
+				moveId: null,
+				cashCost: 0,
+				declaredClass: null,
+				actorWasBluffing: false,
+				targetPlayerId: next.targetPlayerId,
+				originalActionType: null,
+			};
+			state.phase = "defend_window";
+			return true;
+		}
+
+		// actor or target no longer valid (e.g. eliminated meanwhile); drop and try the next queued strike
+		next = state.pendingDefendableStrikes.shift();
+	}
+
+	return false;
 }
 
 // finalizes a challenge after optional bonus offers (too big, bear bones)
@@ -223,21 +293,6 @@ function finalizeResolvedChallenge(
 	state.pendingAction = null;
 	state.phase = "active_turn";
 	return afterAction(state);
-}
-
-function effectiveCost(
-	state: FaceturnServerState,
-	player: FaceturnServerPlayer,
-	moveId: string,
-): number {
-	const base = getMoveCost(state, player, moveId);
-	if (
-		moveId === CARD_IDS.MOVE.CLAIM_THE_BOUNTY &&
-		player.hasCalledBluffSuccessfully
-	) {
-		return 0;
-	}
-	return base;
 }
 
 function applyRpsWinner(state: FaceturnServerState): EngineResult {
@@ -303,6 +358,7 @@ export const faceturnsEngine: GameEngine &
 			challengeEligiblePlayerIds: [],
 			moveChain: null,
 			pendingInteraction: null,
+			pendingDefendableStrikes: [],
 			lastResolution: null,
 			watcherReveal: null,
 			rpsChoices: new Map(),
@@ -573,7 +629,7 @@ export const faceturnsEngine: GameEngine &
 				if (!interaction.eligibleSlots.includes(slot)) return noOp();
 				if (!target.crewIds[slot] || target.crewTurned[slot]) return noOp();
 
-				turnCrewAtSlot(target, slot);
+				turnCrewAtSlot(state, target, slot);
 				recomputePassives(target, state);
 				triggerCrewTurnedEffects(
 					state,
@@ -863,6 +919,20 @@ export const faceturnsEngine: GameEngine &
 				return afterAction(state);
 			}
 
+			if (interaction.type === "too_big_swap_pick") {
+				if (action.type !== "resolve_too_big_swap_pick") return noOp();
+				resolveTooBigSwapPick(
+					state,
+					player,
+					interaction.ownSlot,
+					action.targetPlayerId,
+					action.crewSlot,
+					interaction.eligibleTargets,
+				);
+				state.pendingInteraction = null;
+				return afterAction(state);
+			}
+
 			return noOp();
 		}
 
@@ -877,6 +947,8 @@ export const faceturnsEngine: GameEngine &
 					const move = getMove(moveId);
 					const cost = effectiveCost(state, player, moveId);
 					if (player.cash < cost) return noOp();
+
+					if (!moveHasLegalTarget(state, playerId, move)) return noOp();
 
 					if (
 						move.moveType === "active" &&
@@ -904,12 +976,12 @@ export const faceturnsEngine: GameEngine &
 						}
 					}
 
-					const isBlockableStrike = move.effects.some((e) => {
+					const isDefendableStrike = move.effects.some((e) => {
 						const eff = unwrapEffect(e);
-						return eff.type === "strike_enemy_crew_blockable";
+						return eff.type === "strike_enemy_crew_defendable";
 					});
 
-					if (isBlockableStrike) {
+					if (isDefendableStrike) {
 						if (!action.targetPlayerId) return noOp();
 						const targetIsEnemy = getEnemies(state, playerId).some(
 							(e) => e.playerId === action.targetPlayerId,
@@ -919,10 +991,9 @@ export const faceturnsEngine: GameEngine &
 						if (action.targetCrewSlot !== undefined) {
 							const ambushTarget = state.players.get(action.targetPlayerId)!;
 							const slot = action.targetCrewSlot as 0 | 1;
-							if (
-								!ambushTarget.crewIds[slot] ||
-								ambushTarget.crewTurned[slot]
-							) {
+							// either a face-down crew (turns it) or a face-up crew
+							// (kills it) is a legal target for a strike
+							if (!ambushTarget.crewIds[slot]) {
 								return noOp();
 							}
 						}
@@ -947,8 +1018,8 @@ export const faceturnsEngine: GameEngine &
 							originalActionType: null,
 						};
 
-						state.phase = "block_window";
-						return makeResult(state, C.BLOCK_WINDOW_MS);
+						state.phase = "defend_window";
+						return makeResult(state, C.DEFEND_WINDOW_MS);
 					}
 
 					player.hand.splice(player.hand.indexOf(moveId), 1);
@@ -979,12 +1050,13 @@ export const faceturnsEngine: GameEngine &
 						targetCrewSlot: action.targetCrewSlot,
 						targetAllySlot: action.targetAllySlot,
 						targetPlayerId: action.targetPlayerId,
+						targetActiveMoveSlot: action.targetActiveMoveSlot,
 					});
 					return afterAction(state);
 				}
 
 				case "declare_class_action": {
-					if ((action.action as string) === "block") return noOp();
+					if ((action.action as string) === "defend") return noOp();
 					if (player.classActionUsedThisTurn) return noOp();
 
 					if (action.action === "strike") {
@@ -994,7 +1066,7 @@ export const faceturnsEngine: GameEngine &
 						);
 						if (!targetIsEnemy) return noOp();
 						const strikeTarget = state.players.get(action.targetPlayerId)!;
-						if (isStrikeBlockedByTerminal(strikeTarget)) return noOp();
+						if (isStrikeDefendedByTerminal(strikeTarget)) return noOp();
 					}
 
 					let unturnTargetPlayer = player;
@@ -1105,7 +1177,7 @@ export const faceturnsEngine: GameEngine &
 							overrides?.has(action.guessClass) ||
 							crew.class === action.guessClass;
 						if (matches) {
-							turnCrewAtSlot(targetPlayer, slot);
+							turnCrewAtSlot(state, targetPlayer, slot);
 							recomputePassives(targetPlayer, state);
 							triggerCrewTurnedEffects(state, targetPlayer, slot);
 						}
@@ -1231,6 +1303,13 @@ export const faceturnsEngine: GameEngine &
 					return makeResult(state, ctx.room.timer?.duration ?? null);
 				}
 
+				case "sell_move": {
+					if (!player.hasSellCards) return noOp();
+					const sold = sellMoveFromHand(state, player, action.moveId);
+					if (!sold) return noOp();
+					return makeResult(state, ctx.room.timer?.duration ?? null);
+				}
+
 				default:
 					return noOp();
 			}
@@ -1281,6 +1360,7 @@ export const faceturnsEngine: GameEngine &
 					targetCrewSlot: action.targetCrewSlot,
 					targetAllySlot: action.targetAllySlot,
 					targetPlayerId: action.targetPlayerId,
+					targetActiveMoveSlot: action.targetActiveMoveSlot,
 				});
 
 				return afterAction(state, {
@@ -1427,36 +1507,36 @@ export const faceturnsEngine: GameEngine &
 				return afterAction(state);
 			}
 
-			if (action.type === "block" && pending.type === "class_action_strike") {
+			if (action.type === "defend" && pending.type === "class_action_strike") {
 				if (!isPlayerOrTeammate(state, playerId, pending.targetPlayerId!))
 					return noOp();
-				const blocker = state.players.get(playerId)!;
-				const blockerWouldBeBluffing = computeActorWasBluffing(
-					blocker,
-					"block",
+				const defender = state.players.get(playerId)!;
+				const defenderWouldBeBluffing = computeActorWasBluffing(
+					defender,
+					"defend",
 				);
-				if (blockerWouldBeBluffing && firstUnturnedSlot(blocker) === null) {
+				if (defenderWouldBeBluffing && firstUnturnedSlot(defender) === null) {
 					return noOp();
 				}
-				const blockCost = getClassActionCost(blocker, "block");
-				if (blocker.cash < blockCost) return noOp();
+				const defendCost = getClassActionCost(defender, "defend");
+				if (defender.cash < defendCost) return noOp();
 
-				blocker.cash -= blockCost;
+				defender.cash -= defendCost;
 				state.challengeEligiblePlayerIds = [];
 				state.pendingAction = {
-					type: "class_action_block",
-					actorId: blocker.playerId,
+					type: "class_action_defend",
+					actorId: defender.playerId,
 					targetCrewSlot: pending.targetCrewSlot,
 					targetAllySlot: pending.targetAllySlot,
 					moveId: null,
-					cashCost: blockCost,
-					declaredClass: "block",
-					actorWasBluffing: blockerWouldBeBluffing,
+					cashCost: defendCost,
+					declaredClass: "defend",
+					actorWasBluffing: defenderWouldBeBluffing,
 					targetPlayerId: pending.actorId,
 					originalActionType: pending.type,
 				};
-				state.phase = "block_declared";
-				return makeResult(state, C.BLOCK_DECLARED_MS);
+				state.phase = "defend_declared";
+				return makeResult(state, C.DEFEND_DECLARED_MS);
 			}
 
 			if (action.type === "pass_challenge") {
@@ -1494,51 +1574,51 @@ export const faceturnsEngine: GameEngine &
 			return noOp();
 		}
 
-		// block window
+		// defend window
 
-		if (state.phase === "block_window") {
+		if (state.phase === "defend_window") {
 			const pending = state.pendingAction!;
 			if (!isPlayerOrTeammate(state, playerId, pending.targetPlayerId!))
 				return noOp();
 
-			if (action.type === "block") {
-				const blocker = state.players.get(playerId)!;
-				const blockerWouldBeBluffing = computeActorWasBluffing(
-					blocker,
-					"block",
+			if (action.type === "defend") {
+				const defender = state.players.get(playerId)!;
+				const defenderWouldBeBluffing = computeActorWasBluffing(
+					defender,
+					"defend",
 				);
-				if (blockerWouldBeBluffing && firstUnturnedSlot(blocker) === null) {
+				if (defenderWouldBeBluffing && firstUnturnedSlot(defender) === null) {
 					return noOp();
 				}
-				const blockCost = getClassActionCost(blocker, "block");
-				if (blocker.cash < blockCost) return noOp();
+				const defendCost = getClassActionCost(defender, "defend");
+				if (defender.cash < defendCost) return noOp();
 
-				blocker.cash -= blockCost;
+				defender.cash -= defendCost;
 				state.pendingAction = {
 					...pending,
-					type: "class_action_block",
-					actorId: blocker.playerId,
-					cashCost: blockCost,
-					declaredClass: "block",
-					actorWasBluffing: blockerWouldBeBluffing,
+					type: "class_action_defend",
+					actorId: defender.playerId,
+					cashCost: defendCost,
+					declaredClass: "defend",
+					actorWasBluffing: defenderWouldBeBluffing,
 					targetPlayerId: pending.actorId,
 					originalActionType: pending.type,
 				};
-				state.phase = "block_declared";
-				return makeResult(state, C.BLOCK_DECLARED_MS);
+				state.phase = "defend_declared";
+				return makeResult(state, C.DEFEND_DECLARED_MS);
 			}
 
 			return noOp();
 		}
 
-		// block declared
+		// defend declared
 
-		if (state.phase === "block_declared") {
+		if (state.phase === "defend_declared") {
 			const pending = state.pendingAction!;
 			const strikeerId = pending.targetPlayerId!;
 			if (playerId !== strikeerId) return noOp();
 
-			if (action.type === "accept_block") {
+			if (action.type === "accept_defend") {
 				state.lastResolution = {
 					type: "action_resolved",
 					challengerId: pending.actorId,
@@ -1552,23 +1632,23 @@ export const faceturnsEngine: GameEngine &
 				return afterAction(state);
 			}
 
-			if (action.type === "challenge_block") {
+			if (action.type === "challenge_defend") {
 				if (pending.originalActionType === "card_strike") return noOp();
 
-				const { actionProceeds: blockWasReal, resolution } = resolveChallenge(
+				const { actionProceeds: defendWasReal, resolution } = resolveChallenge(
 					state,
 					strikeerId,
 				);
 				state.lastResolution = resolution;
 
-				if (!blockWasReal) {
+				if (!defendWasReal) {
 					const originalTarget = state.players.get(pending.actorId);
 					if (originalTarget) {
-						const blocker = state.players.get(strikeerId);
-						if (blocker) {
+						const defender = state.players.get(strikeerId);
+						if (defender) {
 							const outcome = resolveStrikeOrExecute(
 								state,
-								blocker,
+								defender,
 								strikeerId,
 								false,
 							);
@@ -1576,7 +1656,7 @@ export const faceturnsEngine: GameEngine &
 								state.lastResolution = buildStrikeResolution(
 									outcome,
 									strikeerId,
-									blocker.playerId,
+									defender.playerId,
 									"challenge_loss",
 								);
 							}
@@ -1632,7 +1712,7 @@ export const faceturnsEngine: GameEngine &
 				const ccTarget = state.players.get(interaction.targetPlayerId);
 				if (ccTarget && interaction.eligibleSlots[0] !== undefined) {
 					const ccSlot = interaction.eligibleSlots[0] as 0 | 1;
-					turnCrewAtSlot(ccTarget, ccSlot);
+					turnCrewAtSlot(state, ccTarget, ccSlot);
 					recomputePassives(ccTarget, state);
 					triggerCrewTurnedEffects(
 						state,
@@ -1741,9 +1821,9 @@ export const faceturnsEngine: GameEngine &
 				if (bgTarget && interaction.eligibleSlots[0] !== undefined) {
 					const CLASSES = [
 						"striker",
-						"blocker",
+						"defender",
 						"collector",
-						"turner",
+						"unturner",
 					] as const;
 					const randomGuess =
 						CLASSES[Math.floor(Math.random() * CLASSES.length)]!;
@@ -1781,6 +1861,20 @@ export const faceturnsEngine: GameEngine &
 				state.pendingAction = null;
 			} else if (interaction.type === "watcher_unturn_offer") {
 				// decline by default
+			} else if (interaction.type === "too_big_swap_pick") {
+				// mandatory turned-effect trigger, not an optional bonus: auto-pick first eligible target
+				const tbActor = state.players.get(interaction.actorId)!;
+				const firstTarget = interaction.eligibleTargets[0];
+				if (firstTarget) {
+					resolveTooBigSwapPick(
+						state,
+						tbActor,
+						interaction.ownSlot,
+						firstTarget.playerId,
+						firstTarget.slot,
+						interaction.eligibleTargets,
+					);
+				}
 			} else if (interaction.type === "lighthouse_disable_pick") {
 				const maxPicks = interaction.maxPicks ?? 1;
 				for (const t of interaction.eligibleTargets.slice(0, maxPicks)) {
@@ -1884,7 +1978,7 @@ export const faceturnsEngine: GameEngine &
 				return afterAction(state);
 			}
 
-			case "block_window": {
+			case "defend_window": {
 				const pending = state.pendingAction!;
 				if (pending.type === "card_strike") {
 					const outcome = performStrike({
@@ -1907,7 +2001,7 @@ export const faceturnsEngine: GameEngine &
 				return afterAction(state);
 			}
 
-			case "block_declared": {
+			case "defend_declared": {
 				state.lastResolution = {
 					type: "action_resolved",
 					challengerId: state.pendingAction!.actorId,
@@ -1978,6 +2072,10 @@ export const faceturnsEngine: GameEngine &
 
 		return {
 			hand: [...player.hand],
+			playableMoveIds:
+				state.phase === "active_turn" && state.activePlayerId === playerId
+					? computePlayableMoveIds(state, player)
+					: [],
 			crewAssignments: Object.fromEntries(
 				player.crewIds
 					.map((id, i): [number, string | null] => [i, id])

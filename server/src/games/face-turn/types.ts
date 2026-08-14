@@ -16,6 +16,24 @@ export interface GameConfig {
 	teams?: [string[], string[]];
 }
 
+export interface PendingDefendableStrike {
+	actorId: string;
+	targetPlayerId: string;
+	targetCrewSlot: number | null;
+}
+
+export interface WarrantOfArrestMark {
+	targetPlayerId: string;
+	targetSlot: 0 | 1;
+	targetCrewId: string;
+	turnsRemaining: number;
+}
+
+export interface RedHerringMark {
+	slot: 0 | 1;
+	crewId: string;
+}
+
 export interface FaceturnServerPlayer {
 	readonly playerId: string;
 	teamIndex: number;
@@ -23,8 +41,8 @@ export interface FaceturnServerPlayer {
 	bossId: string;
 	bossHp: number;
 	bossMaxHp: number;
-	bossShield: number;
-	// decrements at round end; exact in duels, approximate in ffa/teams. also blocks face turn and strike execute
+	bossArmor: number;
+	// decrements at round end; exact in duels, approximate in ffa/teams. also defends face turn and strike execute
 	bossImmunityTurns: number;
 	bossCommandUsed: boolean;
 	// tags how bossHp last reached 0
@@ -48,7 +66,7 @@ export interface FaceturnServerPlayer {
 	hasCalledBluffSuccessfully: boolean;
 	totalCardsDiscarded: number;
 	totalMovesPlayed: number;
-	hasShieldedBossThisGame: boolean;
+	hasArmoredBossThisGame: boolean;
 	// true once any crew turns face-up; never cleared. used by suplex's condition
 	hasTurnedAllyCrewThisGame: boolean;
 
@@ -68,18 +86,47 @@ export interface FaceturnServerPlayer {
 	hasWatcherPassive: boolean;
 	// true while bastion's dual-trigger cash passive is active. derived like other has* flags
 	hasBastionPassive: boolean;
-	shieldPerTurn: number;
+	// pektus: when true, all damage this player deals bypasses armor (still respects immunity/reduction%)
+	hasAllDamagePiercingPassive: boolean;
+	// monkey man: cash stolen from the boss whenever this player deals damage to it
+	stealCashOnDamageDealtAmount: number;
+	armorPerTurn: number;
 	// global move cost reduction; distinct from per-card costOverrides
 	moveBaseCostReduction: number;
 	// burst move cost reduction (zednem); separate from moveBaseCostReduction
 	burstMoveCostReduction: number;
+	// belladonna: flat reduction applied to strike/defend/collect/unturn costs
+	classActionCostReduction: number;
 	// added to enemy move costs; read live from this player by opponents, not accumulated
 	enemyMoveCostSurcharge: number;
 
 	mulliganDecided: boolean;
 
-	// blocks strikes and face turn when bossHp > 60; attempt fizzles
-	hasTerminalStrikeBlock: boolean;
+	// defends strikes and face turn when bossHp > 60; attempt fizzles
+	hasTerminalStrikeDefend: boolean;
+
+	// extortion: cash gained whenever this player wins a challenge (either
+	// as challenge-window defender, or as the challenger who correctly
+	// called a bluff). derived from active moves, like cashGainPerTurn.
+	cashOnChallengeWinAmount: number;
+	// sell out: self-inflicted damage + cash gained at the start of this
+	// player's own turn. derived, paired amounts (both 0 unless the move
+	// is active). damage runs through the normal applyDamage pipeline
+	// (armor/immunity/life-insurance all apply).
+	selfDamagePerTurn: number;
+	selfDamageCashGainAmount: number;
+	// cease & desist: true while the move sits in this player's active
+	// zone; consumed (move discarded) the next time an enemy of this
+	// player would resolve a crew Turned Effect. shape mirrors hasFalseFlag.
+	hasCeaseDesist: boolean;
+
+	// warrant of arrest: marks this player has placed on enemy crew,
+	// keyed by this player's own active-move slot. see WarrantOfArrestMark.
+	warrantMarks: Map<0 | 1 | 2, WarrantOfArrestMark>;
+	// red herring: this player's own pending redirect, if any. see
+	// RedHerringMark. not a derived/recomputed field — set at cast time,
+	// cleared on consumption or invalidation.
+	redHerringMark: RedHerringMark | null;
 
 	hasVoidArms: boolean;
 	// grants team cash on any collector action; trigger-based
@@ -99,8 +146,10 @@ export interface FaceturnServerPlayer {
 	disabledPassiveSlots: Set<0 | 1>;
 	// per-round; reset at round end.
 	prankCallBonusUsedThisRound: boolean;
-	// once-per-turn gate for bastion's cash bonus; shared across damage taken and crew turned triggers
-	bastionCashBonusUsedThisTurn: boolean;
+
+	// dealer passive may sell a Move from hand
+	hasSellCards: boolean;
+	sellCardCashAmount: number;
 
 	// void legs choice at turn start.
 	hasVoidLegsChoice: boolean;
@@ -160,6 +209,9 @@ export interface FaceturnServerState {
 
 	// pending card effect requiring a player choice.
 	pendingInteraction: PendingInteraction | null;
+
+	// turned‑effect strikes (e.g. Shrike) queue if pendingAction is busy, drained by afterAction once state is clean, reusing Ambush’s card_strike/defend_window flow
+	pendingDefendableStrikes: PendingDefendableStrike[];
 
 	lastResolution: ResolutionResult | null;
 
@@ -298,13 +350,20 @@ export type PendingInteraction =
 			actorId: string;
 			targetPlayerId: string;
 			eligibleSlots: number[];
+	  }
+	| {
+			// too big: swap this crew card with any other player's face-up crew card
+			type: "too_big_swap_pick";
+			actorId: string;
+			ownSlot: 0 | 1;
+			eligibleTargets: readonly { playerId: string; slot: 0 | 1 }[];
 	  };
 
 export type ServerPendingActionType =
 	| "class_action_strike"
 	| "class_action_collect"
 	| "class_action_unturn"
-	| "class_action_block"
+	| "class_action_defend"
 	| "card_strike";
 
 export interface ServerPendingAction {
@@ -317,6 +376,6 @@ export interface ServerPendingAction {
 	declaredClass: ClassAction | null;
 	actorWasBluffing: boolean;
 	targetPlayerId: string | null;
-	// only set for blocks; used to disallow challenge_block on card_strike
+	// only set for defends; used to disallow challenge_defend on card_strike
 	originalActionType: ServerPendingActionType | null;
 }

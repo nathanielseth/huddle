@@ -4,8 +4,21 @@ import type {
 	PendingInteraction,
 } from "./types";
 import { FACETURN_CONSTANTS as C } from "./types";
-import type { CardEffect, EffectPrimitive, ConditionalEffect } from "./cards";
-import { getCrew, getMove, getBoss, CARD_IDS, VOID_PIECE_IDS } from "./cards";
+import type {
+	CardEffect,
+	EffectPrimitive,
+	ConditionalEffect,
+	MoveCard,
+} from "./cards";
+import {
+	getCrew,
+	getMove,
+	getBoss,
+	CARD_IDS,
+	VOID_PIECE_IDS,
+	getMoveTargetScope,
+	unwrapEffect,
+} from "./cards";
 import type { CrewClass } from "../../../../shared/games/face-turn/types";
 import { shuffle, pickRandom } from "../lib/random";
 
@@ -15,6 +28,7 @@ export interface EffectContext {
 	targetPlayerId?: string | undefined;
 	targetCrewSlot?: number | undefined;
 	targetAllySlot?: number | undefined;
+	targetActiveMoveSlot?: number | undefined;
 	moveId?: string | undefined;
 	selfTurnedByEnemy?: boolean | undefined;
 }
@@ -67,6 +81,154 @@ export function getEnemies(
 	return getLivingPlayers(state).filter((p) => p.teamIndex !== teamIdx);
 }
 
+const STRICT_ALLY_TARGET_TYPES = new Set<EffectPrimitive["type"]>([
+	"swap_crew_with_teammate",
+	"gain_cash_and_draw_ally",
+]);
+
+const REQUIRES_OWN_FACE_DOWN_CREW_TYPES = new Set<EffectPrimitive["type"]>([
+	"turn_ally_crew",
+	"choose_red_herring_crew",
+]);
+
+const REQUIRES_OWN_FACE_UP_CREW_TYPES = new Set<EffectPrimitive["type"]>([
+	"unturn_ally_crew",
+	"unturn_then_retrigger_ally",
+]);
+
+const REQUIRES_OWN_MIXED_CREW_TYPES = new Set<EffectPrimitive["type"]>([
+	"unturn_one_turn_different_ally",
+]);
+
+const REQUIRES_ENEMY_FACE_DOWN_CREW_TYPES = new Set<EffectPrimitive["type"]>([
+	"mark_enemy_crew_for_delayed_turn",
+]);
+
+const REQUIRES_ENEMY_ACTIVE_MOVE_TYPES = new Set<EffectPrimitive["type"]>([
+	"discard_targeted_enemy_active_move",
+]);
+
+function requiresOwnFaceDownCrew(move: MoveCard): boolean {
+	return move.effects.some((e) =>
+		REQUIRES_OWN_FACE_DOWN_CREW_TYPES.has(unwrapEffect(e).type),
+	);
+}
+
+function requiresOwnFaceUpCrew(move: MoveCard): boolean {
+	return move.effects.some((e) =>
+		REQUIRES_OWN_FACE_UP_CREW_TYPES.has(unwrapEffect(e).type),
+	);
+}
+
+function requiresOwnMixedCrew(move: MoveCard): boolean {
+	return move.effects.some((e) =>
+		REQUIRES_OWN_MIXED_CREW_TYPES.has(unwrapEffect(e).type),
+	);
+}
+
+function requiresEnemyFaceDownCrew(move: MoveCard): boolean {
+	return move.effects.some((e) =>
+		REQUIRES_ENEMY_FACE_DOWN_CREW_TYPES.has(unwrapEffect(e).type),
+	);
+}
+
+function requiresEnemyActiveMove(move: MoveCard): boolean {
+	return move.effects.some((e) =>
+		REQUIRES_ENEMY_ACTIVE_MOVE_TYPES.has(unwrapEffect(e).type),
+	);
+}
+
+export function requiresStrictAllyTarget(move: MoveCard): boolean {
+	return move.effects.some((e) =>
+		STRICT_ALLY_TARGET_TYPES.has(unwrapEffect(e).type),
+	);
+}
+
+function hasOwnFaceDownCrew(actor: FaceturnServerPlayer): boolean {
+	return ([0, 1] as const).some(
+		(i) => actor.crewIds[i] !== null && !actor.crewTurned[i],
+	);
+}
+
+function hasOwnFaceUpCrew(actor: FaceturnServerPlayer): boolean {
+	return ([0, 1] as const).some(
+		(i) => actor.crewIds[i] !== null && actor.crewTurned[i],
+	);
+}
+
+// enemy needs a living foe, ally defaults to self unless STRICT_ALLY types require a teammate; extra REQUIRES_* conditions stack, so guards run sequentially
+export function moveHasLegalTarget(
+	state: FaceturnServerState,
+	actorId: string,
+	move: MoveCard,
+): boolean {
+	const scope = getMoveTargetScope(move);
+
+	if (scope === "enemy" && getEnemies(state, actorId).length === 0) {
+		return false;
+	}
+
+	if (scope === "ally") {
+		const requiresTeammate = requiresStrictAllyTarget(move);
+		if (requiresTeammate) {
+			if (getTeammates(state, actorId).length === 0) return false;
+
+			// swap_crew_with_teammate's additional, more specific requirement:
+			// both the actor and at least one teammate need a filled crew slot
+			if (
+				move.effects.some(
+					(e) => unwrapEffect(e).type === "swap_crew_with_teammate",
+				)
+			) {
+				const actor = state.players.get(actorId);
+				if (!actor || !actor.crewIds.some((id) => id !== null)) return false;
+				if (
+					!getTeammates(state, actorId).some((t) =>
+						t.crewIds.some((id) => id !== null),
+					)
+				) {
+					return false;
+				}
+			}
+		}
+	}
+
+	if (requiresOwnFaceDownCrew(move)) {
+		const actor = state.players.get(actorId);
+		if (!actor || !hasOwnFaceDownCrew(actor)) return false;
+	}
+
+	if (requiresOwnFaceUpCrew(move)) {
+		const actor = state.players.get(actorId);
+		if (!actor || !hasOwnFaceUpCrew(actor)) return false;
+	}
+
+	if (requiresOwnMixedCrew(move)) {
+		const actor = state.players.get(actorId);
+		if (!actor || !hasOwnFaceUpCrew(actor) || !hasOwnFaceDownCrew(actor)) {
+			return false;
+		}
+	}
+
+	if (requiresEnemyFaceDownCrew(move)) {
+		const hasEligibleEnemy = getEnemies(state, actorId).some((enemy) =>
+			([0, 1] as const).some(
+				(i) => enemy.crewIds[i] !== null && !enemy.crewTurned[i],
+			),
+		);
+		if (!hasEligibleEnemy) return false;
+	}
+
+	if (requiresEnemyActiveMove(move)) {
+		const hasEligibleEnemy = getEnemies(state, actorId).some((enemy) =>
+			enemy.activeMoves.some((m) => m !== null),
+		);
+		if (!hasEligibleEnemy) return false;
+	}
+
+	return true;
+}
+
 function resolveTarget(ctx: EffectContext): FaceturnServerPlayer | null {
 	if (ctx.targetPlayerId) {
 		const p = ctx.state.players.get(ctx.targetPlayerId);
@@ -87,6 +249,20 @@ function resolveAllyTarget(ctx: EffectContext): FaceturnServerPlayer {
 
 	const isAlly = candidate.teamIndex === ctx.actor.teamIndex;
 	return isAlly ? candidate : ctx.actor;
+}
+
+// Unlike resolveAllyTarget, never defaults to self, returns null if no living teammate
+function resolveStrictAllyTarget(
+	ctx: EffectContext,
+): FaceturnServerPlayer | null {
+	if (!ctx.targetPlayerId || ctx.targetPlayerId === ctx.actor.playerId) {
+		return null;
+	}
+	const candidate = ctx.state.players.get(ctx.targetPlayerId);
+	if (!candidate || ctx.state.eliminatedPlayers.has(ctx.targetPlayerId)) {
+		return null;
+	}
+	return candidate.teamIndex === ctx.actor.teamIndex ? candidate : null;
 }
 
 export function isConditionalEffect(e: CardEffect): e is ConditionalEffect {
@@ -148,8 +324,8 @@ function checkVoidPiecesAssembled(actor: FaceturnServerPlayer): boolean {
 
 const ALSO_CLASS_GRANTS: Partial<Record<EffectPrimitive["type"], CrewClass>> = {
 	become_also_striker: "striker",
-	become_also_turner: "turner",
-	become_also_blocker: "blocker",
+	become_also_unturner: "unturner",
+	become_also_defender: "defender",
 };
 
 function evaluateCondition(
@@ -187,8 +363,8 @@ function evaluateCondition(
 				return resolveCrewClass(actor, i as 0 | 1, condition.class) === true;
 			});
 
-		case "has_shielded_boss":
-			return actor.bossShield > 0;
+		case "has_armored_boss":
+			return actor.bossArmor > 0;
 
 		case "void_pieces_assembled":
 			return checkVoidPiecesAssembled(actor);
@@ -221,8 +397,8 @@ function evaluateConditionForRecompute(
 	switch (condition.when) {
 		case "always":
 			return true;
-		case "has_shielded_boss":
-			return player.bossShield > 0;
+		case "has_armored_boss":
+			return player.bossArmor > 0;
 		case "enemy_has_more_cash":
 			return getEnemies(state, player.playerId).some(
 				(enemy) => enemy.cash > player.cash,
@@ -261,7 +437,7 @@ function evaluateConditionForRecompute(
 export function resolveCrewClass(
 	player: FaceturnServerPlayer,
 	slot: 0 | 1,
-	cls?: "striker" | "blocker" | "collector" | "turner",
+	cls?: "striker" | "defender" | "collector" | "unturner",
 ): string | boolean {
 	const crewId = player.crewIds[slot];
 	if (!crewId) return cls ? false : "";
@@ -303,39 +479,58 @@ function consumeLifeInsuranceProtecting(
 	recomputePassives(target, state);
 }
 
-// bastion cash on damage taken passive, once per turn, not silenced (boss passives always apply)
+// bastion cash on damage taken passive: fires on every instance of damage taken, not silenced (boss passives always apply)
 function maybeTriggerBastionCashBonus(target: FaceturnServerPlayer): void {
 	if (!target.hasBastionPassive) return;
-	if (target.bastionCashBonusUsedThisTurn) return;
-	target.bastionCashBonusUsedThisTurn = true;
 	target.cash += 1;
 }
 
-// damage pipeline: flat bonus, reduction%, immunity, shield, life insurance
-// unblockable skips shield/immunity/reduction; cannotBeMultiplied skips actor's flat bonus
+// monkey man: steals cash from the boss he just damaged, once per damage instance, capped by their available cash
+function maybeTriggerMonkeyManCashSteal(
+	target: FaceturnServerPlayer,
+	sourceActor: FaceturnServerPlayer,
+	dmgDealt: number,
+): void {
+	if (dmgDealt <= 0) return;
+	if (sourceActor.stealCashOnDamageDealtAmount <= 0) return;
+	if (sourceActor.playerId === target.playerId) return;
+	const stolen = Math.min(
+		sourceActor.stealCashOnDamageDealtAmount,
+		target.cash,
+	);
+	if (stolen <= 0) return;
+	target.cash -= stolen;
+	sourceActor.cash += stolen;
+}
+
+// damage pipeline: flat bonus, reduction%, immunity, armor, life insurance
+// undefendable skips armor/immunity/reduction; cannotBeMultiplied skips actor's flat bonus
 function applyDamage(
 	state: FaceturnServerState,
 	target: FaceturnServerPlayer,
 	rawAmount: number,
 	sourceActor: FaceturnServerPlayer,
-	unblockable = false,
+	undefendable = false,
 	cannotBeMultiplied = false,
 ): number {
 	let dmg =
-		unblockable || cannotBeMultiplied
+		undefendable || cannotBeMultiplied
 			? rawAmount
 			: rawAmount + sourceActor.damageBonusFlat;
 
-	if (!unblockable) {
+	// pektus: all damage from this source bypasses armor, same as undefendable's armor step
+	const skipsArmor = undefendable || sourceActor.hasAllDamagePiercingPassive;
+
+	if (!undefendable) {
 		if (target.damageReductionPercent > 0) {
 			dmg = Math.floor(dmg * (1 - target.damageReductionPercent / 100));
 		}
 		if (target.bossImmunityTurns > 0) {
 			return 0;
 		}
-		if (target.bossShield > 0) {
-			const absorbed = Math.min(target.bossShield, dmg);
-			target.bossShield -= absorbed;
+		if (!skipsArmor && target.bossArmor > 0) {
+			const absorbed = Math.min(target.bossArmor, dmg);
+			target.bossArmor -= absorbed;
 			dmg -= absorbed;
 		}
 	}
@@ -346,6 +541,7 @@ function applyDamage(
 		target.bossHp = 1;
 		consumeLifeInsuranceProtecting(state, target);
 		maybeTriggerBastionCashBonus(target);
+		maybeTriggerMonkeyManCashSteal(target, sourceActor, dmg);
 		return rawAmount;
 	}
 
@@ -354,11 +550,12 @@ function applyDamage(
 	}
 	target.bossHp = clampHp(target.bossHp - dmg, target.bossMaxHp);
 	maybeTriggerBastionCashBonus(target);
+	maybeTriggerMonkeyManCashSteal(target, sourceActor, dmg);
 	return dmg;
 }
 
-// piercing damage: bypasses shield, still respects immunity and reduction%
-function applyDamageIgnoreShield(
+// piercing damage: bypasses armor, still respects immunity and reduction%
+function applyDamageIgnoreArmor(
 	state: FaceturnServerState,
 	target: FaceturnServerPlayer,
 	rawAmount: number,
@@ -376,6 +573,7 @@ function applyDamageIgnoreShield(
 		target.bossHp = 1;
 		consumeLifeInsuranceProtecting(state, target);
 		maybeTriggerBastionCashBonus(target);
+		maybeTriggerMonkeyManCashSteal(target, sourceActor, dmg);
 		return rawAmount;
 	}
 
@@ -384,6 +582,7 @@ function applyDamageIgnoreShield(
 	}
 	target.bossHp = clampHp(target.bossHp - dmg, target.bossMaxHp);
 	maybeTriggerBastionCashBonus(target);
+	maybeTriggerMonkeyManCashSteal(target, sourceActor, dmg);
 	return dmg;
 }
 
@@ -415,9 +614,9 @@ export function discardFromHand(
 	return toDiscard;
 }
 
-const DOCTOR_NORMAN_SHIELD_PER_DISCARD = 10;
+const DOCTOR_NORMAN_ARMOR_PER_DISCARD = 10;
 
-// doctor norman shields per self-initiated discard, scaled by cards discarded
+// doctor norman armor per self-initiated discard, scaled by cards discarded
 function maybeTriggerDoctorNorman(
 	player: FaceturnServerPlayer,
 	cardsDiscarded: number,
@@ -430,8 +629,8 @@ function maybeTriggerDoctorNorman(
 	if (!player.crewTurned[slot as 0 | 1]) return;
 	if (player.crewSkillsDisabled) return;
 	if (player.disabledPassiveSlots.has(slot as 0 | 1)) return;
-	player.bossShield += DOCTOR_NORMAN_SHIELD_PER_DISCARD * cardsDiscarded;
-	player.hasShieldedBossThisGame = true;
+	player.bossArmor += DOCTOR_NORMAN_ARMOR_PER_DISCARD * cardsDiscarded;
+	player.hasArmoredBossThisGame = true;
 }
 
 export function checkRatQueenDrawTrigger(
@@ -454,13 +653,69 @@ export function checkRatQueenDrawTrigger(
 	drawCards(player, amount);
 }
 
+export function sellMoveFromHand(
+	state: FaceturnServerState,
+	actor: FaceturnServerPlayer,
+	moveId: string,
+): boolean {
+	if (!actor.hasSellCards) return false;
+	const handIndex = actor.hand.indexOf(moveId);
+	if (handIndex === -1) return false;
+
+	actor.hand.splice(handIndex, 1);
+	actor.discardPile.push(moveId);
+	actor.totalCardsDiscarded++;
+	actor.costOverrides.delete(moveId);
+	actor.cash += actor.sellCardCashAmount;
+
+	maybeTriggerDoctorNorman(actor, 1);
+	checkRatQueenDrawTrigger(actor, state);
+	return true;
+}
+
+// fires when a slot ceases to be "that face‑down crew": clears marks, using previousCrewId to treat refill as invalidation not match
+function invalidateStaleCrewMarks(
+	state: FaceturnServerState,
+	owner: FaceturnServerPlayer,
+	slot: 0 | 1,
+	previousCrewId: string,
+): void {
+	for (const enemy of getEnemies(state, owner.playerId)) {
+		for (const [ownSlot, mark] of enemy.warrantMarks) {
+			if (
+				mark.targetPlayerId !== owner.playerId ||
+				mark.targetSlot !== slot ||
+				mark.targetCrewId !== previousCrewId
+			) {
+				continue;
+			}
+			enemy.warrantMarks.delete(ownSlot);
+			if (enemy.activeMoves[ownSlot] === CARD_IDS.MOVE.WARRANT_OF_ARREST) {
+				enemy.activeMoves[ownSlot] = null;
+				enemy.discardPile.push(CARD_IDS.MOVE.WARRANT_OF_ARREST);
+				enemy.totalCardsDiscarded++;
+				recomputePassives(enemy, state);
+			}
+			break;
+		}
+	}
+
+	const rh = owner.redHerringMark;
+	if (rh && rh.slot === slot && rh.crewId === previousCrewId) {
+		owner.redHerringMark = null;
+	}
+}
+
 export function turnCrewAtSlot(
+	state: FaceturnServerState,
 	player: FaceturnServerPlayer,
 	slot: 0 | 1,
 ): void {
-	if (!player.crewIds[slot]) return;
+	const crewId = player.crewIds[slot];
+	if (!crewId) return;
 	player.crewTurned[slot] = true;
 	player.hasTurnedAllyCrewThisGame = true;
+	invalidateStaleCrewMarks(state, player, slot, crewId);
 }
 
 export function unturnCrewAtSlot(
@@ -494,7 +749,7 @@ export function firstTurnedSlot(player: FaceturnServerPlayer): 0 | 1 | null {
 // for class declarations, only face-down crew (or crew with class override) count; face-up crew are spent
 export function playerHasClass(
 	player: FaceturnServerPlayer,
-	cls: "striker" | "blocker" | "collector" | "turner",
+	cls: "striker" | "defender" | "collector" | "unturner",
 ): boolean {
 	return player.crewIds.some((crewId, i) => {
 		if (!crewId) return false;
@@ -509,15 +764,16 @@ export function playerHasClass(
 
 export type StrikeOrExecuteOutcome =
 	| { outcome: "crew_turned"; slot: 0 | 1 }
+	| { outcome: "crew_killed"; slot: 0 | 1; refilledFromReserve: boolean }
 	| { outcome: "pending" }
 	| { outcome: "executed"; survivedViaLifeInsurance: boolean }
 	| { outcome: "negated"; negatedBy: "terminal" | "immunity" };
 
-// shared check for terminal strike block to keep resolution and declare-time logic consistent
-export function isStrikeBlockedByTerminal(
+// shared check for terminal strike defend to keep resolution and declare-time logic consistent
+export function isStrikeDefendedByTerminal(
 	target: FaceturnServerPlayer,
 ): boolean {
-	return target.hasTerminalStrikeBlock && target.bossHp > 60;
+	return target.hasTerminalStrikeDefend && target.bossHp > 60;
 }
 
 // turns a face-down crew or executes if none remain; when multiple unturned crew, asks the correct player (void arms lets defender choose)
@@ -528,8 +784,25 @@ export function resolveStrikeOrExecute(
 	isStrike: boolean,
 	preSelectedSlot?: 0 | 1,
 ): StrikeOrExecuteOutcome {
-	if (isStrikeBlockedByTerminal(target)) {
+	if (isStrikeDefendedByTerminal(target)) {
 		return { outcome: "negated", negatedBy: "terminal" };
+	}
+
+	let effectiveSlot = preSelectedSlot;
+	if (
+		isStrike &&
+		actorId !== null &&
+		actorId !== target.playerId &&
+		target.redHerringMark !== null
+	) {
+		const mark = target.redHerringMark;
+		target.redHerringMark = null;
+		if (
+			target.crewIds[mark.slot] === mark.crewId &&
+			!target.crewTurned[mark.slot]
+		) {
+			effectiveSlot = mark.slot;
+		}
 	}
 
 	const unturnedSlots = ([0, 1] as const).filter(
@@ -537,22 +810,51 @@ export function resolveStrikeOrExecute(
 	);
 
 	const resolvedPreSelected =
-		preSelectedSlot !== undefined && unturnedSlots.includes(preSelectedSlot)
-			? preSelectedSlot
+		effectiveSlot !== undefined && unturnedSlots.includes(effectiveSlot)
+			? effectiveSlot
 			: null;
+
+	// striking an already face-up crew slot kills it instead of turning it;
+	// only valid when the actor is an enemy of the target (never self-kill)
+	const isFaceUpKillTarget =
+		isStrike &&
+		effectiveSlot !== undefined &&
+		target.crewIds[effectiveSlot] !== null &&
+		target.crewTurned[effectiveSlot] &&
+		actorId !== null &&
+		actorId !== target.playerId;
 
 	const causedByEnemy = actorId !== null && actorId !== target.playerId;
 
 	let result: StrikeOrExecuteOutcome;
 
-	if (resolvedPreSelected !== null) {
-		turnCrewAtSlot(target, resolvedPreSelected);
+	if (isFaceUpKillTarget) {
+		const slot = effectiveSlot!;
+		const killedCrewId = target.crewIds[slot]!;
+		target.crewIds[slot] = null;
+		target.crewTurned[slot] = false;
+
+		let refilledFromReserve = false;
+		if (target.reserveCrewId !== null) {
+			target.crewIds[slot] = target.reserveCrewId;
+			target.crewTurned[slot] = false;
+			target.reserveCrewId = null;
+			refilledFromReserve = true;
+		}
+
+		invalidateStaleCrewMarks(state, target, slot, killedCrewId);
+
+		recomputePassives(target, state);
+		result = { outcome: "crew_killed", slot, refilledFromReserve };
+		triggerBertoOnEnemyCrewKill(state, actorId);
+	} else if (resolvedPreSelected !== null) {
+		turnCrewAtSlot(state, target, resolvedPreSelected);
 		recomputePassives(target, state);
 		triggerCrewTurnedEffects(state, target, resolvedPreSelected, causedByEnemy);
 		result = { outcome: "crew_turned", slot: resolvedPreSelected };
 	} else if (unturnedSlots.length === 1) {
 		const slot = unturnedSlots[0]!;
-		turnCrewAtSlot(target, slot);
+		turnCrewAtSlot(state, target, slot);
 		recomputePassives(target, state);
 		triggerCrewTurnedEffects(state, target, slot, causedByEnemy);
 		result = { outcome: "crew_turned", slot };
@@ -593,6 +895,27 @@ export function resolveStrikeOrExecute(
 		if (striker) applyBloodMoneyOnStrike(state, striker);
 	}
 	return result;
+}
+
+// berto lopez: turns his own slot face-down whenever his holder kills an enemy crew
+function triggerBertoOnEnemyCrewKill(
+	state: FaceturnServerState,
+	killerId: string,
+): void {
+	const killer = state.players.get(killerId);
+	if (!killer) return;
+	if (killer.crewSkillsDisabled) return;
+
+	for (let i = 0; i < 2; i++) {
+		const slot = i as 0 | 1;
+		if (killer.crewIds[slot] !== CARD_IDS.CREW.BERTO_LOPEZ) continue;
+		if (!killer.crewTurned[slot]) continue;
+		if (killer.disabledPassiveSlots.has(slot)) continue;
+
+		killer.crewTurned[slot] = false;
+		killer.disabledPassiveSlots.delete(slot);
+	}
+	recomputePassives(killer, state);
 }
 
 // blood money: enemies with the passive gain cash when a strike is declared
@@ -687,23 +1010,32 @@ export function recomputePassives(
 	player.crewSkillsDisabled = false;
 	player.damageBonusFlat = 0;
 	player.damageReductionPercent = 0;
-	player.shieldPerTurn = 0;
+	player.armorPerTurn = 0;
 	player.moveBaseCostReduction = 0;
 	player.burstMoveCostReduction = 0;
+	player.classActionCostReduction = 0;
 	player.enemyMoveCostSurcharge = 0;
 	player.hasBastionPassive = false;
+	player.hasAllDamagePiercingPassive = false;
+	player.stealCashOnDamageDealtAmount = 0;
 	player.hasVoidArms = false;
 	player.hasSupplyDrop = false;
 	player.supplyDropCashAmount = 0;
 	player.hasLifeInsurance = false;
 	player.hasFalseFlag = false;
+	player.hasSellCards = false;
+	player.sellCardCashAmount = 0;
 	player.hasVoidLegsChoice = false;
 	player.voidLegsDiscardCost = 0;
 	player.voidLegsDamage = 0;
 	player.hasBackgroundCheck = false;
 	player.hasPrankCall = false;
 	player.prankCallBonusAmount = 0;
-	player.hasTerminalStrikeBlock = false;
+	player.hasTerminalStrikeDefend = false;
+	player.cashOnChallengeWinAmount = 0;
+	player.selfDamagePerTurn = 0;
+	player.selfDamageCashGainAmount = 0;
+	player.hasCeaseDesist = false;
 	player.crewClassOverrides.clear();
 
 	const playersWithActivePoisonSource = new Set<string>();
@@ -824,8 +1156,8 @@ function recomputePassiveSwitch(
 		case "passive_damage_random_enemy_on_move_played":
 			player.damageRandomEnemyOnMovePlayed += effect.amount;
 			break;
-		case "passive_shield_per_turn":
-			player.shieldPerTurn += effect.amount;
+		case "passive_armor_per_turn":
+			player.armorPerTurn += effect.amount;
 			break;
 		case "passive_flat_damage_bonus":
 			player.damageBonusFlat += effect.amount;
@@ -842,14 +1174,17 @@ function recomputePassiveSwitch(
 		case "passive_reduce_burst_move_costs":
 			player.burstMoveCostReduction += effect.reduction;
 			break;
+		case "passive_reduce_class_action_costs":
+			player.classActionCostReduction += effect.reduction;
+			break;
 		case "passive_increase_enemy_move_costs":
 			player.enemyMoveCostSurcharge += effect.amount;
 			break;
 		case "passive_cash_on_damage_taken":
 			player.hasBastionPassive = true;
 			break;
-		case "passive_block_strikes_above_half_hp":
-			player.hasTerminalStrikeBlock = true;
+		case "passive_defend_strikes_above_half_hp":
+			player.hasTerminalStrikeDefend = true;
 			break;
 		case "passive_disable_all_crew_skills":
 			break;
@@ -862,6 +1197,10 @@ function recomputePassiveSwitch(
 			break;
 		case "passive_false_flag":
 			player.hasFalseFlag = true;
+			break;
+		case "passive_sell_moves_for_cash":
+			player.hasSellCards = true;
+			player.sellCardCashAmount += effect.cashAmount;
 			break;
 		case "passive_optional_discard_for_damage_per_turn":
 			player.hasVoidLegsChoice = true;
@@ -878,23 +1217,47 @@ function recomputePassiveSwitch(
 		case "passive_watcher_unturn_on_challenge_win":
 			player.hasWatcherPassive = true;
 			break;
+		case "passive_cash_on_challenge_win":
+			player.cashOnChallengeWinAmount += effect.amount;
+			break;
+		case "passive_self_damage_and_cash_per_turn":
+			player.selfDamagePerTurn += effect.damage;
+			player.selfDamageCashGainAmount += effect.cashAmount;
+			break;
+		case "passive_cease_and_desist":
+			player.hasCeaseDesist = true;
+			break;
 		// no derived stat needed (event-triggered or interaction-driven)
 		case "passive_mirror_enemy_collect_cash":
 		case "passive_poison_per_round":
-		case "passive_shield_on_ally_crew_turn":
-		case "passive_shield_on_discard":
+		case "passive_armor_on_ally_crew_turn":
+		case "passive_armor_on_discard":
 		case "passive_draw_on_hand_empty_once_per_turn":
 		case "passive_optional_strike_on_successful_challenge":
 		case "passive_suppress_enemy_turned_effects":
 			break;
 		// class overrides handled in recomputePassives above
 		case "become_also_striker":
-		case "become_also_turner":
-		case "become_also_blocker":
+		case "become_also_unturner":
+		case "become_also_defender":
 			break;
 		case "passive_disable_all_enemy_crew_passives":
 			break;
 		case "passive_strike_on_self_turned_ally":
+			break;
+		case "passive_turn_self_down_on_enemy_crew_kill":
+			break;
+		case "passive_all_damage_is_piercing":
+			player.hasAllDamagePiercingPassive = true;
+			break;
+		case "passive_steal_cash_on_damage_dealt":
+			player.stealCashOnDamageDealtAmount += effect.amount;
+			break;
+		case "mark_enemy_crew_for_delayed_turn":
+		case "discard_targeted_enemy_active_move":
+		case "shuffle_discard_into_deck_then_draw":
+		case "choose_red_herring_crew":
+		case "gain_cash_and_draw_ally":
 			break;
 	}
 }
@@ -925,7 +1288,7 @@ const handlers: Partial<Record<EffectPrimitive["type"], Handler>> = {
 			target,
 			effect.amount,
 			ctx.actor,
-			effect.unblockable,
+			effect.undefendable,
 			effect.cannotBeMultiplied,
 		);
 	},
@@ -963,11 +1326,11 @@ const handlers: Partial<Record<EffectPrimitive["type"], Handler>> = {
 		);
 	},
 
-	deal_damage_ignore_shield(effect, ctx) {
-		if (effect.type !== "deal_damage_ignore_shield") return;
+	deal_damage_ignore_armor(effect, ctx) {
+		if (effect.type !== "deal_damage_ignore_armor") return;
 		const target = resolveTarget(ctx);
 		if (!target) return;
-		applyDamageIgnoreShield(ctx.state, target, effect.amount, ctx.actor);
+		applyDamageIgnoreArmor(ctx.state, target, effect.amount, ctx.actor);
 	},
 
 	deal_damage_per_discarded_variable(effect, ctx) {
@@ -1003,8 +1366,18 @@ const handlers: Partial<Record<EffectPrimitive["type"], Handler>> = {
 		performStrike(ctx);
 	},
 
-	strike_enemy_crew_unblockable_with_cash_cost(effect, ctx) {
-		if (effect.type !== "strike_enemy_crew_unblockable_with_cash_cost") return;
+	strike_enemy_crew_defendable(_effect, ctx) {
+		const target = resolveTarget(ctx);
+		if (!target) return;
+		ctx.state.pendingDefendableStrikes.push({
+			actorId: ctx.actor.playerId,
+			targetPlayerId: target.playerId,
+			targetCrewSlot: ctx.targetCrewSlot ?? null,
+		});
+	},
+
+	strike_enemy_crew_undefendable_with_cash_cost(effect, ctx) {
+		if (effect.type !== "strike_enemy_crew_undefendable_with_cash_cost") return;
 		if (ctx.actor.cash < effect.cashCost) return; // fizzle: insufficient funds
 		ctx.actor.cash -= effect.cashCost;
 		performStrike(ctx);
@@ -1020,7 +1393,7 @@ const handlers: Partial<Record<EffectPrimitive["type"], Handler>> = {
 				? (effect.targetSlot as 0 | 1)
 				: firstUnturnedSlot(target);
 		if (slot === null) return;
-		turnCrewAtSlot(target, slot);
+		turnCrewAtSlot(ctx.state, target, slot);
 		recomputePassives(target, ctx.state);
 		triggerCrewTurnedEffects(ctx.state, target, slot);
 	},
@@ -1032,7 +1405,7 @@ const handlers: Partial<Record<EffectPrimitive["type"], Handler>> = {
 				? (effect.targetSlot as 0 | 1)
 				: firstUnturnedSlot(ctx.actor);
 		if (slot === null) return false;
-		turnCrewAtSlot(ctx.actor, slot);
+		turnCrewAtSlot(ctx.state, ctx.actor, slot);
 		recomputePassives(ctx.actor, ctx.state);
 		triggerCrewTurnedEffects(ctx.state, ctx.actor, slot);
 		return true;
@@ -1046,7 +1419,7 @@ const handlers: Partial<Record<EffectPrimitive["type"], Handler>> = {
 			if (slot === triggeringSlot) continue;
 			if (!actor.crewIds[slot]) continue;
 			if (actor.crewTurned[slot]) continue;
-			turnCrewAtSlot(actor, slot);
+			turnCrewAtSlot(ctx.state, actor, slot);
 			recomputePassives(actor, ctx.state);
 			triggerCrewTurnedEffects(ctx.state, actor, slot);
 		}
@@ -1081,7 +1454,7 @@ const handlers: Partial<Record<EffectPrimitive["type"], Handler>> = {
 		if (slot === null) return;
 		unturnCrewAtSlot(ctx.state, ctx.actor, slot);
 		recomputePassives(ctx.actor, ctx.state);
-		turnCrewAtSlot(ctx.actor, slot);
+		turnCrewAtSlot(ctx.state, ctx.actor, slot);
 		recomputePassives(ctx.actor, ctx.state);
 		triggerCrewTurnedEffects(ctx.state, ctx.actor, slot);
 	},
@@ -1134,6 +1507,29 @@ const handlers: Partial<Record<EffectPrimitive["type"], Handler>> = {
 			teammateId: teammate.playerId,
 			ownEligibleSlots,
 			teammateEligibleSlots,
+		} satisfies PendingInteraction;
+	},
+
+	// too big: swap with any other living player's face-up crew (ally or enemy)
+	swap_with_any_face_up_crew(_effect, ctx) {
+		const ownSlot = ctx.targetAllySlot;
+		if (ownSlot === undefined) return;
+		const actor = ctx.actor;
+		const eligibleTargets: { playerId: string; slot: 0 | 1 }[] = [];
+		for (const p of getLivingPlayers(ctx.state)) {
+			for (const i of [0, 1] as const) {
+				if (p.playerId === actor.playerId && i === ownSlot) continue;
+				if (p.crewIds[i] !== null && p.crewTurned[i]) {
+					eligibleTargets.push({ playerId: p.playerId, slot: i });
+				}
+			}
+		}
+		if (eligibleTargets.length === 0) return;
+		ctx.state.pendingInteraction = {
+			type: "too_big_swap_pick",
+			actorId: actor.playerId,
+			ownSlot: ownSlot as 0 | 1,
+			eligibleTargets,
 		} satisfies PendingInteraction;
 	},
 
@@ -1331,37 +1727,37 @@ const handlers: Partial<Record<EffectPrimitive["type"], Handler>> = {
 		drawCards(ctx.actor, effect.drawAmount);
 	},
 
-	// boss hp / shield
+	// boss hp / armor
 	heal_boss(effect, ctx) {
 		if (effect.type !== "heal_boss") return;
 		const target = resolveAllyTarget(ctx);
 		target.bossHp = clampHp(target.bossHp + effect.amount, target.bossMaxHp);
 	},
 
-	shield_boss(effect, ctx) {
-		if (effect.type !== "shield_boss") return;
+	armor_boss(effect, ctx) {
+		if (effect.type !== "armor_boss") return;
 		const target = resolveAllyTarget(ctx);
-		target.bossShield += effect.amount;
-		target.hasShieldedBossThisGame = true;
+		target.bossArmor += effect.amount;
+		target.hasArmoredBossThisGame = true;
 	},
 
-	shield_all_ally_bosses(effect, ctx) {
-		if (effect.type !== "shield_all_ally_bosses") return;
+	armor_all_ally_bosses(effect, ctx) {
+		if (effect.type !== "armor_all_ally_bosses") return;
 		const allies = [ctx.actor, ...getTeammates(ctx.state, ctx.actor.playerId)];
 		for (const ally of allies) {
-			ally.bossShield += effect.amount;
-			ally.hasShieldedBossThisGame = true;
+			ally.bossArmor += effect.amount;
+			ally.hasArmoredBossThisGame = true;
 		}
 	},
 
-	remove_all_shields(effect, ctx) {
-		if (effect.type !== "remove_all_shields") return;
+	remove_all_armor(effect, ctx) {
+		if (effect.type !== "remove_all_armor") return;
 		if (effect.target === "enemy_boss") {
 			const target = resolveTarget(ctx);
 			if (!target) return;
-			target.bossShield = 0;
+			target.bossArmor = 0;
 		} else {
-			ctx.actor.bossShield = 0;
+			ctx.actor.bossArmor = 0;
 		}
 	},
 
@@ -1443,17 +1839,17 @@ const handlers: Partial<Record<EffectPrimitive["type"], Handler>> = {
 	negate_enemy_slow_move() {},
 	reflect_slow_move_base_damage() {},
 
-	// bastion command: gain shield, deal damage equal to new shield total, then empty shield regardless
-	command_gain_shield_then_deal_damage_equal_to_shield(effect, ctx) {
-		if (effect.type !== "command_gain_shield_then_deal_damage_equal_to_shield")
+	// bastion command: gain armor, deal damage equal to new armor total, then empty armor regardless
+	command_gain_armor_then_deal_damage_equal_to_armor(effect, ctx) {
+		if (effect.type !== "command_gain_armor_then_deal_damage_equal_to_armor")
 			return;
 		const target = resolveTarget(ctx);
-		ctx.actor.bossShield += effect.shieldAmount;
-		ctx.actor.hasShieldedBossThisGame = true;
-		const totalShield = ctx.actor.bossShield;
-		ctx.actor.bossShield = 0;
-		if (!target || totalShield <= 0) return;
-		applyDamage(ctx.state, target, totalShield, ctx.actor, false, false);
+		ctx.actor.bossArmor += effect.armorAmount;
+		ctx.actor.hasArmoredBossThisGame = true;
+		const totalArmor = ctx.actor.bossArmor;
+		ctx.actor.bossArmor = 0;
+		if (!target || totalArmor <= 0) return;
+		applyDamage(ctx.state, target, totalArmor, ctx.actor, false, false);
 	},
 
 	// stat accumulators or live-triggered; no runtime handler needed here
@@ -1495,7 +1891,8 @@ const handlers: Partial<Record<EffectPrimitive["type"], Handler>> = {
 	passive_cash_on_enemy_move_or_strike() {},
 	passive_heal_on_move_played() {},
 	passive_damage_random_enemy_on_move_played() {},
-	passive_shield_per_turn() {},
+	passive_armor_per_turn() {},
+	passive_sell_moves_for_cash() {},
 	passive_optional_discard_for_damage_per_turn() {},
 	passive_flat_damage_bonus() {},
 	passive_negate_damage_percent() {},
@@ -1527,12 +1924,105 @@ const handlers: Partial<Record<EffectPrimitive["type"], Handler>> = {
 		ctx.actor.trickleDownTargets.set(slot, ctx.targetPlayerId);
 	},
 	passive_false_flag() {},
-	passive_block_strikes_above_half_hp() {},
-	passive_shield_on_discard() {},
+	passive_defend_strikes_above_half_hp() {},
+	passive_armor_on_discard() {},
 	passive_draw_on_hand_empty_once_per_turn() {},
 	passive_watcher_unturn_on_challenge_win() {},
 	passive_optional_strike_on_successful_challenge() {},
 	passive_suppress_enemy_turned_effects() {},
+	// derived stat set in recomputePassiveSwitch; nothing to do at play time
+	passive_cash_on_challenge_win() {},
+	passive_self_damage_and_cash_per_turn() {},
+	passive_cease_and_desist() {},
+
+	// warrant of arrest: locks in target player + slot + crewId now;
+	// resolution is entirely owned by processWarrantOfArrestTicks (game.ts
+	// startTurn). Keyed by the caster's own active-move slot so multiple
+	// copies track independently. Fizzles quietly if the target has no
+	// face-down crew at cast time.
+	mark_enemy_crew_for_delayed_turn(_effect, ctx) {
+		if (!ctx.moveId) return;
+		const ownSlot = ctx.actor.activeMoves.indexOf(ctx.moveId) as 0 | 1 | 2 | -1;
+		if (ownSlot === -1) return;
+		const target = resolveTarget(ctx);
+		if (!target) return;
+		const slot = ctx.targetCrewSlot as 0 | 1 | undefined;
+		if (slot === undefined) return;
+		const crewId = target.crewIds[slot];
+		if (!crewId || target.crewTurned[slot]) return;
+		ctx.actor.warrantMarks.set(ownSlot, {
+			targetPlayerId: target.playerId,
+			targetSlot: slot,
+			targetCrewId: crewId,
+			turnsRemaining: 2,
+		});
+	},
+
+	// sabotage: ctx.targetActiveMoveSlot is a dedicated 0-2 field, distinct
+	// from targetCrewSlot (see EffectContext / play_move / chain_play_burst).
+	// an empty slot, a slow-move slot, or no slot at all is a clean whiff —
+	// the card still plays and still costs cash by design.
+	discard_targeted_enemy_active_move(_effect, ctx) {
+		const target = resolveTarget(ctx);
+		if (!target) return;
+		if (ctx.targetActiveMoveSlot === undefined) return;
+		const slot = ctx.targetActiveMoveSlot;
+		if (slot < 0 || slot > 2) return;
+		const moveId = target.activeMoves[slot as 0 | 1 | 2];
+		if (!moveId) return;
+		target.activeMoves[slot as 0 | 1 | 2] = null;
+		target.trickleDownTargets.delete(slot as 0 | 1 | 2);
+		target.discardPile.push(moveId);
+		target.totalCardsDiscarded++;
+		recomputePassives(target, ctx.state);
+	},
+
+	// restock: harmless no-op reshuffle when the discard pile is empty,
+	// guarded explicitly to avoid a pointless array-churn/shuffle call
+	shuffle_discard_into_deck_then_draw(_effect, ctx) {
+		if (ctx.actor.discardPile.length > 0) {
+			ctx.actor.deck = shuffle([...ctx.actor.deck, ...ctx.actor.discardPile]);
+			ctx.actor.discardPile = [];
+		}
+		drawCards(ctx.actor, 1);
+	},
+
+	// red herring: picks (or defaults to) a face-down slot, sets the
+	// redirect mark, then discards itself out of the active zone
+	// immediately — the card text's "then discard this Move" happens at
+	// cast time, same slot-lookup trick passive_life_insurance uses above.
+	choose_red_herring_crew(_effect, ctx) {
+		const actor = ctx.actor;
+		const slot =
+			ctx.targetCrewSlot !== undefined
+				? (ctx.targetCrewSlot as 0 | 1)
+				: firstUnturnedSlot(actor);
+		if (slot === null || !actor.crewIds[slot] || actor.crewTurned[slot]) {
+			return;
+		}
+		const crewId = actor.crewIds[slot];
+		actor.redHerringMark = { slot, crewId };
+
+		if (ctx.moveId) {
+			const activeSlot = actor.activeMoves.indexOf(ctx.moveId);
+			if (activeSlot !== -1) {
+				actor.activeMoves[activeSlot] = null;
+				actor.discardPile.push(ctx.moveId);
+				actor.totalCardsDiscarded++;
+			}
+		}
+	},
+
+	// my treat: requires a genuine teammate (moveHasLegalTarget already
+	// guarantees this before the card can be cast); the null-check here is
+	// defense in depth, not a real expected path
+	gain_cash_and_draw_ally(effect, ctx) {
+		if (effect.type !== "gain_cash_and_draw_ally") return;
+		const target = resolveStrictAllyTarget(ctx);
+		if (!target) return;
+		target.cash += effect.cashAmount;
+		drawCards(target, effect.drawAmount);
+	},
 
 	// win condition
 	win_if_void_pieces_assembled(_effect, ctx) {
@@ -1723,7 +2213,7 @@ export function resolveSwitchUpPick(
 	if (!faceDownSlots.includes(turnSlot)) return;
 	unturnCrewAtSlot(state, actor, unturnSlot as 0 | 1);
 	recomputePassives(actor, state);
-	turnCrewAtSlot(actor, turnSlot as 0 | 1);
+	turnCrewAtSlot(state, actor, turnSlot as 0 | 1);
 	recomputePassives(actor, state);
 	triggerCrewTurnedEffects(state, actor, turnSlot as 0 | 1);
 }
@@ -1799,6 +2289,45 @@ export function resolveTagOutPick(
 	recomputePassives(teammate, state);
 }
 
+export function resolveTooBigSwapPick(
+	state: FaceturnServerState,
+	actor: FaceturnServerPlayer,
+	ownSlot: number,
+	targetPlayerId: string,
+	targetSlot: number,
+	eligibleTargets: readonly { playerId: string; slot: 0 | 1 }[],
+): void {
+	const isEligible = eligibleTargets.some(
+		(t) => t.playerId === targetPlayerId && t.slot === targetSlot,
+	);
+	if (!isEligible) return;
+	const target = state.players.get(targetPlayerId);
+	if (!target) return;
+	const oSlot = ownSlot as 0 | 1;
+	const tSlot = targetSlot as 0 | 1;
+
+	const ownId = actor.crewIds[oSlot];
+	const ownTurned = actor.crewTurned[oSlot];
+	const ownOverrides = actor.crewClassOverrides.get(oSlot);
+
+	const targetId = target.crewIds[tSlot];
+	const targetTurned = target.crewTurned[tSlot];
+	const targetOverrides = target.crewClassOverrides.get(tSlot);
+
+	actor.crewIds[oSlot] = targetId;
+	actor.crewTurned[oSlot] = targetTurned;
+	if (targetOverrides) actor.crewClassOverrides.set(oSlot, targetOverrides);
+	else actor.crewClassOverrides.delete(oSlot);
+
+	target.crewIds[tSlot] = ownId;
+	target.crewTurned[tSlot] = ownTurned;
+	if (ownOverrides) target.crewClassOverrides.set(tSlot, ownOverrides);
+	else target.crewClassOverrides.delete(tSlot);
+
+	recomputePassives(actor, state);
+	recomputePassives(target, state);
+}
+
 // checks if any enemy has a face-up, unsuppressed lighthouse suppressing turned effects
 function isTurnedEffectSuppressedByEnemyLighthouse(
 	state: FaceturnServerState,
@@ -1812,6 +2341,26 @@ function isTurnedEffectSuppressedByEnemyLighthouse(
 			if (enemy.disabledPassiveSlots.has(i)) continue;
 			return true;
 		}
+	}
+	return false;
+}
+
+// consumes/discards the first enemy Cease & Desist move; unaffected by Blackmail since it’s a Move effect, only trigger when a turned effect is resolving
+function consumeCeaseDesistIfPresent(
+	state: FaceturnServerState,
+	player: FaceturnServerPlayer,
+): boolean {
+	for (const enemy of getEnemies(state, player.playerId)) {
+		if (!enemy.hasCeaseDesist) continue;
+		const slot = enemy.activeMoves.findIndex(
+			(id) => id === CARD_IDS.MOVE.CEASE_AND_DESIST,
+		);
+		if (slot === -1) continue;
+		enemy.activeMoves[slot] = null;
+		enemy.discardPile.push(CARD_IDS.MOVE.CEASE_AND_DESIST);
+		enemy.totalCardsDiscarded++;
+		recomputePassives(enemy, state);
+		return true;
 	}
 	return false;
 }
@@ -1887,17 +2436,18 @@ export function resolveBearBonesBonusStrike(
 	if (actor.cash < BEAR_BONES_STRIKE_CASH_COST) return null;
 	const target = state.players.get(targetPlayerId);
 	if (!target || state.eliminatedPlayers.has(targetPlayerId)) return null;
-	const slot =
-		targetSlot !== null ? (targetSlot as 0 | 1) : firstUnturnedSlot(target);
-	if (slot === null) return null;
-	if (!target.crewIds[slot]) return null;
+
 	actor.cash -= BEAR_BONES_STRIKE_CASH_COST;
-	turnCrewAtSlot(target, slot);
-	recomputePassives(target, state);
-	triggerCrewTurnedEffects(state, target, slot);
+	const outcome = resolveStrikeOrExecute(
+		state,
+		target,
+		actor.playerId,
+		true,
+		targetSlot !== null ? (targetSlot as 0 | 1) : undefined,
+	);
 	// a bonus strike still counts as a strike for blood money
 	applyBloodMoneyOnStrike(state, actor);
-	return { outcome: "crew_turned", slot };
+	return outcome;
 }
 
 // background check: wrong guess auto-turns one of the guesser's own crew
@@ -1906,7 +2456,7 @@ export function resolveBackgroundCheckGuess(
 	challenger: FaceturnServerPlayer,
 	target: FaceturnServerPlayer,
 	guessedSlot: number,
-	guessedClass: "striker" | "blocker" | "collector" | "turner",
+	guessedClass: "striker" | "defender" | "collector" | "unturner",
 	eligibleSlots: readonly number[],
 ): { correct: boolean } {
 	if (!eligibleSlots.includes(guessedSlot)) return { correct: false };
@@ -1916,7 +2466,7 @@ export function resolveBackgroundCheckGuess(
 		const ownSlot =
 			firstUnturnedSlot(challenger) ?? firstTurnedSlot(challenger);
 		if (ownSlot !== null) {
-			turnCrewAtSlot(challenger, ownSlot);
+			turnCrewAtSlot(state, challenger, ownSlot);
 			recomputePassives(challenger, state);
 			triggerCrewTurnedEffects(state, challenger, ownSlot);
 		}
@@ -1924,7 +2474,39 @@ export function resolveBackgroundCheckGuess(
 	return { correct: matches };
 }
 
-// mama mercy shields ally boss on any ally crew turn; suplex strikes enemy crew only on ally's own turn (not forced)
+// warrant of Arrest: on turn start, decrements marks; resolves/discards when countdown hits 0 or crew is invalidated, ensuring cards leave play once their purpose is moot without double‑discard
+export function processWarrantOfArrestTicks(
+	state: FaceturnServerState,
+	caster: FaceturnServerPlayer,
+): void {
+	for (const [ownSlot, mark] of [...caster.warrantMarks]) {
+		if (caster.activeMoves[ownSlot] !== CARD_IDS.MOVE.WARRANT_OF_ARREST) {
+			caster.warrantMarks.delete(ownSlot);
+			continue;
+		}
+
+		mark.turnsRemaining--;
+		if (mark.turnsRemaining > 0) continue;
+
+		caster.warrantMarks.delete(ownSlot);
+		caster.activeMoves[ownSlot] = null;
+		caster.discardPile.push(CARD_IDS.MOVE.WARRANT_OF_ARREST);
+		caster.totalCardsDiscarded++;
+		recomputePassives(caster, state);
+
+		const target = state.players.get(mark.targetPlayerId);
+		if (!target || state.eliminatedPlayers.has(mark.targetPlayerId)) continue;
+		if (target.crewIds[mark.targetSlot] !== mark.targetCrewId) continue;
+		if (target.crewTurned[mark.targetSlot]) continue;
+
+		// not a strike
+		turnCrewAtSlot(state, target, mark.targetSlot);
+		recomputePassives(target, state);
+		triggerCrewTurnedEffects(state, target, mark.targetSlot, true);
+	}
+}
+
+// mama mercy armor ally boss on any ally crew turn; suplex strikes enemy crew only on ally's own turn (not forced)
 function triggerAllyTurnReactions(
 	state: FaceturnServerState,
 	turner: FaceturnServerPlayer,
@@ -1950,12 +2532,12 @@ function triggerAllyTurnReactions(
 		if (!holder.crewTurned[mamaSlot]) continue;
 		if (holder.disabledPassiveSlots.has(mamaSlot)) continue;
 
-		const mamaShieldAmount = findEffectAmount(
+		const mamaArmorAmount = findEffectAmount(
 			getCrew(CARD_IDS.CREW.MAMA_MERCY).passiveEffects,
-			"passive_shield_on_ally_crew_turn",
+			"passive_armor_on_ally_crew_turn",
 		);
-		holder.bossShield += mamaShieldAmount;
-		holder.hasShieldedBossThisGame = true;
+		holder.bossArmor += mamaArmorAmount;
+		holder.hasArmoredBossThisGame = true;
 	}
 
 	if (!causedByEnemy) {
@@ -2009,7 +2591,12 @@ export function triggerCrewTurnedEffects(
 		player,
 	);
 
-	if (!suppressedByLighthouse) {
+	const suppressedByCeaseDesist =
+		!suppressedByLighthouse &&
+		crew.turnedEffects.length > 0 &&
+		consumeCeaseDesistIfPresent(state, player);
+
+	if (!suppressedByLighthouse && !suppressedByCeaseDesist) {
 		resolveEffects(crew.turnedEffects, ctx);
 	}
 
@@ -2042,7 +2629,6 @@ export function triggerRoundEndPassives(state: FaceturnServerState): void {
 		player.classActionUsedThisTurn = false;
 		player.ratQueenDrawUsedThisTurn = false;
 		player.prankCallBonusUsedThisRound = false;
-		player.bastionCashBonusUsedThisTurn = false;
 	}
 }
 

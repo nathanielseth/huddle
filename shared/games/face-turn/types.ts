@@ -10,14 +10,14 @@ export type FaceturnsPhase =
 	| "active_turn"
 	| "move_chain_window"
 	| "challenge_window"
-	| "block_window"
-	| "block_declared"
-	| "block_challenge_window"
+	| "defend_window"
+	| "defend_declared"
+	| "defend_challenge_window"
 	| "finished";
 
-export type CrewClass = "striker" | "blocker" | "collector" | "turner";
+export type CrewClass = "striker" | "defender" | "collector" | "unturner";
 export type MoveType = "burst" | "slow" | "active";
-export type ClassAction = "strike" | "block" | "collect" | "unturn";
+export type ClassAction = "strike" | "defend" | "collect" | "unturn";
 
 export type GameMode = "duel" | "ffa" | "teams";
 
@@ -65,10 +65,10 @@ export interface BossView {
 	readonly maxHp: number;
 
 	// damage absorbed before hp, separate pool
-	readonly shield: number;
+	readonly armor: number;
 
 	// frontline immunity countdown, ticks down each round end
-	readonly shieldTurnsRemaining: number | null;
+	readonly armorTurnsRemaining: number | null;
 
 	// once per game, prevents boss command reuse
 	readonly commandUsed: boolean;
@@ -96,7 +96,7 @@ export interface FaceturnsPlayerView {
 	readonly hasCalledBluffSuccessfully: boolean;
 	readonly totalCardsDiscarded: number;
 	readonly totalMovesPlayed: number;
-	readonly hasShieldedBossThisGame: boolean;
+	readonly hasArmoredBossThisGame: boolean;
 
 	// total incoming poison damage from all sources, applied at round end
 	readonly poisonStacks: number;
@@ -113,8 +113,8 @@ export type PendingActionType =
 	| "class_action_strike"
 	| "class_action_collect"
 	| "class_action_unturn"
-	| "class_action_block"
-	| "card_strike"; // burst-move blockable strike
+	| "class_action_defend"
+	| "card_strike"; // burst-move defendable strike
 
 export interface PendingAction {
 	readonly type: PendingActionType;
@@ -252,6 +252,12 @@ export type PendingInteractionView =
 			actorId: string;
 			targetPlayerId: string;
 			eligibleSlots: number[];
+	  }
+	| {
+			type: "too_big_swap_pick";
+			actorId: string;
+			ownSlot: number;
+			eligibleTargets: readonly { playerId: string; slot: number }[];
 	  };
 
 export interface FaceturnsState {
@@ -315,14 +321,19 @@ export type ResolutionResult =
 			readonly attackerId: string;
 			readonly targetPlayerId: string;
 			readonly via: "strike" | "face_turn" | "challenge_loss";
-			readonly outcome: "crew_turned" | "executed" | "negated";
+			readonly outcome: "crew_turned" | "crew_killed" | "executed" | "negated";
 			readonly crewTurnedSlot: number | null;
+			readonly crewKilledSlot: number | null;
+			readonly crewRefilledFromReserve: boolean;
 			readonly negatedBy: "terminal" | "immunity" | null;
 			readonly survivedViaLifeInsurance: boolean;
 	  };
 
 export interface FaceturnsSecret {
 	readonly hand: readonly string[];
+
+	// hand card ids (may include duplicates) that could legally be played rn
+	readonly playableMoveIds: readonly string[];
 
 	// slot index → crew id; hidden from opponents until crew turns face-up
 	readonly crewAssignments: Readonly<Record<number, string>>;

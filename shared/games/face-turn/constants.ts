@@ -11,13 +11,13 @@ export const FACETURN_CONSTANTS = {
 	ACTIVE_TURN_DURATION_MS: 35 * 1_000,
 	CHALLENGE_WINDOW_MS: 15 * 1_000,
 	MOVE_CHAIN_WINDOW_MS: 15 * 1_000,
-	BLOCK_DECLARED_MS: 15 * 1_000,
-	BLOCK_WINDOW_MS: 15 * 1_000,
-	BLOCK_CHALLENGE_MS: 15 * 1_000,
+	DEFEND_DECLARED_MS: 15 * 1_000,
+	DEFEND_WINDOW_MS: 15 * 1_000,
+	DEFEND_CHALLENGE_MS: 15 * 1_000,
 	RESOLUTION_DISPLAY_MS: 3 * 1_000,
 
 	STRIKE_CASH_COST: 3,
-	BLOCK_CASH_COST: 0,
+	DEFEND_CASH_COST: 0,
 	COLLECT_CASH_COST: 0,
 	UNTURN_CASH_COST: 4,
 
@@ -44,8 +44,7 @@ export function getFaceturnSeatBounds(
 ): { min: number; max: number } {
 	if (mode === "duel") return { min: 2, max: 2 };
 	if (mode === "teams") {
-		const size = FACETURN_CONSTANTS.TEAM_SIZE;
-		return { min: size * 2 - (size - 1), max: size * 2 };
+		return { min: 3, max: FACETURN_CONSTANTS.TEAM_SIZE * 2 };
 	}
 	return {
 		min: FACETURN_CONSTANTS.FFA_MIN_PLAYERS,

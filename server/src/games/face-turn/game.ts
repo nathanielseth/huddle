@@ -2,6 +2,7 @@ import type {
 	FaceturnServerState,
 	FaceturnServerPlayer,
 	GameConfig,
+	DraftSelections,
 } from "./types";
 import { FACETURN_CONSTANTS as C } from "./types";
 import type {
@@ -45,6 +46,7 @@ import {
 	applyCoolGuyDamageOnMovePlayed,
 	executedPlayerIdFrom,
 	unturnCrewAtSlot,
+	processWarrantOfArrestTicks,
 } from "./effects";
 import type { StrikeOrExecuteOutcome } from "./effects";
 import { shuffle } from "../lib/random";
@@ -63,7 +65,7 @@ export function makeServerPlayer(
 		bossId: "",
 		bossHp: 0,
 		bossMaxHp: 0,
-		bossShield: 0,
+		bossArmor: 0,
 		bossImmunityTurns: 0,
 		bossCommandUsed: false,
 		lastHpZeroCause: null,
@@ -80,7 +82,7 @@ export function makeServerPlayer(
 		hasCalledBluffSuccessfully: false,
 		totalCardsDiscarded: 0,
 		totalMovesPlayed: 0,
-		hasShieldedBossThisGame: false,
+		hasArmoredBossThisGame: false,
 		hasTurnedAllyCrewThisGame: false,
 		incomingPoison: new Map(),
 		cashGainPerTurn: 0,
@@ -91,10 +93,13 @@ export function makeServerPlayer(
 		crewSkillsDisabled: false,
 		damageBonusFlat: 0,
 		damageReductionPercent: 0,
-		shieldPerTurn: 0,
+		armorPerTurn: 0,
 		moveBaseCostReduction: 0,
 		burstMoveCostReduction: 0,
+		classActionCostReduction: 0,
 		enemyMoveCostSurcharge: 0,
+		hasSellCards: false,
+		sellCardCashAmount: 0,
 		hasVoidArms: false,
 		hasVoidLegsChoice: false,
 		voidLegsDiscardCost: 0,
@@ -102,6 +107,8 @@ export function makeServerPlayer(
 		hasBackgroundCheck: false,
 		hasWatcherPassive: false,
 		hasBastionPassive: false,
+		hasAllDamagePiercingPassive: false,
+		stealCashOnDamageDealtAmount: 0,
 		hasLifeInsurance: false,
 		lifeInsuranceTargets: new Map(),
 		trickleDownTargets: new Map(),
@@ -113,14 +120,19 @@ export function makeServerPlayer(
 		ratQueenDrawUsedThisTurn: false,
 		disabledPassiveSlots: new Set(),
 		prankCallBonusUsedThisRound: false,
-		bastionCashBonusUsedThisTurn: false,
 		playedMoveThisTurn: false,
 		classActionUsedThisTurn: false,
 		costOverrides: new Map(),
 		draftSelections: { bossId: null, crewIds: [], moveIds: [] },
 		isDraftLocked: false,
 		mulliganDecided: false,
-		hasTerminalStrikeBlock: false,
+		hasTerminalStrikeDefend: false,
+		cashOnChallengeWinAmount: 0,
+		selfDamagePerTurn: 0,
+		selfDamageCashGainAmount: 0,
+		hasCeaseDesist: false,
+		warrantMarks: new Map(),
+		redHerringMark: null,
 	};
 }
 
@@ -319,26 +331,24 @@ function isDeadPick(
 	);
 }
 
-export function randomizeEmptyDraftSlots(player: FaceturnServerPlayer): void {
-	if (!player.draftSelections?.bossId) {
-		player.draftSelections!.bossId =
-			BOSSES[Math.floor(Math.random() * BOSSES.length)]!.id;
+export function randomizeDraftSelections(
+	draft: DraftSelections,
+	rng: () => number = Math.random,
+): void {
+	if (!draft.bossId) {
+		draft.bossId = BOSSES[Math.floor(rng() * BOSSES.length)]!.id;
 	}
 
 	const maxCrewes =
-		player.draftSelections!.bossId === CARD_IDS.BOSS.THE_DEALER
-			? C.CREW_SLOTS + 1
-			: C.CREW_SLOTS;
+		draft.bossId === CARD_IDS.BOSS.THE_DEALER ? C.CREW_SLOTS + 1 : C.CREW_SLOTS;
 	const maxMoves = C.MOVES_PER_DECK;
 
 	// check existing manual picks before filling, so prerequisite cards can still be added later
-	const draft = player.draftSelections!;
-
 	const availableCrewes = CREW.filter(
 		(h) => isDraftable(h) && !draft.crewIds.includes(h.id),
 	);
 	while (draft.crewIds.length < maxCrewes && availableCrewes.length) {
-		const idx = Math.floor(Math.random() * availableCrewes.length);
+		const idx = Math.floor(rng() * availableCrewes.length);
 		const pick = availableCrewes.splice(idx, 1)[0]!;
 		if (isDeadPick(pick.id, "crew", draft.crewIds, draft.moveIds)) continue;
 		draft.crewIds.push(pick.id);
@@ -346,7 +356,7 @@ export function randomizeEmptyDraftSlots(player: FaceturnServerPlayer): void {
 
 	const availableMoves = MOVES.filter((s) => !draft.moveIds.includes(s.id));
 	while (draft.moveIds.length < maxMoves && availableMoves.length) {
-		const idx = Math.floor(Math.random() * availableMoves.length);
+		const idx = Math.floor(rng() * availableMoves.length);
 		const pick = availableMoves.splice(idx, 1)[0]!;
 		if (isDeadPick(pick.id, "move", draft.crewIds, draft.moveIds)) continue;
 		draft.moveIds.push(pick.id);
@@ -354,8 +364,15 @@ export function randomizeEmptyDraftSlots(player: FaceturnServerPlayer): void {
 
 	// second pass: picks that were dead earlier might be alive now, fill remaining slots
 	if (draft.crewIds.length < maxCrewes || draft.moveIds.length < maxMoves) {
-		fillRemainingIgnoringDeadPicks(draft, maxCrewes, maxMoves);
+		fillRemainingIgnoringDeadPicks(draft, maxCrewes, maxMoves, rng);
 	}
+}
+
+export function randomizeEmptyDraftSlots(
+	player: FaceturnServerPlayer,
+	rng: () => number = Math.random,
+): void {
+	randomizeDraftSelections(player.draftSelections!, rng);
 }
 
 // fallback when every candidate was dead on first draw; re-scans once, admits anything not permanently dead
@@ -363,12 +380,14 @@ function fillRemainingIgnoringDeadPicks(
 	draft: { crewIds: string[]; moveIds: string[] },
 	maxCrewes: number,
 	maxMoves: number,
+	rng: () => number,
 ): void {
 	if (draft.crewIds.length < maxCrewes) {
 		const rest = shuffle(
 			CREW.filter((h) => isDraftable(h) && !draft.crewIds.includes(h.id)).map(
 				(h) => h.id,
 			),
+			rng,
 		);
 		for (const id of rest) {
 			if (draft.crewIds.length >= maxCrewes) break;
@@ -379,6 +398,7 @@ function fillRemainingIgnoringDeadPicks(
 	if (draft.moveIds.length < maxMoves) {
 		const rest = shuffle(
 			MOVES.filter((s) => !draft.moveIds.includes(s.id)).map((s) => s.id),
+			rng,
 		);
 		for (const id of rest) {
 			if (draft.moveIds.length >= maxMoves) break;
@@ -454,10 +474,21 @@ export function startTurn(state: FaceturnServerState, playerId: string): void {
 	if (player.drawPerTurn > 0) {
 		drawCards(player, player.drawPerTurn);
 	}
-	if (player.shieldPerTurn > 0) {
-		player.bossShield += player.shieldPerTurn;
-		player.hasShieldedBossThisGame = true;
+	if (player.armorPerTurn > 0) {
+		player.bossArmor += player.armorPerTurn;
+		player.hasArmoredBossThisGame = true;
 	}
+	if (player.selfDamagePerTurn > 0 || player.selfDamageCashGainAmount > 0) {
+		resolveEffects(
+			[
+				{ type: "deal_damage_self_boss", amount: player.selfDamagePerTurn },
+				{ type: "gain_cash", amount: player.selfDamageCashGainAmount },
+			],
+			{ state, actor: player },
+		);
+	}
+
+	processWarrantOfArrestTicks(state, player);
 
 	checkRatQueenDrawTrigger(player, state);
 
@@ -530,7 +561,7 @@ function eliminatePlayer(state: FaceturnServerState, playerId: string): void {
 		if (
 			state.phase === "challenge_window" ||
 			state.phase === "move_chain_window" ||
-			state.phase === "block_declared"
+			state.phase === "defend_declared"
 		) {
 			state.phase = "active_turn";
 		}
@@ -733,10 +764,11 @@ export function resolveChallenge(
 			};
 		}
 
-		// the watcher: only offer if no pending interaction
+		// the watcher: won the challenge by successfully defending against it (actor wasn't bluffing)
 		if (state.pendingInteraction === null) {
 			const actor = state.players.get(pending.actorId)!;
 			if (actor.hasWatcherPassive) {
+				drawCards(actor, 2);
 				const eligibleTargets = watcherEligibleTargets(state, actor);
 				if (eligibleTargets.length > 0) {
 					state.pendingInteraction = {
@@ -746,6 +778,15 @@ export function resolveChallenge(
 					};
 				}
 			}
+		}
+
+		// extortion: unconditional cash grant, no interaction of its own to
+		// conflict with — deliberately not gated behind
+		// pendingInteraction === null the way Watcher is, since that gate
+		// exists purely so Watcher doesn't stack a second interaction on
+		// top of an already-open choose_crew_to_turn.
+		if (actor.cashOnChallengeWinAmount > 0) {
+			actor.cash += actor.cashOnChallengeWinAmount;
 		}
 
 		return {
@@ -786,6 +827,7 @@ export function resolveChallenge(
 
 	// the watcher: the challenger also gets this if they just won the challenge
 	if (state.pendingInteraction === null && challenger.hasWatcherPassive) {
+		drawCards(challenger, 2);
 		const eligibleTargets = watcherEligibleTargets(state, challenger);
 		if (eligibleTargets.length > 0) {
 			state.pendingInteraction = {
@@ -797,6 +839,11 @@ export function resolveChallenge(
 	}
 	if (state.pendingInteraction === null) {
 		maybeOpenBearBonesOffer(state, challenger, pending.actorId);
+	}
+
+	// extortion: same unconditional-grant reasoning as the actor's branch above
+	if (challenger.cashOnChallengeWinAmount > 0) {
+		challenger.cash += challenger.cashOnChallengeWinAmount;
 	}
 
 	return {
@@ -861,7 +908,7 @@ export function executePendingAction(
 			}
 			return null;
 		}
-		case "class_action_block": {
+		case "class_action_defend": {
 			return null;
 		}
 	}
@@ -872,6 +919,7 @@ interface MoveTarget {
 	targetCrewSlot?: number | undefined;
 	targetAllySlot?: number | undefined;
 	targetPlayerId?: string | undefined;
+	targetActiveMoveSlot?: number | undefined;
 }
 
 export function executeMove(
@@ -898,6 +946,7 @@ export function executeMove(
 		targetCrewSlot: targets.targetCrewSlot,
 		targetAllySlot: targets.targetAllySlot,
 		targetPlayerId: targets.targetPlayerId,
+		targetActiveMoveSlot: targets.targetActiveMoveSlot,
 		moveId,
 	});
 
@@ -1060,31 +1109,49 @@ export function getMoveCost(
 	return Math.max(0, base - reduction + surcharge);
 }
 
+export function effectiveCost(
+	state: FaceturnServerState,
+	player: FaceturnServerPlayer,
+	moveId: string,
+): number {
+	const base = getMoveCost(state, player, moveId);
+	if (
+		moveId === CARD_IDS.MOVE.CLAIM_THE_BOUNTY &&
+		player.hasCalledBluffSuccessfully
+	) {
+		return 0;
+	}
+	return base;
+}
+
 export function getClassActionCost(
 	player: FaceturnServerPlayer,
-	action: "strike" | "block" | "collect" | "unturn",
+	action: "strike" | "defend" | "collect" | "unturn",
 ): number {
-	switch (action) {
-		case "strike":
-			return C.STRIKE_CASH_COST;
-		case "block":
-			return C.BLOCK_CASH_COST;
-		case "collect":
-			return C.COLLECT_CASH_COST;
-		case "unturn":
-			return C.UNTURN_CASH_COST;
-	}
+	const base = (() => {
+		switch (action) {
+			case "strike":
+				return C.STRIKE_CASH_COST;
+			case "defend":
+				return C.DEFEND_CASH_COST;
+			case "collect":
+				return C.COLLECT_CASH_COST;
+			case "unturn":
+				return C.UNTURN_CASH_COST;
+		}
+	})();
+	return Math.max(0, base - player.classActionCostReduction);
 }
 
 export function computeActorWasBluffing(
 	actor: FaceturnServerPlayer,
-	action: "strike" | "collect" | "unturn" | "block",
+	action: "strike" | "collect" | "unturn" | "defend",
 ): boolean {
 	const requiredClass = {
 		strike: "striker",
 		collect: "collector",
-		unturn: "turner",
-		block: "blocker",
+		unturn: "unturner",
+		defend: "defender",
 	} as const;
 	return !playerHasClass(actor, requiredClass[action]);
 }

@@ -19,6 +19,29 @@ import type {
 	PendingInteraction,
 } from "./types";
 import { getCrew, getMove, getBoss } from "./cards";
+import { moveHasLegalTarget } from "./effects";
+import { effectiveCost } from "./game";
+
+export function computePlayableMoveIds(
+	state: FaceturnServerState,
+	player: FaceturnServerPlayer,
+): readonly string[] {
+	const playable: string[] = [];
+	for (const moveId of player.hand) {
+		const move = getMove(moveId);
+		const cost = effectiveCost(state, player, moveId);
+		if (player.cash < cost) continue;
+		if (
+			move.moveType === "active" &&
+			player.activeMoves.findIndex((s) => s === null) === -1
+		) {
+			continue;
+		}
+		if (!moveHasLegalTarget(state, player.playerId, move)) continue;
+		playable.push(moveId);
+	}
+	return playable;
+}
 
 function buildCrewSlots(player: FaceturnServerPlayer): readonly CrewSlotView[] {
 	return [0, 1].map((i): CrewSlotView => {
@@ -65,8 +88,8 @@ function buildBossView(player: FaceturnServerPlayer): BossView {
 			name: "",
 			hp: 0,
 			maxHp: 0,
-			shield: 0,
-			shieldTurnsRemaining: null,
+			armor: 0,
+			armorTurnsRemaining: null,
 			commandUsed: false,
 			passiveEffects: [],
 		};
@@ -77,8 +100,8 @@ function buildBossView(player: FaceturnServerPlayer): BossView {
 		name: def.name,
 		hp: player.bossHp,
 		maxHp: player.bossMaxHp,
-		shield: player.bossShield,
-		shieldTurnsRemaining:
+		armor: player.bossArmor,
+		armorTurnsRemaining:
 			player.bossImmunityTurns > 0 ? player.bossImmunityTurns : null,
 		commandUsed: player.bossCommandUsed,
 		passiveEffects:
@@ -121,7 +144,7 @@ function buildPlayerView(
 		hasCalledBluffSuccessfully: player.hasCalledBluffSuccessfully,
 		totalCardsDiscarded: player.totalCardsDiscarded,
 		totalMovesPlayed: player.totalMovesPlayed,
-		hasShieldedBossThisGame: player.hasShieldedBossThisGame,
+		hasArmoredBossThisGame: player.hasArmoredBossThisGame,
 		poisonStacks: totalIncomingPoison,
 		cashGainPerTurn: player.cashGainPerTurn,
 		moveBaseCostReduction: player.moveBaseCostReduction,
@@ -276,6 +299,14 @@ function buildPendingInteractionView(
 				...(pi.maxPicks !== undefined ? { maxPicks: pi.maxPicks } : {}),
 			};
 
+		case "too_big_swap_pick":
+			return {
+				type: "too_big_swap_pick",
+				actorId: pi.actorId,
+				ownSlot: pi.ownSlot,
+				eligibleTargets: pi.eligibleTargets,
+			};
+
 		default: {
 			const _exhaustive: never = pi;
 			throw new Error(
@@ -406,6 +437,10 @@ export function buildPrivatePayloads(
 
 		payloads.set(playerId, {
 			hand: [...player.hand],
+			playableMoveIds:
+				state.phase === "active_turn" && state.activePlayerId === playerId
+					? computePlayableMoveIds(state, player)
+					: [],
 			crewAssignments: Object.fromEntries(
 				player.crewIds
 					.map((id, i): [number, string | null] => [i, id])
