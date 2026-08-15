@@ -94,6 +94,7 @@ const REQUIRES_OWN_FACE_DOWN_CREW_TYPES = new Set<EffectPrimitive["type"]>([
 const REQUIRES_OWN_FACE_UP_CREW_TYPES = new Set<EffectPrimitive["type"]>([
 	"unturn_ally_crew",
 	"unturn_then_retrigger_ally",
+	"strike_own_crew",
 ]);
 
 const REQUIRES_OWN_MIXED_CREW_TYPES = new Set<EffectPrimitive["type"]>([
@@ -382,6 +383,9 @@ function evaluateCondition(
 				(crewId, i) => !crewId || !actor.crewTurned[i as 0 | 1],
 			);
 
+		case "has_bluffed_successfully":
+			return actor.hasBluffedSuccessfully;
+
 		default: {
 			const _exhaustive: never = condition;
 			return _exhaustive;
@@ -427,6 +431,8 @@ function evaluateConditionForRecompute(
 			return player.crewIds.every(
 				(crewId, i) => !crewId || !player.crewTurned[i as 0 | 1],
 			);
+		case "has_bluffed_successfully":
+			return player.hasBluffedSuccessfully;
 		default: {
 			const _exhaustive: never = condition;
 			return _exhaustive;
@@ -730,6 +736,30 @@ export function unturnCrewAtSlot(
 	triggerAllyTurnReactions(state, player, causedByEnemy);
 }
 
+// kills a face-up crew slot: clears it (refilling from reserve if available)
+// invalidates any stale marks pointing at it, and recomputes passives
+export function killCrewAtSlot(
+	state: FaceturnServerState,
+	owner: FaceturnServerPlayer,
+	slot: 0 | 1,
+): { refilledFromReserve: boolean } {
+	const killedCrewId = owner.crewIds[slot]!;
+	owner.crewIds[slot] = null;
+	owner.crewTurned[slot] = false;
+
+	let refilledFromReserve = false;
+	if (owner.reserveCrewId !== null) {
+		owner.crewIds[slot] = owner.reserveCrewId;
+		owner.crewTurned[slot] = false;
+		owner.reserveCrewId = null;
+		refilledFromReserve = true;
+	}
+
+	invalidateStaleCrewMarks(state, owner, slot, killedCrewId);
+	recomputePassives(owner, state);
+	return { refilledFromReserve };
+}
+
 export function firstUnturnedSlot(player: FaceturnServerPlayer): 0 | 1 | null {
 	for (let i = 0; i < 2; i++) {
 		const idx = i as 0 | 1;
@@ -830,23 +860,9 @@ export function resolveStrikeOrExecute(
 
 	if (isFaceUpKillTarget) {
 		const slot = effectiveSlot!;
-		const killedCrewId = target.crewIds[slot]!;
-		target.crewIds[slot] = null;
-		target.crewTurned[slot] = false;
-
-		let refilledFromReserve = false;
-		if (target.reserveCrewId !== null) {
-			target.crewIds[slot] = target.reserveCrewId;
-			target.crewTurned[slot] = false;
-			target.reserveCrewId = null;
-			refilledFromReserve = true;
-		}
-
-		invalidateStaleCrewMarks(state, target, slot, killedCrewId);
-
-		recomputePassives(target, state);
+		const { refilledFromReserve } = killCrewAtSlot(state, target, slot);
 		result = { outcome: "crew_killed", slot, refilledFromReserve };
-		triggerBertoOnEnemyCrewKill(state, actorId);
+		triggerBertoOnCrewKill(state, actorId);
 	} else if (resolvedPreSelected !== null) {
 		turnCrewAtSlot(state, target, resolvedPreSelected);
 		recomputePassives(target, state);
@@ -897,8 +913,36 @@ export function resolveStrikeOrExecute(
 	return result;
 }
 
-// berto lopez: turns his own slot face-down whenever his holder kills an enemy crew
-function triggerBertoOnEnemyCrewKill(
+// move resolves in one pass.
+export function performSelfStrike(
+	ctx: EffectContext,
+	preSelectedSlot?: 0 | 1,
+): StrikeOrExecuteOutcome | null {
+	const actor = ctx.actor;
+	const faceUpSlots = ([0, 1] as const).filter(
+		(i) => actor.crewIds[i] !== null && actor.crewTurned[i],
+	);
+	if (faceUpSlots.length === 0) return null;
+
+	const slot =
+		preSelectedSlot !== undefined && faceUpSlots.includes(preSelectedSlot)
+			? preSelectedSlot
+			: faceUpSlots.length === 1
+				? faceUpSlots[0]!
+				: null;
+
+	// ambiguous (2 face-up crew) and the client didn't pre-select one: fizzle
+	// rather than half-execute the move (kill nothing, still strike the enemy)
+	if (slot === null) return null;
+
+	const { refilledFromReserve } = killCrewAtSlot(ctx.state, actor, slot);
+	triggerBertoOnCrewKill(ctx.state, actor.playerId);
+
+	return { outcome: "crew_killed", slot, refilledFromReserve };
+}
+
+// kills any crew
+export function triggerBertoOnCrewKill(
 	state: FaceturnServerState,
 	killerId: string,
 ): void {
@@ -1029,8 +1073,6 @@ export function recomputePassives(
 	player.voidLegsDiscardCost = 0;
 	player.voidLegsDamage = 0;
 	player.hasBackgroundCheck = false;
-	player.hasPrankCall = false;
-	player.prankCallBonusAmount = 0;
 	player.hasTerminalStrikeDefend = false;
 	player.cashOnChallengeWinAmount = 0;
 	player.selfDamagePerTurn = 0;
@@ -1210,10 +1252,6 @@ function recomputePassiveSwitch(
 		case "passive_background_check":
 			player.hasBackgroundCheck = true;
 			break;
-		case "passive_bonus_cash_on_first_bluff_per_round":
-			player.hasPrankCall = true;
-			player.prankCallBonusAmount = effect.amount;
-			break;
 		case "passive_watcher_unturn_on_challenge_win":
 			player.hasWatcherPassive = true;
 			break;
@@ -1381,6 +1419,15 @@ const handlers: Partial<Record<EffectPrimitive["type"], Handler>> = {
 		if (ctx.actor.cash < effect.cashCost) return; // fizzle: insufficient funds
 		ctx.actor.cash -= effect.cashCost;
 		performStrike(ctx);
+	},
+
+	strike_own_crew(effect, ctx) {
+		if (effect.type !== "strike_own_crew") return;
+		const preSelected =
+			effect.targetSlot !== undefined
+				? (effect.targetSlot as 0 | 1)
+				: (ctx.targetCrewSlot as 0 | 1 | undefined);
+		performSelfStrike(ctx, preSelected);
 	},
 
 	// crew turn manipulation
@@ -1793,13 +1840,24 @@ const handlers: Partial<Record<EffectPrimitive["type"], Handler>> = {
 		const target = resolveTarget(ctx);
 		if (!target) return;
 
-		if (target.hand.length > 0 && ctx.actor.hand.length < C.HAND_LIMIT) {
-			const idx = Math.floor(Math.random() * target.hand.length);
-			const [taken] = target.hand.splice(idx, 1);
+		if (target.hand.length === 1 && ctx.actor.hand.length < C.HAND_LIMIT) {
+			// only 1 card available: steal it immediately, no pick needed
+			const [taken] = target.hand.splice(0, 1);
 			if (taken) {
 				target.costOverrides.delete(taken);
 				ctx.actor.hand.push(taken);
 			}
+		} else if (target.hand.length > 1 && ctx.actor.hand.length < C.HAND_LIMIT) {
+			// reveal 2 random cards from the target's hand; actor picks 1 to steal
+			const shuffled = [...target.hand].sort(() => Math.random() - 0.5);
+			const card1 = shuffled[0]!;
+			const card2 = shuffled[1]!;
+			ctx.state.pendingInteraction = {
+				type: "watcher_steal_pick",
+				actorId: ctx.actor.playerId,
+				targetPlayerId: target.playerId,
+				revealedCards: [card1, card2],
+			} satisfies PendingInteraction;
 		}
 
 		const stolen = Math.min(effect.cashAmount, target.cash);
@@ -1839,13 +1897,10 @@ const handlers: Partial<Record<EffectPrimitive["type"], Handler>> = {
 	negate_enemy_slow_move() {},
 	reflect_slow_move_base_damage() {},
 
-	// bastion command: gain armor, deal damage equal to new armor total, then empty armor regardless
-	command_gain_armor_then_deal_damage_equal_to_armor(effect, ctx) {
-		if (effect.type !== "command_gain_armor_then_deal_damage_equal_to_armor")
-			return;
+	// bastion command: damage equal to armor total, then empty armor regardless
+	command_deal_damage_equal_to_armor(effect, ctx) {
+		if (effect.type !== "command_deal_damage_equal_to_armor") return;
 		const target = resolveTarget(ctx);
-		ctx.actor.bossArmor += effect.armorAmount;
-		ctx.actor.hasArmoredBossThisGame = true;
 		const totalArmor = ctx.actor.bossArmor;
 		ctx.actor.bossArmor = 0;
 		if (!target || totalArmor <= 0) return;
@@ -1903,7 +1958,6 @@ const handlers: Partial<Record<EffectPrimitive["type"], Handler>> = {
 	passive_disable_all_crew_skills() {},
 	passive_defender_chooses_crew_to_turn() {},
 	passive_background_check() {},
-	passive_bonus_cash_on_first_bluff_per_round() {},
 	passive_team_cash_on_ally_collect() {},
 	// life insurance: stores protected target keyed by active move slot
 	passive_life_insurance(_effect, ctx) {
@@ -2328,6 +2382,46 @@ export function resolveTooBigSwapPick(
 	recomputePassives(target, state);
 }
 
+// to the death: actor had 2 face-up crew and picked one to kill
+export function resolveChooseOwnCrewToStrike(
+	state: FaceturnServerState,
+	actor: FaceturnServerPlayer,
+	crewSlot: number,
+	eligibleSlots: number[],
+): StrikeOrExecuteOutcome | null {
+	const slot = crewSlot as 0 | 1;
+	if (!eligibleSlots.includes(slot)) return null;
+	if (!actor.crewIds[slot] || !actor.crewTurned[slot]) return null;
+
+	const { refilledFromReserve } = killCrewAtSlot(state, actor, slot);
+	triggerBertoOnCrewKill(state, actor.playerId);
+
+	return { outcome: "crew_killed", slot, refilledFromReserve };
+}
+
+export function resolveWatcherStealPick(
+	state: FaceturnServerState,
+	actor: FaceturnServerPlayer,
+	targetPlayerId: string,
+	cardId: string,
+	revealedCards: readonly [string, string],
+): boolean {
+	if (!revealedCards.includes(cardId)) return false;
+	if (actor.hand.length >= C.HAND_LIMIT) return false;
+
+	const target = state.players.get(targetPlayerId);
+	if (!target) return false;
+
+	const idx = target.hand.indexOf(cardId);
+	if (idx === -1) return false;
+
+	const [taken] = target.hand.splice(idx, 1);
+	if (!taken) return false;
+	target.costOverrides.delete(taken);
+	actor.hand.push(taken);
+	return true;
+}
+
 // checks if any enemy has a face-up, unsuppressed lighthouse suppressing turned effects
 function isTurnedEffectSuppressedByEnemyLighthouse(
 	state: FaceturnServerState,
@@ -2628,7 +2722,6 @@ export function triggerRoundEndPassives(state: FaceturnServerState): void {
 		player.playedMoveThisTurn = false;
 		player.classActionUsedThisTurn = false;
 		player.ratQueenDrawUsedThisTurn = false;
-		player.prankCallBonusUsedThisRound = false;
 	}
 }
 

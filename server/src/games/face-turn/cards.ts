@@ -59,6 +59,12 @@ export type EffectPrimitive =
 	| {
 			type: "strike_enemy_crew_defendable";
 	  }
+	// to the death: kills the actor's own already face-up crew. never turns a
+	// face-down crew and never falls through to executing the actor's own boss.
+	| {
+			type: "strike_own_crew";
+			targetSlot?: number;
+	  }
 	| { type: "turn_enemy_crew"; targetSlot?: number }
 	| { type: "turn_ally_crew"; targetSlot?: number }
 	| {
@@ -170,11 +176,10 @@ export type EffectPrimitive =
 	| {
 			type: "command_replace_crew_from_reserve";
 	  }
-	// damage equals new armor total; actor's armor emptied after, regardless of target/damage
+	// damage equals actor's current armor total; actor's armor emptied after, regardless of target/damage
 	| {
-			type: "command_gain_armor_then_deal_damage_equal_to_armor";
-			armorAmount: number;
-	  }
+			type: "command_deal_damage_equal_to_armor";
+		}
 	| {
 			type: "negate_enemy_slow_move";
 	  }
@@ -324,11 +329,6 @@ export type EffectPrimitive =
 	| {
 			type: "mutual_discard_hand_then_redraw_same_count";
 	  }
-	// round-scoped; resets via prankCallBonusUsedThisRound
-	| {
-			type: "passive_bonus_cash_on_first_bluff_per_round";
-			amount: number;
-	  }
 	| {
 			type: "passive_team_cash_on_ally_collect";
 			amount: number;
@@ -382,7 +382,8 @@ export type EffectCondition =
 	| { when: "enemy_has_more_cash" }
 	| { when: "void_pieces_assembled" }
 	| { when: "no_face_up_crew" }
-	| { when: "self_turned_not_by_enemy" };
+	| { when: "self_turned_not_by_enemy" }
+	| { when: "has_bluffed_successfully" };
 
 export interface ConditionalEffect {
 	readonly condition: EffectCondition;
@@ -421,7 +422,7 @@ const BOSS_MECHANICS: Record<
 	Pick<BossCard, "commandEffects" | "passiveEffects">
 > = {
 	"the-watcher": {
-		commandEffects: [{ type: "peek_steal", cashAmount: 3 }],
+		commandEffects: [{ type: "peek_steal", cashAmount: 2 }],
 		passiveEffects: [{ type: "passive_watcher_unturn_on_challenge_win" }],
 	},
 	"the-dealer": {
@@ -430,15 +431,10 @@ const BOSS_MECHANICS: Record<
 	},
 	"the-razor": {
 		commandEffects: [{ type: "command_guess_crew_class_turn_if_correct" }],
-		passiveEffects: [{ type: "passive_flat_damage_bonus", amount: 6 }],
+		passiveEffects: [{ type: "passive_flat_damage_bonus", amount: 7 }],
 	},
 	"the-bastion": {
-		commandEffects: [
-			{
-				type: "command_gain_armor_then_deal_damage_equal_to_armor",
-				armorAmount: 15,
-			},
-		],
+		commandEffects: [{ type: "command_deal_damage_equal_to_armor" }],
 		passiveEffects: [{ type: "passive_cash_on_damage_taken", amount: 1 }],
 	},
 };
@@ -472,7 +468,7 @@ const CREW_MECHANICS: Record<
 		turnedEffects: [
 			when(
 				{ when: "another_ally_is_turned" },
-				{ type: "deal_damage", target: "enemy_boss", amount: 35 },
+				{ type: "deal_damage", target: "enemy_boss", amount: 30 },
 			),
 			when(
 				{ when: "another_ally_is_turned" },
@@ -597,7 +593,7 @@ const CREW_MECHANICS: Record<
 			when({ when: "another_ally_is_turned" }, { type: "unturn_self" }),
 			when(
 				{ when: "another_ally_is_turned" },
-				{ type: "deal_damage_self_boss", amount: 10 },
+				{ type: "deal_damage_self_boss", amount: 5 },
 			),
 		],
 		passiveEffects: [],
@@ -634,7 +630,7 @@ const CREW_MECHANICS: Record<
 		passiveEffects: [{ type: "passive_draw_per_turn", amount: 1 }],
 	},
 	zednem: {
-		turnedEffects: [{ type: "draw_cards", amount: 1 }],
+		turnedEffects: [{ type: "draw_cards", amount: 2 }],
 		passiveEffects: [{ type: "passive_reduce_burst_move_costs", reduction: 1 }],
 	},
 	keeper: {
@@ -681,7 +677,7 @@ const MOVE_MECHANICS: Record<string, Pick<MoveCard, "effects">> = {
 	},
 	"prank-call": {
 		effects: [
-			{ type: "passive_bonus_cash_on_first_bluff_per_round", amount: 3 },
+			when({ when: "has_bluffed_successfully" }, { type: "steal_cash", amount: 4 }),
 		],
 	},
 	"void-arms": {
@@ -747,7 +743,7 @@ const MOVE_MECHANICS: Record<string, Pick<MoveCard, "effects">> = {
 		effects: [{ type: "deal_damage", target: "enemy_boss", amount: 30 }],
 	},
 	"claim-the-bounty": {
-		effects: [{ type: "deal_damage", target: "enemy_boss", amount: 30 }],
+		effects: [{ type: "deal_damage", target: "enemy_boss", amount: 25 }],
 	},
 	ambush: {
 		effects: [{ type: "strike_enemy_crew_defendable" }],
@@ -847,7 +843,7 @@ const MOVE_MECHANICS: Record<string, Pick<MoveCard, "effects">> = {
 		effects: [{ type: "unturn_ally_crew" }],
 	},
 	"first-aid": {
-		effects: [{ type: "heal_boss", amount: 15 }],
+		effects: [{ type: "heal_boss", amount: 20 }],
 	},
 	"neetos-clock": {
 		effects: [
@@ -856,7 +852,7 @@ const MOVE_MECHANICS: Record<string, Pick<MoveCard, "effects">> = {
 	},
 	bailout: {
 		effects: [
-			{ type: "heal_boss", amount: 15 },
+			{ type: "heal_boss", amount: 20 },
 			{ type: "gain_cash", amount: 2 },
 		],
 	},
@@ -973,7 +969,7 @@ const MOVE_MECHANICS: Record<string, Pick<MoveCard, "effects">> = {
 	},
 	"to-the-death": {
 		effects: [
-			{ type: "turn_ally_crew" },
+			{ type: "strike_own_crew" },
 			{ type: "strike_enemy_crew", undefendable: true },
 		],
 	},

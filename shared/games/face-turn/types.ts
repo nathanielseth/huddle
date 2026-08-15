@@ -258,6 +258,18 @@ export type PendingInteractionView =
 			actorId: string;
 			ownSlot: number;
 			eligibleTargets: readonly { playerId: string; slot: number }[];
+	  }
+	| {
+			// to the death: actor has 2 face-up crew, picks which one to kill
+			type: "choose_own_crew_to_strike";
+			actorId: string;
+			eligibleSlots: number[];
+	  }
+	| {
+			// the revealed cards are private to the actor, not exposed in public view
+			type: "watcher_steal_pick";
+			actorId: string;
+			targetPlayerId: string;
 	  };
 
 export interface FaceturnsState {
@@ -353,4 +365,7 @@ export interface FaceturnsSecret {
 	// the two cards revealed when resolving peek effects
 	readonly peekRevealedCards: readonly [string, string] | null;
 	readonly digDeepRevealedCards: readonly string[] | null;
+
+	// the two cards revealed from the enemy's hand when resolving the watcher's steal
+	readonly watcherStealRevealedCards: readonly [string, string] | null;
 }

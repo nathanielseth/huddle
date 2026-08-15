@@ -94,7 +94,9 @@ const DeclareClassActionSchema = z.object({
 // shared by the razor and dealer boss commands
 const UseBossCommandSchema = z.object({
 	type: z.literal("use_boss_command"),
-	guessClass: z.enum(["striker", "defender", "collector", "unturner"]).optional(),
+	guessClass: z
+		.enum(["striker", "defender", "collector", "unturner"])
+		.optional(),
 	targetCrewSlot: z.number().int().min(0).max(1).optional(),
 	targetAllySlot: z.number().int().min(0).max(1).optional(),
 	targetPlayerId: z.string().optional(),
@@ -276,6 +278,18 @@ const ResolveTooBigSwapPickSchema = z.object({
 	crewSlot: z.number().int().min(0).max(1),
 });
 
+// to the death: actor has 2 face-up crew, picks which one to kill
+const ResolveChooseOwnCrewToStrikeSchema = z.object({
+	type: z.literal("resolve_choose_own_crew_to_strike"),
+	crewSlot: z.number().int().min(0).max(1),
+});
+
+// the watcher: actor is shown 2 random cards from the enemy's hand and picks 1 to steal
+const ResolveWatcherStealPickSchema = z.object({
+	type: z.literal("resolve_watcher_steal_pick"),
+	cardId: z.string(),
+});
+
 export const FaceturnsActionSchema = z.discriminatedUnion("type", [
 	SelectBossSchema,
 	SelectCrewSchema,
@@ -319,6 +333,8 @@ export const FaceturnsActionSchema = z.discriminatedUnion("type", [
 	ResolveTruthSerumRevealSchema,
 	ResolveLighthouseDisablePickSchema,
 	ResolveTooBigSwapPickSchema,
+	ResolveChooseOwnCrewToStrikeSchema,
+	ResolveWatcherStealPickSchema,
 ]);
 
 export type FaceturnsAction = z.infer<typeof FaceturnsActionSchema>;

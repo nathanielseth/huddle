@@ -4,12 +4,12 @@ export interface BossCardDisplay {
 	readonly id: string;
 	readonly name: string;
 	readonly effectText: {
-		readonly faceTurn: string;
 		readonly command: string;
 		readonly passive: string;
 	};
 	readonly flavorText: string;
 	readonly maxHp: number;
+	readonly startingArmor?: number;
 	readonly draftable?: boolean;
 	readonly hasCustomCommandLogic?: true;
 	readonly artSrc?: string;
@@ -43,11 +43,11 @@ export interface MoveCardDisplay {
 export const BOSS_DISPLAY: readonly BossCardDisplay[] = [
 	{
 		id: "the-watcher",
+		artSrc: "/assets/games/face-turn/cards/the-watcher.avif",
 		name: "The Watcher",
 		effectText: {
-			faceTurn: "Pay 6 Cash. I deliver an unstoppable Strike.",
 			command:
-				"Take 1 random card from an enemy's hand, then steal 3 Cash from them.",
+				"See 2 random cards from an enemy's hand and take 1, then steal 2 Cash from them.",
 			passive:
 				"Whenever you win a challenge, draw 2 cards, and you may turn one of your face-up Crew face-down.",
 		},
@@ -56,9 +56,9 @@ export const BOSS_DISPLAY: readonly BossCardDisplay[] = [
 	},
 	{
 		id: "the-dealer",
+		artSrc: "/assets/games/face-turn/cards/the-dealer.avif",
 		name: "The Dealer",
 		effectText: {
-			faceTurn: "Pay 6 Cash. I deliver an unstoppable Strike.",
 			command:
 				"Replace one of your face-up Crew with your reserved Crew, face-down.",
 			passive: "On your turn, you may discard a Move to gain 1 Cash.",
@@ -69,12 +69,12 @@ export const BOSS_DISPLAY: readonly BossCardDisplay[] = [
 	},
 	{
 		id: "the-razor",
+		artSrc: "/assets/games/face-turn/cards/the-razor.avif",
 		name: "The Razor",
 		effectText: {
-			faceTurn: "Pay 6 Cash. I deliver an unstoppable Strike.",
 			command:
 				"Guess the class of one face-down enemy Crew. If correct, turn it face-up.",
-			passive: "Damage you deal is increased by 6.",
+			passive: "Damage you deal is increased by 7.",
 		},
 		flavorText: "",
 		maxHp: 100,
@@ -82,15 +82,17 @@ export const BOSS_DISPLAY: readonly BossCardDisplay[] = [
 	},
 	{
 		id: "the-bastion",
+		artSrc: "/assets/games/face-turn/cards/the-bastion.avif",
 		name: "The Bastion",
 		effectText: {
-			faceTurn: "I deliver an undefendable, unchallengeable strike.",
 			command:
-				"I gain 15 Armor, then deal damage to an enemy Boss equal to my current Armor. My Armor is then emptied.",
-			passive: "Whenever I take damage, you gain 1 Cash.",
+				"Deal damage to an enemy Boss equal to my current Armor. My Armor is then emptied.",
+			passive:
+				"I start with 15 Armor. Whenever I take damage, you gain 1 Cash.",
 		},
 		flavorText: "",
 		maxHp: 100,
+		startingArmor: 15,
 	},
 ];
 
@@ -100,6 +102,7 @@ export const CREW_DISPLAY: readonly CrewCardDisplay[] = [
 	// strikers
 	{
 		id: "pektus",
+		artSrc: "/assets/games/face-turn/cards/pektus.avif",
 		name: "Pektus",
 		class: "striker",
 		effectText: {
@@ -110,15 +113,17 @@ export const CREW_DISPLAY: readonly CrewCardDisplay[] = [
 	},
 	{
 		id: "shrike",
+		artSrc: "/assets/games/face-turn/cards/shrike.avif",
 		name: "Shrike",
 		class: "striker",
 		effectText: {
-			turned: "I Strike an enemy Crew. This can be defended against.",
+			turned: "I Strike an enemy Crew.",
 		},
 		flavorText: "",
 	},
 	{
 		id: "g-rone",
+		artSrc: "/assets/games/face-turn/cards/g-rone.avif",
 		name: "G-Rone",
 		class: "striker",
 		effectText: {
@@ -128,6 +133,7 @@ export const CREW_DISPLAY: readonly CrewCardDisplay[] = [
 	},
 	{
 		id: "monkey-man",
+		artSrc: "/assets/games/face-turn/cards/monkey-man.avif",
 		name: "Monkey-Man",
 		class: "striker",
 		effectText: {
@@ -139,17 +145,19 @@ export const CREW_DISPLAY: readonly CrewCardDisplay[] = [
 	},
 	{
 		id: "berto-lopez",
+		artSrc: "/assets/games/face-turn/cards/berto-lopez.avif",
 		name: "Berto Lopez",
 		class: "striker",
 		effectText: {
 			turned:
-				"I deal 15 damage to an enemy Boss. If my partner Crew is face-up, deal 35 damage instead.",
-			passive: "Whenever you kill an enemy Crew, turn me face-down.",
+				"I deal 15 damage to an enemy Boss. If my partner Crew is face-up, deal 30 damage instead.",
+			passive: "Whenever you kill a Crew, turn me face-down.",
 		},
 		flavorText: "",
 	},
 	{
 		id: "hot-girl",
+		artSrc: "/assets/games/face-turn/cards/hot-girl.avif",
 		name: "Hot Girl",
 		class: "striker",
 		effectText: {
@@ -160,6 +168,7 @@ export const CREW_DISPLAY: readonly CrewCardDisplay[] = [
 	},
 	{
 		id: "black-fist",
+		artSrc: "/assets/games/face-turn/cards/black-fist.avif",
 		name: "Black Fist",
 		class: "striker",
 		effectText: {
@@ -169,17 +178,19 @@ export const CREW_DISPLAY: readonly CrewCardDisplay[] = [
 	},
 	{
 		id: "whisper",
+		artSrc: "/assets/games/face-turn/cards/whisper.avif",
 		name: "Whisper",
 		class: "striker",
 		effectText: {
 			turned:
-				"Discard 3 cards. If you do, I do an undefendable Strike on an enemy Crew. If you have successfully called a bluff this game, discard 1 instead.",
+				"Discard 3 cards. If you do, I do an unstoppable Strike on an enemy Crew. If you have successfully called a bluff this game, discard 1 instead.",
 		},
 		flavorText: "",
 	},
 
 	{
 		id: "wolfman",
+		artSrc: "/assets/games/face-turn/cards/wolfman.avif",
 		name: "Wolfman",
 		class: "striker",
 		effectText: { turned: "I deal 50 damage to an enemy Boss." },
@@ -191,6 +202,7 @@ export const CREW_DISPLAY: readonly CrewCardDisplay[] = [
 
 	{
 		id: "rilla-gorilla",
+		artSrc: "/assets/games/face-turn/cards/rilla-gorilla.avif",
 		name: "Rilla Gorilla",
 		class: "defender",
 		effectText: {
@@ -201,6 +213,7 @@ export const CREW_DISPLAY: readonly CrewCardDisplay[] = [
 	},
 	{
 		id: "frontline",
+		artSrc: "/assets/games/face-turn/cards/frontline.avif",
 		name: "Frontline",
 		class: "defender",
 		effectText: {
@@ -210,6 +223,7 @@ export const CREW_DISPLAY: readonly CrewCardDisplay[] = [
 	},
 	{
 		id: "mama-mercy",
+		artSrc: "/assets/games/face-turn/cards/mama-mercy.avif",
 		name: "Mama Mercy",
 		class: "defender",
 		effectText: {
@@ -220,6 +234,7 @@ export const CREW_DISPLAY: readonly CrewCardDisplay[] = [
 	},
 	{
 		id: "lighthouse",
+		artSrc: "/assets/games/face-turn/cards/lighthouse.avif",
 		name: "Lighthouse",
 		class: "defender",
 		effectText: {
@@ -230,6 +245,7 @@ export const CREW_DISPLAY: readonly CrewCardDisplay[] = [
 	},
 	{
 		id: "glob",
+		artSrc: "/assets/games/face-turn/cards/glob.avif",
 		name: "Glob",
 		class: "defender",
 		effectText: {
@@ -240,6 +256,7 @@ export const CREW_DISPLAY: readonly CrewCardDisplay[] = [
 	},
 	{
 		id: "silencer",
+		artSrc: "/assets/games/face-turn/cards/silencer.avif",
 		name: "Silencer",
 		class: "defender",
 		effectText: {
@@ -250,6 +267,7 @@ export const CREW_DISPLAY: readonly CrewCardDisplay[] = [
 	},
 	{
 		id: "doctor-norman",
+		artSrc: "/assets/games/face-turn/cards/doctor-norman.avif",
 		name: "Doctor Norman",
 		class: "defender",
 		effectText: {
@@ -260,6 +278,7 @@ export const CREW_DISPLAY: readonly CrewCardDisplay[] = [
 	},
 	{
 		id: "lotus",
+		artSrc: "/assets/games/face-turn/cards/lotus.avif",
 		name: "Lotus",
 		class: "defender",
 		effectText: {
@@ -272,6 +291,7 @@ export const CREW_DISPLAY: readonly CrewCardDisplay[] = [
 
 	{
 		id: "mayumi",
+		artSrc: "/assets/games/face-turn/cards/mayumi.avif",
 		name: "Mayumi",
 		class: "collector",
 		effectText: { turned: "You gain 1 Cash and draw 1 card." },
@@ -279,6 +299,7 @@ export const CREW_DISPLAY: readonly CrewCardDisplay[] = [
 	},
 	{
 		id: "too-big",
+		artSrc: "/assets/games/face-turn/cards/too-big.avif",
 		name: "Too Big",
 		class: "collector",
 		effectText: {
@@ -288,6 +309,7 @@ export const CREW_DISPLAY: readonly CrewCardDisplay[] = [
 	},
 	{
 		id: "claw-machine",
+		artSrc: "/assets/games/face-turn/cards/claw-machine.avif",
 		name: "Claw Machine",
 		class: "collector",
 		effectText: { turned: "You draw 2 cards." },
@@ -295,6 +317,7 @@ export const CREW_DISPLAY: readonly CrewCardDisplay[] = [
 	},
 	{
 		id: "cristatella",
+		artSrc: "/assets/games/face-turn/cards/cristatella.avif",
 		name: "Cristatella",
 		class: "collector",
 		effectText: {
@@ -304,6 +327,7 @@ export const CREW_DISPLAY: readonly CrewCardDisplay[] = [
 	},
 	{
 		id: "cool-guy",
+		artSrc: "/assets/games/face-turn/cards/cool-guy.avif",
 		name: "Cool Guy",
 		class: "collector",
 		effectText: {
@@ -314,6 +338,7 @@ export const CREW_DISPLAY: readonly CrewCardDisplay[] = [
 	},
 	{
 		id: "belladonna",
+		artSrc: "/assets/games/face-turn/cards/belladonna.avif",
 		name: "Belladonna",
 		class: "collector",
 		effectText: {
@@ -323,6 +348,7 @@ export const CREW_DISPLAY: readonly CrewCardDisplay[] = [
 	},
 	{
 		id: "rat-queen",
+		artSrc: "/assets/games/face-turn/cards/rat-queen.avif",
 		name: "Rat Queen",
 		class: "collector",
 		effectText: {
@@ -333,6 +359,7 @@ export const CREW_DISPLAY: readonly CrewCardDisplay[] = [
 	},
 	{
 		id: "bear-bones",
+		artSrc: "/assets/games/face-turn/cards/bear-bones.avif",
 		name: "Bear Bones",
 		class: "collector",
 		effectText: {
@@ -346,16 +373,18 @@ export const CREW_DISPLAY: readonly CrewCardDisplay[] = [
 
 	{
 		id: "handles",
+		artSrc: "/assets/games/face-turn/cards/handles.avif",
 		name: "Handles",
 		class: "unturner",
 		effectText: {
 			turned:
-				"If my partner Crew is face-up, turn me face-down and deal 10 damage to my Boss.",
+				"If my partner Crew is face-up, turn me face-down and deal 5 damage to my Boss.",
 		},
 		flavorText: "",
 	},
 	{
 		id: "hider",
+		artSrc: "/assets/games/face-turn/cards/hider.avif",
 		name: "Hider",
 		class: "unturner",
 		effectText: {
@@ -366,6 +395,7 @@ export const CREW_DISPLAY: readonly CrewCardDisplay[] = [
 	},
 	{
 		id: "terminal",
+		artSrc: "/assets/games/face-turn/cards/terminal.avif",
 		name: "Terminal",
 		class: "unturner",
 		effectText: {
@@ -375,6 +405,7 @@ export const CREW_DISPLAY: readonly CrewCardDisplay[] = [
 	},
 	{
 		id: "suplex",
+		artSrc: "/assets/games/face-turn/cards/suplex.avif",
 		name: "Suplex",
 		class: "unturner",
 		effectText: {
@@ -386,6 +417,7 @@ export const CREW_DISPLAY: readonly CrewCardDisplay[] = [
 	},
 	{
 		id: "retro",
+		artSrc: "/assets/games/face-turn/cards/retro.avif",
 		name: "Retro",
 		class: "unturner",
 		effectText: {
@@ -396,6 +428,7 @@ export const CREW_DISPLAY: readonly CrewCardDisplay[] = [
 	},
 	{
 		id: "andrew",
+		artSrc: "/assets/games/face-turn/cards/andrew.avif",
 		name: "Andrew",
 		class: "unturner",
 		effectText: {
@@ -405,16 +438,18 @@ export const CREW_DISPLAY: readonly CrewCardDisplay[] = [
 	},
 	{
 		id: "zednem",
+		artSrc: "/assets/games/face-turn/cards/zednem.avif",
 		name: "Zednem",
 		class: "unturner",
 		effectText: {
-			turned: "Draw 1 card.",
+			turned: "Draw 2 cards.",
 			passive: "Your Burst Moves cost 1 less Cash.",
 		},
 		flavorText: "",
 	},
 	{
 		id: "keeper",
+		artSrc: "/assets/games/face-turn/cards/keeper.avif",
 		name: "Keeper",
 		class: "unturner",
 		effectText: {
@@ -431,14 +466,16 @@ export const MOVE_DISPLAY: readonly MoveCardDisplay[] = [
 	// active moves
 	{
 		id: "poison-breath",
+		artSrc: "/assets/games/face-turn/cards/poison-breath.avif",
 		name: "Poison Breath",
-		baseCost: 2,
+		baseCost: 3,
 		moveType: "active",
 		effectText: "At the end of each round, deal 10 damage to an enemy Boss.",
 		flavorText: "",
 	},
 	{
 		id: "side-hustle",
+		artSrc: "/assets/games/face-turn/cards/side-hustle.avif",
 		name: "Side Hustle",
 		baseCost: 2,
 		moveType: "active",
@@ -447,6 +484,7 @@ export const MOVE_DISPLAY: readonly MoveCardDisplay[] = [
 	},
 	{
 		id: "equalizer",
+		artSrc: "/assets/games/face-turn/cards/equalizer.avif",
 		name: "Equalizer",
 		baseCost: 2,
 		moveType: "active",
@@ -456,6 +494,7 @@ export const MOVE_DISPLAY: readonly MoveCardDisplay[] = [
 	},
 	{
 		id: "dataminer",
+		artSrc: "/assets/games/face-turn/cards/dataminer.avif",
 		name: "Dataminer",
 		baseCost: 1,
 		moveType: "active",
@@ -464,6 +503,7 @@ export const MOVE_DISPLAY: readonly MoveCardDisplay[] = [
 	},
 	{
 		id: "blood-money",
+		artSrc: "/assets/games/face-turn/cards/blood-money.avif",
 		name: "Blood Money",
 		baseCost: 2,
 		moveType: "active",
@@ -473,6 +513,7 @@ export const MOVE_DISPLAY: readonly MoveCardDisplay[] = [
 	},
 	{
 		id: "background-check",
+		artSrc: "/assets/games/face-turn/cards/background-check.avif",
 		name: "Background Check",
 		baseCost: 1,
 		moveType: "active",
@@ -482,15 +523,16 @@ export const MOVE_DISPLAY: readonly MoveCardDisplay[] = [
 	},
 	{
 		id: "prank-call",
+		artSrc: "/assets/games/face-turn/cards/prank-call.avif",
 		name: "Prank Call",
-		baseCost: 1,
-		moveType: "active",
-		effectText:
-			"The first time each round you bluff a Class Action, gain 3 Cash.",
+		baseCost: 2,
+		moveType: "slow",
+		effectText: "If you have ever bluffed, steal 4 Cash from an enemy.",
 		flavorText: "",
 	},
 	{
 		id: "void-arms",
+		artSrc: "/assets/games/face-turn/cards/void-arms.avif",
 		name: "The Iterated Void's Arms",
 		baseCost: 1,
 		moveType: "active",
@@ -500,6 +542,7 @@ export const MOVE_DISPLAY: readonly MoveCardDisplay[] = [
 	},
 	{
 		id: "void-legs",
+		artSrc: "/assets/games/face-turn/cards/void-legs.avif",
 		name: "The Iterated Void's Legs",
 		baseCost: 1,
 		moveType: "active",
@@ -509,6 +552,7 @@ export const MOVE_DISPLAY: readonly MoveCardDisplay[] = [
 	},
 	{
 		id: "void-torso",
+		artSrc: "/assets/games/face-turn/cards/void-torso.avif",
 		name: "The Iterated Void's Torso",
 		baseCost: 1,
 		moveType: "active",
@@ -517,6 +561,7 @@ export const MOVE_DISPLAY: readonly MoveCardDisplay[] = [
 	},
 	{
 		id: "big-voucher",
+		artSrc: "/assets/games/face-turn/cards/big-voucher.avif",
 		name: "Big Voucher",
 		baseCost: 2,
 		moveType: "active",
@@ -525,6 +570,7 @@ export const MOVE_DISPLAY: readonly MoveCardDisplay[] = [
 	},
 	{
 		id: "command-center",
+		artSrc: "/assets/games/face-turn/cards/command-center.avif",
 		name: "Command Center",
 		baseCost: 3,
 		moveType: "active",
@@ -533,6 +579,7 @@ export const MOVE_DISPLAY: readonly MoveCardDisplay[] = [
 	},
 	{
 		id: "blackmail",
+		artSrc: "/assets/games/face-turn/cards/blackmail.avif",
 		name: "Blackmail",
 		baseCost: 3,
 		moveType: "active",
@@ -541,6 +588,7 @@ export const MOVE_DISPLAY: readonly MoveCardDisplay[] = [
 	},
 	{
 		id: "supply-drop",
+		artSrc: "/assets/games/face-turn/cards/supply-drop.avif",
 		name: "Supply Drop",
 		baseCost: 1,
 		moveType: "active",
@@ -550,6 +598,7 @@ export const MOVE_DISPLAY: readonly MoveCardDisplay[] = [
 	},
 	{
 		id: "life-insurance",
+		artSrc: "/assets/games/face-turn/cards/life-insurance.avif",
 		name: "Life Insurance",
 		baseCost: 3,
 		moveType: "active",
@@ -559,6 +608,7 @@ export const MOVE_DISPLAY: readonly MoveCardDisplay[] = [
 	},
 	{
 		id: "false-flag-operation",
+		artSrc: "/assets/games/face-turn/cards/false-flag-operation.avif",
 		name: "False Flag Operation",
 		baseCost: 0,
 		moveType: "active",
@@ -568,6 +618,7 @@ export const MOVE_DISPLAY: readonly MoveCardDisplay[] = [
 	},
 	{
 		id: "bamboo-wall",
+		artSrc: "/assets/games/face-turn/cards/bamboo-wall.avif",
 		name: "Bamboo Wall",
 		baseCost: 1,
 		moveType: "active",
@@ -577,6 +628,7 @@ export const MOVE_DISPLAY: readonly MoveCardDisplay[] = [
 	},
 	{
 		id: "trickle-down-economics",
+		artSrc: "/assets/games/face-turn/cards/trickle-down-economics.avif",
 		name: "Trickle-Down Economics",
 		baseCost: 2,
 		moveType: "active",
@@ -588,6 +640,7 @@ export const MOVE_DISPLAY: readonly MoveCardDisplay[] = [
 	// burst / slow
 	{
 		id: "deleb-i",
+		artSrc: "/assets/games/face-turn/cards/deleb-i.avif",
 		name: "Deleb-i, The Iterated Void",
 		baseCost: 2,
 		moveType: "burst",
@@ -597,6 +650,7 @@ export const MOVE_DISPLAY: readonly MoveCardDisplay[] = [
 	},
 	{
 		id: "reload",
+		artSrc: "/assets/games/face-turn/cards/reload.avif",
 		name: "Reload",
 		baseCost: 1,
 		moveType: "burst",
@@ -605,6 +659,7 @@ export const MOVE_DISPLAY: readonly MoveCardDisplay[] = [
 	},
 	{
 		id: "drive-by",
+		artSrc: "/assets/games/face-turn/cards/drive-by.avif",
 		name: "Drive-By",
 		baseCost: 3,
 		moveType: "slow",
@@ -613,15 +668,17 @@ export const MOVE_DISPLAY: readonly MoveCardDisplay[] = [
 	},
 	{
 		id: "claim-the-bounty",
+		artSrc: "/assets/games/face-turn/cards/claim-the-bounty.avif",
 		name: "Claim The Bounty",
 		baseCost: 4,
 		moveType: "slow",
 		effectText:
-			"Deal 30 damage to an enemy Boss. If you have successfully called a bluff this game, this costs 0 Cash instead.",
+			"Deal 25 damage to an enemy Boss. If you have successfully called a bluff this game, this costs 0 Cash instead.",
 		flavorText: "",
 	},
 	{
 		id: "ambush",
+		artSrc: "/assets/games/face-turn/cards/ambush.avif",
 		name: "Ambush",
 		baseCost: 4,
 		moveType: "slow",
@@ -630,6 +687,7 @@ export const MOVE_DISPLAY: readonly MoveCardDisplay[] = [
 	},
 	{
 		id: "devastate",
+		artSrc: "/assets/games/face-turn/cards/devastate.avif",
 		name: "Devastate",
 		baseCost: 7,
 		moveType: "slow",
@@ -638,6 +696,7 @@ export const MOVE_DISPLAY: readonly MoveCardDisplay[] = [
 	},
 	{
 		id: "bulletproof-vest",
+		artSrc: "/assets/games/face-turn/cards/bulletproof-vest.avif",
 		name: "Bulletproof Vest",
 		baseCost: 1,
 		moveType: "burst",
@@ -646,6 +705,7 @@ export const MOVE_DISPLAY: readonly MoveCardDisplay[] = [
 	},
 	{
 		id: "job-application",
+		artSrc: "/assets/games/face-turn/cards/job-application.avif",
 		name: "Job Application",
 		baseCost: 3,
 		moveType: "slow",
@@ -654,6 +714,7 @@ export const MOVE_DISPLAY: readonly MoveCardDisplay[] = [
 	},
 	{
 		id: "chronotrix",
+		artSrc: "/assets/games/face-turn/cards/chronotrix.avif",
 		name: "Chronotrix",
 		baseCost: 10,
 		moveType: "burst",
@@ -663,6 +724,7 @@ export const MOVE_DISPLAY: readonly MoveCardDisplay[] = [
 	},
 	{
 		id: "all-in",
+		artSrc: "/assets/games/face-turn/cards/all-in.avif",
 		name: "All-In",
 		baseCost: 4,
 		moveType: "burst",
@@ -672,6 +734,7 @@ export const MOVE_DISPLAY: readonly MoveCardDisplay[] = [
 	},
 	{
 		id: "cheap-labor",
+		artSrc: "/assets/games/face-turn/cards/cheap-labor.avif",
 		name: "Cheap Labor",
 		baseCost: 1,
 		moveType: "burst",
@@ -680,15 +743,17 @@ export const MOVE_DISPLAY: readonly MoveCardDisplay[] = [
 	},
 	{
 		id: "coordinated-strike",
+		artSrc: "/assets/games/face-turn/cards/coordinated-strike.avif",
 		name: "Coordinated Strike",
 		baseCost: 2,
 		moveType: "burst",
 		effectText:
-			"Deal 15 damage to an enemy Boss. If you or an ally has a face-up Striker, deal 30 damage instead.",
+			"Deal 15 damage to an enemy Boss. If the team has a face-up Striker, deal 30 damage instead.",
 		flavorText: "",
 	},
 	{
 		id: "ratatatat",
+		artSrc: "/assets/games/face-turn/cards/ratatatat.avif",
 		name: "Ratatatat!",
 		baseCost: 2,
 		moveType: "slow",
@@ -697,6 +762,7 @@ export const MOVE_DISPLAY: readonly MoveCardDisplay[] = [
 	},
 	{
 		id: "dig-deep",
+		artSrc: "/assets/games/face-turn/cards/dig-deep.avif",
 		name: "Dig Deep",
 		baseCost: 2,
 		moveType: "burst",
@@ -706,6 +772,7 @@ export const MOVE_DISPLAY: readonly MoveCardDisplay[] = [
 	},
 	{
 		id: "reinforcements",
+		artSrc: "/assets/games/face-turn/cards/reinforcements.avif",
 		name: "Reinforcements",
 		baseCost: 2,
 		moveType: "burst",
@@ -714,6 +781,7 @@ export const MOVE_DISPLAY: readonly MoveCardDisplay[] = [
 	},
 	{
 		id: "empty-the-clip",
+		artSrc: "/assets/games/face-turn/cards/empty-the-clip.avif",
 		name: "Empty The Clip",
 		baseCost: 2,
 		moveType: "burst",
@@ -723,6 +791,7 @@ export const MOVE_DISPLAY: readonly MoveCardDisplay[] = [
 	},
 	{
 		id: "fresh-start",
+		artSrc: "/assets/games/face-turn/cards/fresh-start.avif",
 		name: "Fresh Start",
 		baseCost: 1,
 		moveType: "burst",
@@ -732,6 +801,7 @@ export const MOVE_DISPLAY: readonly MoveCardDisplay[] = [
 	},
 	{
 		id: "tactical-support",
+		artSrc: "/assets/games/face-turn/cards/tactical-support.avif",
 		name: "Tactical Support",
 		baseCost: 5,
 		moveType: "burst",
@@ -741,6 +811,7 @@ export const MOVE_DISPLAY: readonly MoveCardDisplay[] = [
 	},
 	{
 		id: "full-moon",
+		artSrc: "/assets/games/face-turn/cards/full-moon.avif",
 		name: "Full Moon",
 		baseCost: 1,
 		moveType: "burst",
@@ -749,6 +820,7 @@ export const MOVE_DISPLAY: readonly MoveCardDisplay[] = [
 	},
 	{
 		id: "scorched-earth",
+		artSrc: "/assets/games/face-turn/cards/scorched-earth.avif",
 		name: "Scorched Earth",
 		baseCost: 3,
 		moveType: "slow",
@@ -757,6 +829,7 @@ export const MOVE_DISPLAY: readonly MoveCardDisplay[] = [
 	},
 	{
 		id: "triangle-of-trust",
+		artSrc: "/assets/games/face-turn/cards/triangle-of-trust.avif",
 		name: "Triangle of Trust",
 		baseCost: 1,
 		moveType: "burst",
@@ -765,6 +838,7 @@ export const MOVE_DISPLAY: readonly MoveCardDisplay[] = [
 	},
 	{
 		id: "heel-turn",
+		artSrc: "/assets/games/face-turn/cards/heel-turn.avif",
 		name: "Heel Turn",
 		baseCost: 4,
 		moveType: "burst",
@@ -773,14 +847,16 @@ export const MOVE_DISPLAY: readonly MoveCardDisplay[] = [
 	},
 	{
 		id: "first-aid",
+		artSrc: "/assets/games/face-turn/cards/first-aid.avif",
 		name: "First Aid",
 		baseCost: 1,
 		moveType: "burst",
-		effectText: "Heal an allied Boss for 15 HP.",
+		effectText: "Heal an allied Boss for 20 HP.",
 		flavorText: "",
 	},
 	{
 		id: "neetos-clock",
+		artSrc: "/assets/games/face-turn/cards/neetos-clock.avif",
 		name: "Neeto's Clock",
 		baseCost: 2,
 		moveType: "burst",
@@ -790,14 +866,16 @@ export const MOVE_DISPLAY: readonly MoveCardDisplay[] = [
 	},
 	{
 		id: "bailout",
+		artSrc: "/assets/games/face-turn/cards/bailout.avif",
 		name: "Bailout",
 		baseCost: 2,
 		moveType: "burst",
-		effectText: "Heal an allied Boss for 15 HP. You gain 2 Cash.",
+		effectText: "Heal an allied Boss for 20 HP. You gain 2 Cash.",
 		flavorText: "",
 	},
 	{
 		id: "pull-counter",
+		artSrc: "/assets/games/face-turn/cards/pull-counter.avif",
 		name: "Pull Counter",
 		baseCost: 3,
 		moveType: "burst",
@@ -806,6 +884,7 @@ export const MOVE_DISPLAY: readonly MoveCardDisplay[] = [
 	},
 	{
 		id: "cash-out",
+		artSrc: "/assets/games/face-turn/cards/cash-out.avif",
 		name: "Cash Out",
 		baseCost: 0,
 		moveType: "burst",
@@ -814,6 +893,7 @@ export const MOVE_DISPLAY: readonly MoveCardDisplay[] = [
 	},
 	{
 		id: "switch-up",
+		artSrc: "/assets/games/face-turn/cards/switch-up.avif",
 		name: "Switch Up",
 		baseCost: 3,
 		moveType: "burst",
@@ -823,6 +903,7 @@ export const MOVE_DISPLAY: readonly MoveCardDisplay[] = [
 	},
 	{
 		id: "tag-out",
+		artSrc: "/assets/games/face-turn/cards/tag-out.avif",
 		name: "Tag Out",
 		baseCost: 0,
 		moveType: "burst",
@@ -831,6 +912,7 @@ export const MOVE_DISPLAY: readonly MoveCardDisplay[] = [
 	},
 	{
 		id: "take-it-back",
+		artSrc: "/assets/games/face-turn/cards/take-it-back.avif",
 		name: "Take It Back",
 		baseCost: 1,
 		moveType: "burst",
@@ -839,6 +921,7 @@ export const MOVE_DISPLAY: readonly MoveCardDisplay[] = [
 	},
 	{
 		id: "spare-change",
+		artSrc: "/assets/games/face-turn/cards/spare-change.avif",
 		name: "Spare Change",
 		baseCost: 1,
 		moveType: "burst",
@@ -847,6 +930,7 @@ export const MOVE_DISPLAY: readonly MoveCardDisplay[] = [
 	},
 	{
 		id: "paycheck",
+		artSrc: "/assets/games/face-turn/cards/paycheck.avif",
 		name: "Paycheck",
 		baseCost: 2,
 		moveType: "burst",
@@ -855,6 +939,7 @@ export const MOVE_DISPLAY: readonly MoveCardDisplay[] = [
 	},
 	{
 		id: "sucker-punch",
+		artSrc: "/assets/games/face-turn/cards/sucker-punch.avif",
 		name: "Sucker Punch",
 		baseCost: 1,
 		moveType: "burst",
@@ -863,6 +948,7 @@ export const MOVE_DISPLAY: readonly MoveCardDisplay[] = [
 	},
 	{
 		id: "wolfblaster",
+		artSrc: "/assets/games/face-turn/cards/wolfblaster.avif",
 		name: "Wolfblaster",
 		baseCost: 6,
 		moveType: "slow",
@@ -871,6 +957,7 @@ export const MOVE_DISPLAY: readonly MoveCardDisplay[] = [
 	},
 	{
 		id: "dead-drop-retrieval",
+		artSrc: "/assets/games/face-turn/cards/dead-drop-retrieval.avif",
 		name: "Dead Drop Retrieval",
 		baseCost: 2,
 		moveType: "burst",
@@ -880,6 +967,7 @@ export const MOVE_DISPLAY: readonly MoveCardDisplay[] = [
 
 	{
 		id: "cheap-shot",
+		artSrc: "/assets/games/face-turn/cards/cheap-shot.avif",
 		name: "Cheap Shot",
 		baseCost: 1,
 		moveType: "slow",
@@ -888,15 +976,17 @@ export const MOVE_DISPLAY: readonly MoveCardDisplay[] = [
 	},
 	{
 		id: "unfinished-business",
+		artSrc: "/assets/games/face-turn/cards/unfinished-business.avif",
 		name: "Unfinished Business",
-		baseCost: 3,
+		baseCost: 4,
 		moveType: "slow",
 		effectText:
-			"If you or an ally has a face-up Defender, perform an undefendable Strike on an enemy Crew.",
+			"If the team has a face-up Defender, perform an unstoppable Strike on an enemy Crew.",
 		flavorText: "",
 	},
 	{
 		id: "kamikaze",
+		artSrc: "/assets/games/face-turn/cards/kamikaze.avif",
 		name: "Kamikaze",
 		baseCost: 0,
 		moveType: "slow",
@@ -906,6 +996,7 @@ export const MOVE_DISPLAY: readonly MoveCardDisplay[] = [
 	},
 	{
 		id: "nope",
+		artSrc: "/assets/games/face-turn/cards/nope.avif",
 		name: "Nope!",
 		baseCost: 1,
 		moveType: "slow",
@@ -914,6 +1005,7 @@ export const MOVE_DISPLAY: readonly MoveCardDisplay[] = [
 	},
 	{
 		id: "interrogation",
+		artSrc: "/assets/games/face-turn/cards/interrogation.avif",
 		name: "Interrogation",
 		baseCost: 1,
 		moveType: "slow",
@@ -923,6 +1015,7 @@ export const MOVE_DISPLAY: readonly MoveCardDisplay[] = [
 	},
 	{
 		id: "reverse-card",
+		artSrc: "/assets/games/face-turn/cards/reverse-card.avif",
 		name: "Reversal",
 		baseCost: 2,
 		moveType: "slow",
@@ -932,6 +1025,7 @@ export const MOVE_DISPLAY: readonly MoveCardDisplay[] = [
 	},
 	{
 		id: "pickpocket",
+		artSrc: "/assets/games/face-turn/cards/pickpocket.avif",
 		name: "Pickpocket",
 		baseCost: 0,
 		moveType: "slow",
@@ -940,6 +1034,7 @@ export const MOVE_DISPLAY: readonly MoveCardDisplay[] = [
 	},
 	{
 		id: "strip-em-down",
+		artSrc: "/assets/games/face-turn/cards/strip-em-down.avif",
 		name: "Strip 'Em Down",
 		baseCost: 1,
 		moveType: "slow",
@@ -948,6 +1043,7 @@ export const MOVE_DISPLAY: readonly MoveCardDisplay[] = [
 	},
 	{
 		id: "wheel-of-fortune",
+		artSrc: "/assets/games/face-turn/cards/wheel-of-fortune.avif",
 		name: "Wheel Of Fortune",
 		baseCost: 1,
 		moveType: "slow",
@@ -957,6 +1053,7 @@ export const MOVE_DISPLAY: readonly MoveCardDisplay[] = [
 	},
 	{
 		id: "truth-serum",
+		artSrc: "/assets/games/face-turn/cards/truth-serum.avif",
 		name: "Truth Serum",
 		baseCost: 3,
 		moveType: "slow",
@@ -965,6 +1062,7 @@ export const MOVE_DISPLAY: readonly MoveCardDisplay[] = [
 	},
 	{
 		id: "ayuda-slip",
+		artSrc: "/assets/games/face-turn/cards/ayuda-slip.avif",
 		name: "Ayuda Slip",
 		baseCost: 2,
 		moveType: "burst",
@@ -974,8 +1072,9 @@ export const MOVE_DISPLAY: readonly MoveCardDisplay[] = [
 	},
 	{
 		id: "warrant-of-arrest",
+		artSrc: "/assets/games/face-turn/cards/warrant-of-arrest.avif",
 		name: "Warrant of Arrest",
-		baseCost: 2,
+		baseCost: 1,
 		moveType: "active",
 		effectText:
 			"Mark a face-down enemy Crew. At the start of your 2nd turn after this resolves, if that Crew is still face-down, turn it face-up.",
@@ -983,6 +1082,7 @@ export const MOVE_DISPLAY: readonly MoveCardDisplay[] = [
 	},
 	{
 		id: "cease-and-desist",
+		artSrc: "/assets/games/face-turn/cards/cease-and-desist.avif",
 		name: "Cease & Desist",
 		baseCost: 1,
 		moveType: "active",
@@ -992,6 +1092,7 @@ export const MOVE_DISPLAY: readonly MoveCardDisplay[] = [
 	},
 	{
 		id: "extortion",
+		artSrc: "/assets/games/face-turn/cards/extortion.avif",
 		name: "Extortion",
 		baseCost: 2,
 		moveType: "active",
@@ -1000,6 +1101,7 @@ export const MOVE_DISPLAY: readonly MoveCardDisplay[] = [
 	},
 	{
 		id: "sell-out",
+		artSrc: "/assets/games/face-turn/cards/sell-out.avif",
 		name: "Sell Out",
 		baseCost: 1,
 		moveType: "active",
@@ -1009,6 +1111,7 @@ export const MOVE_DISPLAY: readonly MoveCardDisplay[] = [
 	},
 	{
 		id: "red-herring",
+		artSrc: "/assets/games/face-turn/cards/red-herring.avif",
 		name: "Red Herring",
 		baseCost: 1,
 		moveType: "active",
@@ -1018,6 +1121,7 @@ export const MOVE_DISPLAY: readonly MoveCardDisplay[] = [
 	},
 	{
 		id: "sabotage",
+		artSrc: "/assets/games/face-turn/cards/sabotage.avif",
 		name: "Sabotage",
 		baseCost: 2,
 		moveType: "burst",
@@ -1026,6 +1130,7 @@ export const MOVE_DISPLAY: readonly MoveCardDisplay[] = [
 	},
 	{
 		id: "restock",
+		artSrc: "/assets/games/face-turn/cards/restock.avif",
 		name: "Restock",
 		baseCost: 1,
 		moveType: "burst",
@@ -1034,6 +1139,7 @@ export const MOVE_DISPLAY: readonly MoveCardDisplay[] = [
 	},
 	{
 		id: "my-treat",
+		artSrc: "/assets/games/face-turn/cards/my-treat.avif",
 		name: "My Treat",
 		baseCost: 2,
 		moveType: "burst",
@@ -1042,10 +1148,12 @@ export const MOVE_DISPLAY: readonly MoveCardDisplay[] = [
 	},
 	{
 		id: "to-the-death",
+		artSrc: "/assets/games/face-turn/cards/to-the-death.avif",
 		name: "To The Death",
-		baseCost: 3,
+		baseCost: 5,
 		moveType: "slow",
-		effectText: "Strike one of your Crew. Then perform an unstoppable Strike.",
+		effectText:
+			"Kill one of your face-up Crew. Then perform an unstoppable Strike.",
 		flavorText: "",
 	},
 ];

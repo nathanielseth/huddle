@@ -144,8 +144,6 @@ export interface FaceturnServerPlayer {
 	ratQueenDrawUsedThisTurn: boolean;
 	// crew slots with disabled passives; cleared when crew unturns
 	disabledPassiveSlots: Set<0 | 1>;
-	// per-round; reset at round end.
-	prankCallBonusUsedThisRound: boolean;
 
 	// dealer passive may sell a Move from hand
 	hasSellCards: boolean;
@@ -157,9 +155,6 @@ export interface FaceturnServerPlayer {
 	voidLegsDamage: number;
 	// forces a background check guess before challenge
 	hasBackgroundCheck: boolean;
-
-	hasPrankCall: boolean;
-	prankCallBonusAmount: number;
 
 	playedMoveThisTurn: boolean;
 	classActionUsedThisTurn: boolean;
@@ -357,6 +352,20 @@ export type PendingInteraction =
 			actorId: string;
 			ownSlot: 0 | 1;
 			eligibleTargets: readonly { playerId: string; slot: 0 | 1 }[];
+	  }
+	| {
+			// to the death: actor has 2 face-up crew, picks which one to kill
+			type: "choose_own_crew_to_strike";
+			actorId: string;
+			eligibleSlots: number[];
+	  }
+	| {
+			// the watcher: actor sees 2 random cards from the target's hand
+			// (private reveal) and picks 1 to steal
+			type: "watcher_steal_pick";
+			actorId: string;
+			targetPlayerId: string;
+			revealedCards: [string, string];
 	  };
 
 export type ServerPendingActionType =

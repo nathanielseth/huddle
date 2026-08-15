@@ -22,6 +22,23 @@ import { getCrew, getMove, getBoss } from "./cards";
 import { moveHasLegalTarget } from "./effects";
 import { effectiveCost } from "./game";
 
+let simulationModeActive = false;
+
+const EMPTY_PUBLIC_STATE = Object.freeze({}) as unknown as FaceturnsState;
+const EMPTY_PRIVATE_PAYLOADS: Map<string, FaceturnsSecret> = new Map();
+
+export function runInSimulationMode<T>(fn: () => T): T {
+	const previous = simulationModeActive;
+	simulationModeActive = true;
+	try {
+		return fn();
+	} finally {
+		simulationModeActive = previous;
+	}
+}
+
+// hand cards the player could legally play right now: affordable, has a
+// free active-move slot if the move is "active", and has a legal target.
 export function computePlayableMoveIds(
 	state: FaceturnServerState,
 	player: FaceturnServerPlayer,
@@ -307,6 +324,22 @@ function buildPendingInteractionView(
 				eligibleTargets: pi.eligibleTargets,
 			};
 
+		case "choose_own_crew_to_strike":
+			return {
+				type: "choose_own_crew_to_strike",
+				actorId: pi.actorId,
+				eligibleSlots: pi.eligibleSlots,
+			};
+
+		case "watcher_steal_pick":
+			// revealedCards is deliberately omitted, private info, delivered only
+			// via FaceturnsSecret to the owning player
+			return {
+				type: "watcher_steal_pick",
+				actorId: pi.actorId,
+				targetPlayerId: pi.targetPlayerId,
+			};
+
 		default: {
 			const _exhaustive: never = pi;
 			throw new Error(
@@ -408,6 +441,7 @@ function buildPublicState(state: FaceturnServerState): FaceturnsState {
 export function getCachedPublicState(
 	state: FaceturnServerState,
 ): FaceturnsState {
+	if (simulationModeActive) return EMPTY_PUBLIC_STATE;
 	if (state._publicStateCacheValid && state._cachedPublicState) {
 		return state._cachedPublicState as FaceturnsState;
 	}
@@ -420,6 +454,7 @@ export function getCachedPublicState(
 export function buildPrivatePayloads(
 	state: FaceturnServerState,
 ): Map<string, FaceturnsSecret> {
+	if (simulationModeActive) return EMPTY_PRIVATE_PAYLOADS;
 	const payloads = new Map<string, FaceturnsSecret>();
 
 	for (const [playerId, player] of state.players) {
@@ -431,6 +466,12 @@ export function buildPrivatePayloads(
 
 		const digDeepRevealedCards: readonly string[] | null =
 			state.pendingInteraction?.type === "dig_deep_pick" &&
+			state.pendingInteraction.actorId === playerId
+				? state.pendingInteraction.revealedCards
+				: null;
+		
+		const watcherStealRevealedCards: [string, string] | null =
+			state.pendingInteraction?.type === "watcher_steal_pick" &&
 			state.pendingInteraction.actorId === playerId
 				? state.pendingInteraction.revealedCards
 				: null;
@@ -457,6 +498,7 @@ export function buildPrivatePayloads(
 				: null,
 			peekRevealedCards,
 			digDeepRevealedCards,
+			watcherStealRevealedCards,
 		});
 	}
 

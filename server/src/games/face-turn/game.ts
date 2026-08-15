@@ -115,11 +115,8 @@ export function makeServerPlayer(
 		hasFalseFlag: false,
 		hasSupplyDrop: false,
 		supplyDropCashAmount: 0,
-		hasPrankCall: false,
-		prankCallBonusAmount: 0,
 		ratQueenDrawUsedThisTurn: false,
 		disabledPassiveSlots: new Set(),
-		prankCallBonusUsedThisRound: false,
 		playedMoveThisTurn: false,
 		classActionUsedThisTurn: false,
 		costOverrides: new Map(),
@@ -277,6 +274,7 @@ export function finalizeDraft(player: FaceturnServerPlayer): void {
 	player.bossId = boss.id;
 	player.bossHp = boss.maxHp;
 	player.bossMaxHp = boss.maxHp;
+	player.bossArmor = boss.startingArmor ?? 0;
 
 	// dealer drafts 3 crew: 2 in normal slots, 1 in reserve
 	for (let i = 0; i < Math.min(draft.crewIds.length, C.CREW_SLOTS); i++) {

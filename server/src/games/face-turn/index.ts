@@ -74,6 +74,8 @@ import {
 	resolveWatcherUnturn,
 	resolveTagOutPick,
 	resolveTooBigSwapPick,
+	resolveChooseOwnCrewToStrike,
+	resolveWatcherStealPick,
 	resolveBearBonesBonusStrike,
 	resolveBackgroundCheckGuess,
 	sellMoveFromHand,
@@ -661,6 +663,48 @@ export const faceturnsEngine: GameEngine &
 				return afterAction(state);
 			}
 
+			if (interaction.type === "choose_own_crew_to_strike") {
+				if (action.type !== "resolve_choose_own_crew_to_strike") return noOp();
+				const actor = state.players.get(interaction.actorId);
+				if (!actor) return noOp();
+
+				const outcome = resolveChooseOwnCrewToStrike(
+					state,
+					actor,
+					action.crewSlot,
+					interaction.eligibleSlots,
+				);
+				if (!outcome) return noOp();
+
+				state.lastResolution = buildStrikeResolution(
+					outcome,
+					interaction.actorId,
+					interaction.actorId,
+					"strike",
+				);
+
+				state.pendingInteraction = null;
+				return afterAction(state);
+			}
+
+			if (interaction.type === "watcher_steal_pick") {
+				if (action.type !== "resolve_watcher_steal_pick") return noOp();
+				const actor = state.players.get(interaction.actorId);
+				if (!actor) return noOp();
+
+				const stole = resolveWatcherStealPick(
+					state,
+					actor,
+					interaction.targetPlayerId,
+					action.cardId,
+					interaction.revealedCards,
+				);
+				if (!stole) return noOp();
+
+				state.pendingInteraction = null;
+				return afterAction(state);
+			}
+
 			if (interaction.type === "truth_serum_reveal") {
 				if (action.type !== "resolve_truth_serum_reveal") return noOp();
 				const target = state.players.get(interaction.targetPlayerId);
@@ -1114,15 +1158,6 @@ export const faceturnsEngine: GameEngine &
 								: null;
 
 					const actorWasBluffing = wouldBeBluffing;
-
-					if (
-						actorWasBluffing &&
-						player.hasPrankCall &&
-						!player.prankCallBonusUsedThisRound
-					) {
-						player.cash += player.prankCallBonusAmount;
-						player.prankCallBonusUsedThisRound = true;
-					}
 
 					state.pendingAction = {
 						type: `class_action_${action.action}` as ServerPendingAction["type"],
@@ -1885,6 +1920,34 @@ export const faceturnsEngine: GameEngine &
 						interaction.eligibleTargets,
 					);
 				}
+			} else if (interaction.type === "choose_own_crew_to_strike") {
+				const cosActor = state.players.get(interaction.actorId)!;
+				const cosSlot = interaction.eligibleSlots[0];
+				if (cosSlot !== undefined) {
+					const outcome = resolveChooseOwnCrewToStrike(
+						state,
+						cosActor,
+						cosSlot,
+						interaction.eligibleSlots,
+					);
+					if (outcome) {
+						state.lastResolution = buildStrikeResolution(
+							outcome,
+							interaction.actorId,
+							interaction.actorId,
+							"strike",
+						);
+					}
+				}
+			} else if (interaction.type === "watcher_steal_pick") {
+				const wsActor = state.players.get(interaction.actorId)!;
+				resolveWatcherStealPick(
+					state,
+					wsActor,
+					interaction.targetPlayerId,
+					interaction.revealedCards[0],
+					interaction.revealedCards,
+				);
 			}
 
 			return afterAction(state);
@@ -2070,6 +2133,12 @@ export const faceturnsEngine: GameEngine &
 				? state.pendingInteraction.revealedCards
 				: null;
 
+		const watcherStealRevealedCards: [string, string] | null =
+			state.pendingInteraction?.type === "watcher_steal_pick" &&
+			state.pendingInteraction.actorId === playerId
+				? state.pendingInteraction.revealedCards
+				: null;
+
 		return {
 			hand: [...player.hand],
 			playableMoveIds:
@@ -2092,6 +2161,7 @@ export const faceturnsEngine: GameEngine &
 				: null,
 			peekRevealedCards,
 			digDeepRevealedCards,
+			watcherStealRevealedCards,
 		};
 	},
 };
