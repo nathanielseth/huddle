@@ -8,8 +8,6 @@ export interface OddsResult {
 
 export type HeuristicWeights = Record<(typeof FEATURE_NAMES)[number], number>;
 
-// logistic-regression weights produced by calibrate.ts. to retrain: run
-// `tsx calibrate.ts`, review weights.json, update this const and commit together
 export const WEIGHTS: HeuristicWeights = {
 	health: 0.6294,
 	attack: 1.5171,
@@ -26,11 +24,7 @@ export const WEIGHTS: HeuristicWeights = {
 	health_sq: -0.0037,
 } as const;
 
-// pre-computed weight vector matching extractFeatures order, avoids allocation
 const DEFAULT_WEIGHT_VECTOR: number[] = FEATURE_NAMES.map((n) => WEIGHTS[n]);
-
-// controls how sharply win probability diverges from 0.5 as stat differences
-// grow. calibrate.ts imports this to guarantee training and inference stay aligned
 export const SIGMOID_STEEPNESS = 3.2;
 
 function sigmoid(x: number): number {
@@ -47,7 +41,7 @@ function dotProduct(a: number[], b: number[]): number {
 export function moneylineToDecimal(ml: number): number {
 	if (ml > 0) return 1 + ml / 100;
 	if (ml < 0) return 1 + 100 / Math.abs(ml);
-	return 2.0;
+	return 2.0; // unreachable in normal operation; safe fallback
 }
 
 function probabilityToMoneyline(p: number): number {
@@ -70,7 +64,7 @@ export function predictWinProbability(
 	return Math.min(Math.max(sigmoid(score * SIGMOID_STEEPNESS), 0.02), 0.98);
 }
 
-// returns raw probability and american moneyline odds for a matchup.
+// returns probability and american moneyline odds for a matchup.
 // probability is authoritative; moneyline carries integer-rounding loss
 export function getMatchupOdds(
 	fighter1: FighterStats,

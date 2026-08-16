@@ -2,8 +2,7 @@ import { SABONG_CONSTANTS } from "./types";
 
 const R = SABONG_CONSTANTS.STAT_RANGES;
 
-// per-stat value ranges for normalising raw deltas to [-1, 1].
-// derived from STAT_RANGES at module load so they never drift
+// computed at module load to stay in sync with STAT_RANGES
 const SPREADS = {
 	health: R.health[1] - R.health[0],
 	attack: R.attack[1] - R.attack[0],
@@ -13,8 +12,7 @@ const SPREADS = {
 	determination: R.determination[1] - R.determination[0],
 } as const;
 
-// ordered feature names — index N corresponds to index N in the weight vector.
-// add or remove entries here AND retrain before deploying new weights
+// order must match the weight vector indices; change requires retraining before deploy
 export const FEATURE_NAMES = [
 	"health",
 	"attack",
@@ -42,9 +40,7 @@ export interface FeatureInput {
 	determination: number;
 }
 
-// extracts the 13-dimensional feature vector representing fighter a's advantage
-// over fighter b. all values normalised to roughly [-1, 1].
-// single source of truth — imported by odds.ts (prediction) and calibrate.ts (training)
+// canonical feature extraction used by both prediction and training
 export function extractFeatures(a: FeatureInput, b: FeatureInput): number[] {
 	const h = (a.health - b.health) / SPREADS.health;
 	const atk = (a.attack - b.attack) / SPREADS.attack;

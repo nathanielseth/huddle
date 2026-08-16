@@ -1,4 +1,4 @@
-import type { BattleEvent } from "../../../../shared/games/sabong";
+import type { BattleEvent } from "../../../../shared/games/sabong/index";
 import { SABONG_CONSTANTS } from "./types";
 
 const { CRIT_MULTIPLIER, MAX_TURNS, MAX_ATTACK_BOOST } = SABONG_CONSTANTS;
@@ -117,33 +117,44 @@ function execMove(
 			crit: isCrit,
 			defenderHp: currentDefHp,
 		});
-		if (currentDefHp <= 0)
+		if (currentDefHp <= 0) {
 			return { outcome: "ko", attackerBoost, defenderHp: 0 };
+		}
 	} else {
 		log.push({ type: "miss", turn, attackerId: attacker.id, move });
 	}
 
-	// second hit — double_strike only, each accuracy roll independent
-	if (move === "double_strike" && Math.random() <= MOVE_ACCURACY) {
-		const [dmg, isCrit] = calcDamage(
-			effectiveAtk,
-			attacker.critRate,
-			attackerVr,
-			defender.defense,
-			attacker.determination,
-		);
-		currentDefHp = Math.max(currentDefHp - dmg, 0);
-		log.push({
-			type: "move",
-			turn,
-			attackerId: attacker.id,
-			move: "double_strike",
-			damage: dmg,
-			crit: isCrit,
-			defenderHp: currentDefHp,
-		});
-		if (currentDefHp <= 0)
-			return { outcome: "ko", attackerBoost, defenderHp: 0 };
+	// second hit in double strike - each accuracy roll is independent
+	if (move === "double_strike") {
+		if (Math.random() <= MOVE_ACCURACY) {
+			const [dmg, isCrit] = calcDamage(
+				effectiveAtk,
+				attacker.critRate,
+				attackerVr,
+				defender.defense,
+				attacker.determination,
+			);
+			currentDefHp = Math.max(currentDefHp - dmg, 0);
+			log.push({
+				type: "move",
+				turn,
+				attackerId: attacker.id,
+				move: "double_strike",
+				damage: dmg,
+				crit: isCrit,
+				defenderHp: currentDefHp,
+			});
+			if (currentDefHp <= 0) {
+				return { outcome: "ko", attackerBoost, defenderHp: 0 };
+			}
+		} else {
+			log.push({
+				type: "miss",
+				turn,
+				attackerId: attacker.id,
+				move: "double_strike",
+			});
+		}
 	}
 
 	return { outcome: "continue", attackerBoost, defenderHp: currentDefHp };
@@ -162,9 +173,8 @@ export function simulateBattle(
 			: Math.random() < 0.5;
 
 	const [first, second] = f1First ? [fighter1, fighter2] : [fighter2, fighter1];
-	const [firstVr, secondVr] = f1First
-		? [varRange(fighter1.speed), varRange(fighter2.speed)]
-		: [varRange(fighter2.speed), varRange(fighter1.speed)];
+	const firstVr = varRange(first.speed);
+	const secondVr = varRange(second.speed);
 
 	let hpOfFirst = first.health;
 	let hpOfSecond = second.health;
@@ -174,7 +184,6 @@ export function simulateBattle(
 	let winnerId: string | null = null;
 
 	for (let turn = 1; turn <= MAX_TURNS; turn++) {
-		// first fighter attacks second
 		const r1 = execMove(
 			turn,
 			first,
@@ -191,7 +200,6 @@ export function simulateBattle(
 			break;
 		}
 
-		// second fighter attacks first
 		const r2 = execMove(
 			turn,
 			second,
@@ -209,7 +217,7 @@ export function simulateBattle(
 		}
 	}
 
-	// timeout: resolve by HP advantage or coin flip
+	// timeout: resolve by hp advantage or coin flip
 	if (winnerId === null) {
 		if (hpOfFirst !== hpOfSecond) {
 			winnerId = hpOfFirst > hpOfSecond ? first.id : second.id;
@@ -226,13 +234,13 @@ export function simulateBattle(
 	}
 
 	return {
-		winnerId: winnerId!,
+		winnerId,
 		loserId: winnerId === fighter1.id ? fighter2.id : fighter1.id,
 		log,
 	};
 }
 
-// convenience wrapper for monte carlo simulations. uses canonical simulateBattle
+// convenience wrapper for monte carlo simulations
 export function fightOnce(a: FighterStats, b: FighterStats): boolean {
 	return simulateBattle(a, b).winnerId === a.id;
 }

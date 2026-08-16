@@ -15,7 +15,7 @@ const SabotageManokSchema = z.object({
 	manokId: z.string().min(1),
 });
 
-// server reveals one randomly-chosen hidden stat to requesting player only
+// server reveals one randomly-chosen hidden stat to the requesting player only
 const RevealStatSchema = z.object({
 	type: z.literal("reveal_stat"),
 	manokId: z.string().min(1),
@@ -48,7 +48,7 @@ export type ParsedRevealStat = z.infer<typeof RevealStatSchema>;
 export type ParsedPlaceBet = z.infer<typeof PlaceBetSchema>;
 export type ParsedLockBet = z.infer<typeof LockBetSchema>;
 
-// semantic checks (manokId exists, phase correct, balance sufficient) stay in engine
+// semantic checks
 export function parseSabongAction(raw: unknown): ParsedSabongAction | null {
 	const result = SabongActionSchema.safeParse(raw);
 	if (result.success) return result.data;

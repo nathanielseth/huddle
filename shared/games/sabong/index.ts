@@ -93,6 +93,11 @@ export interface SabongPrivateView {
 	readonly shopSpyRemaining: number | null;
 	readonly shopSabotageRemaining: number | null;
 	readonly receivedAyuda: boolean;
+	readonly myPendingBracketPick: string | null;
+	readonly myPendingBet: {
+		readonly manokId: string;
+		readonly amount: number;
+	} | null;
 }
 
 export interface SabongState {

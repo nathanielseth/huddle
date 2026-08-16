@@ -18,7 +18,7 @@ const TIER_SUBTITLES: Record<
 } as const;
 
 // the ONLY constants to update after re-running the distribution script.
-// all values in terms of favored fighter's win probability (always >= 0.5)
+// all values in terms of the favored fighter's win probability (always >= 0.5).
 const THRESHOLDS = {
 	EVEN_MAX: 0.535, // ~32% of matchups
 	SLIGHT_EDGE_MAX: 0.575, // ~28%, cumulative ~60%
@@ -30,7 +30,7 @@ export interface TierResult {
 	tier: MatchupTier;
 	label: string;
 	// normalised edge strength in [0, 1]. 0 = low end of tier, 1 = high end.
-	// useful for continuous visual effects (bar width, colour intensity)
+	// useful for continuous visual effects (bar width, colour intensity).
 	edge: number;
 }
 
@@ -63,8 +63,8 @@ export interface FighterMatchupInfo {
 }
 
 export interface MatchupDescription {
-	favorite: FighterMatchupInfo; // fighter with winProbability >= 0.5
-	underdog: FighterMatchupInfo; // fighter with winProbability < 0.5
+	favorite: FighterMatchupInfo;
+	underdog: FighterMatchupInfo;
 	isEven: boolean;
 }
 
@@ -78,12 +78,15 @@ export function describeMatchup(
 	const favP = f1IsFavorite ? p1 : p2;
 	const undP = f1IsFavorite ? p2 : p1;
 	const tier = classifyFavoredProb(favP);
+	// bounds are defined in terms of the favorite's probability (>= 0.5), so both
+	// sides share one edge value — the underdog isn't a separate, symmetric case
+	const edge = computeEdge(favP, tier);
 
 	const favorite: FighterMatchupInfo = {
 		tier,
 		label: TIER_LABELS[tier],
 		subtitle: TIER_SUBTITLES[tier].favorite,
-		edge: computeEdge(favP, tier),
+		edge,
 		winProbability: favP,
 		moneylineHint: toMoneylineString(favP),
 	};
@@ -92,14 +95,14 @@ export function describeMatchup(
 		tier,
 		label: TIER_LABELS[tier],
 		subtitle: TIER_SUBTITLES[tier].underdog,
-		edge: computeEdge(undP, tier),
+		edge,
 		winProbability: undP,
 		moneylineHint: toMoneylineString(undP),
 	};
 
 	return {
-		favorite: f1IsFavorite ? favorite : underdog,
-		underdog: f1IsFavorite ? underdog : favorite,
+		favorite,
+		underdog,
 		isEven: tier === "even",
 	};
 }
