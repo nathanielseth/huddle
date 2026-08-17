@@ -1,6 +1,5 @@
 import type {
 	FaceturnsPhase,
-	CrewClass,
 	ClassAction,
 	RpsChoice,
 	WinCondition,
@@ -9,7 +8,10 @@ import type {
 	MoveChainEntry,
 } from "../../../../shared/games/face-turn/types";
 import { FACETURN_CONSTANTS } from "../../../../shared/games/face-turn/constants";
+import type { FaceturnDerivedPlayerStats } from "./derived";
+import type { PendingInteraction } from "./interactions/types";
 export { FACETURN_CONSTANTS };
+export type { PendingInteraction };
 
 export interface GameConfig {
 	mode: GameMode;
@@ -50,7 +52,6 @@ export interface FaceturnServerPlayer {
 
 	crewIds: [string | null, string | null];
 	crewTurned: [boolean, boolean];
-	crewClassOverrides: Map<number, Set<CrewClass>>;
 
 	reserveCrewId: string | null;
 
@@ -72,53 +73,7 @@ export interface FaceturnServerPlayer {
 
 	incomingPoison: Map<string, number>;
 
-	// derived passive stats; recomputed from active sources, never mutated directly
-	cashGainPerTurn: number;
-	drawPerTurn: number;
-	cashOnEnemyMoveOrStrike: number;
-	healOnMovePlayed: number;
-	damageRandomEnemyOnMovePlayed: number;
-	crewSkillsDisabled: boolean;
-	// flat bonus applied once per effect resolution; not scaled by effect amount. see applyDamage
-	damageBonusFlat: number;
-	damageReductionPercent: number;
-
-	hasWatcherPassive: boolean;
-	// true while bastion's dual-trigger cash passive is active. derived like other has* flags
-	hasBastionPassive: boolean;
-	// pektus: when true, all damage this player deals bypasses armor (still respects immunity/reduction%)
-	hasAllDamagePiercingPassive: boolean;
-	// monkey man: cash stolen from the boss whenever this player deals damage to it
-	stealCashOnDamageDealtAmount: number;
-	armorPerTurn: number;
-	// global move cost reduction; distinct from per-card costOverrides
-	moveBaseCostReduction: number;
-	// burst move cost reduction (zednem); separate from moveBaseCostReduction
-	burstMoveCostReduction: number;
-	// belladonna: flat reduction applied to strike/defend/collect/unturn costs
-	classActionCostReduction: number;
-	// added to enemy move costs; read live from this player by opponents, not accumulated
-	enemyMoveCostSurcharge: number;
-
 	mulliganDecided: boolean;
-
-	// defends strikes and face turn when bossHp > 60; attempt fizzles
-	hasTerminalStrikeDefend: boolean;
-
-	// extortion: cash gained whenever this player wins a challenge (either
-	// as challenge-window defender, or as the challenger who correctly
-	// called a bluff). derived from active moves, like cashGainPerTurn.
-	cashOnChallengeWinAmount: number;
-	// sell out: self-inflicted damage + cash gained at the start of this
-	// player's own turn. derived, paired amounts (both 0 unless the move
-	// is active). damage runs through the normal applyDamage pipeline
-	// (armor/immunity/life-insurance all apply).
-	selfDamagePerTurn: number;
-	selfDamageCashGainAmount: number;
-	// cease & desist: true while the move sits in this player's active
-	// zone; consumed (move discarded) the next time an enemy of this
-	// player would resolve a crew Turned Effect. shape mirrors hasFalseFlag.
-	hasCeaseDesist: boolean;
 
 	// warrant of arrest: marks this player has placed on enemy crew,
 	// keyed by this player's own active-move slot. see WarrantOfArrestMark.
@@ -128,33 +83,14 @@ export interface FaceturnServerPlayer {
 	// cleared on consumption or invalidation.
 	redHerringMark: RedHerringMark | null;
 
-	hasVoidArms: boolean;
-	// grants team cash on any collector action; trigger-based
-	hasSupplyDrop: boolean;
-	supplyDropCashAmount: number;
-	// true when protected by a teammate's life insurance
-	hasLifeInsurance: boolean;
 	// maps active slot to protected ally; locked at cast time
 	lifeInsuranceTargets: Map<0 | 1 | 2, string>;
 	// maps active slot to watched enemy; read live by applyTrickleDownOnCollect
 	trickleDownTargets: Map<0 | 1 | 2, string>;
-	// failed challenge discards the false flag active move instead of turning crew
-	hasFalseFlag: boolean;
 	// per-turn flag; reset in startTurn.
 	ratQueenDrawUsedThisTurn: boolean;
 	// crew slots with disabled passives; cleared when crew unturns
 	disabledPassiveSlots: Set<0 | 1>;
-
-	// dealer passive may sell a Move from hand
-	hasSellCards: boolean;
-	sellCardCashAmount: number;
-
-	// void legs choice at turn start.
-	hasVoidLegsChoice: boolean;
-	voidLegsDiscardCost: number;
-	voidLegsDamage: number;
-	// forces a background check guess before challenge
-	hasBackgroundCheck: boolean;
 
 	playedMoveThisTurn: boolean;
 	classActionUsedThisTurn: boolean;
@@ -162,6 +98,9 @@ export interface FaceturnServerPlayer {
 
 	draftSelections: DraftSelections | null;
 	isDraftLocked: boolean;
+
+	// derived passive stats; wholesale-rebuilt by recomputePassives
+	derived: FaceturnDerivedPlayerStats;
 }
 
 export interface DraftSelections {
@@ -183,6 +122,8 @@ export interface FaceturnServerState {
 	phase: FaceturnsPhase;
 	players: Map<string, FaceturnServerPlayer>;
 	mode: GameMode;
+
+	rng: () => number;
 
 	teams: string[][];
 
@@ -230,143 +171,6 @@ export interface FaceturnServerState {
 	_publicStateCacheValid: boolean;
 	_cachedPublicState: unknown;
 }
-
-export type PendingInteraction =
-	| {
-			type: "peek_discard";
-			actorId: string;
-			revealedCards: [string, string];
-	  }
-	| {
-			// neeto's clock
-			type: "crew_reactivate";
-			actorId: string;
-			eligibleSlots: number[];
-	  }
-	| {
-			// g-rone's poison target choice
-			type: "poison_target_pick";
-			actorId: string;
-			eligibleTargetIds: string[];
-			damagePerRound: number;
-	  }
-	| {
-			// chooser player: attacker unless void arms flips. isStrike gates blood money
-			type: "choose_crew_to_turn";
-			targetPlayerId: string;
-			actorId: string;
-			chooserPlayerId: string;
-			eligibleSlots: number[];
-			isStrike: boolean;
-			// true when this is a challenge-loss penalty deferred behind the original pending action
-			deferredActionPending?: boolean;
-			// true when an enemy (not the crew's own owner) caused this turn;
-			causedByEnemy: boolean;
-	  }
-	| {
-			// empty the clip: choose discard count. target locked at play time
-			type: "choose_discard_count";
-			actorId: string;
-			maxCount: number;
-			targetPlayerId: string;
-			damagePerCard: number;
-	  }
-	| {
-			// take it back: pick a discard to return to hand
-			type: "choose_from_discard";
-			actorId: string;
-			discardPileSnapshot: readonly string[];
-	  }
-	| {
-			// dig deep: actor picks from top deck cards (private reveal)
-			type: "dig_deep_pick";
-			actorId: string;
-			revealedCards: readonly string[];
-			maxPicks?: number;
-	  }
-	| {
-			// switch up: pick one face-up to unturn and one face-down to turn
-			type: "switch_up_pick";
-			actorId: string;
-			faceUpSlots: number[];
-			faceDownSlots: number[];
-	  }
-	| {
-			// tactical support: actor may unturn one of target's face-up crew
-			type: "tactical_support_unturn_offer";
-			actorId: string;
-			targetPlayerId: string;
-			eligibleSlots: number[];
-	  }
-	| {
-			// bear bones: optional strike on a face-down enemy crew after challenge win
-			type: "bear_bones_bonus_strike";
-			actorId: string;
-			eligibleTargetIds: string[];
-			cashCost: number;
-	  }
-	| {
-			// void legs: at turn start, discard for damage
-			type: "void_legs_choice";
-			actorId: string;
-			hasCardsToDiscard: boolean;
-	  }
-	| {
-			// background check: challenger guesses face-down crew's class
-			type: "background_check_guess";
-			actorId: string;
-			targetPlayerId: string;
-			eligibleSlots: number[];
-	  }
-	| {
-			// watcher: actor may unturn a face-up crew after defending a challenge
-			type: "watcher_unturn_offer";
-			actorId: string;
-			eligibleTargets: readonly { playerId: string; slot: 0 | 1 }[];
-	  }
-	| {
-			// lighthouse: pick face-up crew to disable passive. cross-player slot selection
-			type: "lighthouse_disable_pick";
-			actorId: string;
-			eligibleTargets: readonly { playerId: string; slot: 0 | 1 }[];
-			maxPicks?: number;
-	  }
-	| {
-			// tag out: swap crew slots with a teammate (teams only)
-			type: "tag_out_pick";
-			actorId: string;
-			teammateId: string;
-			ownEligibleSlots: number[];
-			teammateEligibleSlots: number[];
-	  }
-	| {
-			// truth serum: target picks which face-down crew to reveal
-			type: "truth_serum_reveal";
-			actorId: string;
-			targetPlayerId: string;
-			eligibleSlots: number[];
-	  }
-	| {
-			// too big: swap this crew card with any other player's face-up crew card
-			type: "too_big_swap_pick";
-			actorId: string;
-			ownSlot: 0 | 1;
-			eligibleTargets: readonly { playerId: string; slot: 0 | 1 }[];
-	  }
-	| {
-			// to the death: actor has 2 face-up crew, picks which one to kill
-			type: "choose_own_crew_to_strike";
-			actorId: string;
-			eligibleSlots: number[];
-	  }
-	| {
-			// the watcher: actor sees 2 random cards from the target's hand
-			// (private reveal) and picks 1 to steal
-			type: "watcher_steal_pick";
-			actorId: string;
-			targetPlayerId: string;
-			revealedCards: [string, string];
-	  };
 
 export type ServerPendingActionType =
 	| "class_action_strike"

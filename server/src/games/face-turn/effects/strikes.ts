@@ -1,0 +1,500 @@
+import type { FaceturnServerState, FaceturnServerPlayer } from "../types";
+import type { EffectPrimitive } from "../cards";
+import { CARD_IDS, getCrew } from "../cards";
+import { recomputePassives } from "../derived";
+import type { EffectContext, Handler } from "./index";
+import {
+	getEnemies,
+	getLivingPlayers,
+	getTeammates,
+	resolveTarget,
+	findEffectAmount,
+	resolveEffects,
+} from "./index";
+import { consumeLifeInsuranceProtecting } from "./damage";
+
+// fires when a slot ceases to be "that face-down crew": clears marks, using previousCrewId to treat refill as invalidation not match
+function invalidateStaleCrewMarks(
+	state: FaceturnServerState,
+	owner: FaceturnServerPlayer,
+	slot: 0 | 1,
+	previousCrewId: string,
+): void {
+	for (const enemy of getEnemies(state, owner.playerId)) {
+		for (const [ownSlot, mark] of enemy.warrantMarks) {
+			if (
+				mark.targetPlayerId !== owner.playerId ||
+				mark.targetSlot !== slot ||
+				mark.targetCrewId !== previousCrewId
+			) {
+				continue;
+			}
+			enemy.warrantMarks.delete(ownSlot);
+			if (enemy.activeMoves[ownSlot] === CARD_IDS.MOVE.WARRANT_OF_ARREST) {
+				enemy.activeMoves[ownSlot] = null;
+				enemy.discardPile.push(CARD_IDS.MOVE.WARRANT_OF_ARREST);
+				enemy.totalCardsDiscarded++;
+				recomputePassives(enemy, state);
+			}
+			break;
+		}
+	}
+
+	const rh = owner.redHerringMark;
+	if (rh && rh.slot === slot && rh.crewId === previousCrewId) {
+		owner.redHerringMark = null;
+	}
+}
+
+export function turnCrewAtSlot(
+	state: FaceturnServerState,
+	player: FaceturnServerPlayer,
+	slot: 0 | 1,
+): void {
+	const crewId = player.crewIds[slot];
+	if (!crewId) return;
+	player.crewTurned[slot] = true;
+	player.hasTurnedAllyCrewThisGame = true;
+	invalidateStaleCrewMarks(state, player, slot, crewId);
+}
+
+export function unturnCrewAtSlot(
+	state: FaceturnServerState,
+	player: FaceturnServerPlayer,
+	slot: 0 | 1,
+	causedByEnemy = false,
+): void {
+	if (!player.crewIds[slot]) return;
+	player.crewTurned[slot] = false;
+	player.disabledPassiveSlots.delete(slot);
+	triggerAllyTurnReactions(state, player, causedByEnemy);
+}
+
+// kills a face-up crew slot: clears it (refilling from reserve if available)
+// invalidates any stale marks pointing at it, and recomputes passives
+export function killCrewAtSlot(
+	state: FaceturnServerState,
+	owner: FaceturnServerPlayer,
+	slot: 0 | 1,
+): { refilledFromReserve: boolean } {
+	const killedCrewId = owner.crewIds[slot]!;
+	owner.crewIds[slot] = null;
+	owner.crewTurned[slot] = false;
+
+	let refilledFromReserve = false;
+	if (owner.reserveCrewId !== null) {
+		owner.crewIds[slot] = owner.reserveCrewId;
+		owner.crewTurned[slot] = false;
+		owner.reserveCrewId = null;
+		refilledFromReserve = true;
+	}
+
+	invalidateStaleCrewMarks(state, owner, slot, killedCrewId);
+	recomputePassives(owner, state);
+	return { refilledFromReserve };
+}
+
+export function firstUnturnedSlot(player: FaceturnServerPlayer): 0 | 1 | null {
+	for (let i = 0; i < 2; i++) {
+		const idx = i as 0 | 1;
+		if (player.crewIds[idx] && !player.crewTurned[idx]) return idx;
+	}
+	return null;
+}
+
+export function firstTurnedSlot(player: FaceturnServerPlayer): 0 | 1 | null {
+	for (let i = 0; i < 2; i++) {
+		const idx = i as 0 | 1;
+		if (player.crewIds[idx] && player.crewTurned[idx]) return idx;
+	}
+	return null;
+}
+
+export type StrikeOrExecuteOutcome =
+	| { outcome: "crew_turned"; slot: 0 | 1 }
+	| { outcome: "crew_killed"; slot: 0 | 1; refilledFromReserve: boolean }
+	| { outcome: "pending" }
+	| { outcome: "executed"; survivedViaLifeInsurance: boolean }
+	| { outcome: "negated"; negatedBy: "terminal" | "immunity" };
+
+// shared check for terminal strike defend to keep resolution and declare-time logic consistent
+export function isStrikeDefendedByTerminal(
+	target: FaceturnServerPlayer,
+): boolean {
+	return target.derived.hasTerminalStrikeDefend && target.bossHp > 60;
+}
+
+// turns a face-down crew or executes if none remain; when multiple unturned crew, asks the correct player (void arms lets defender choose)
+export function resolveStrikeOrExecute(
+	state: FaceturnServerState,
+	target: FaceturnServerPlayer,
+	actorId: string | null,
+	isStrike: boolean,
+	preSelectedSlot?: 0 | 1,
+): StrikeOrExecuteOutcome {
+	if (isStrikeDefendedByTerminal(target)) {
+		return { outcome: "negated", negatedBy: "terminal" };
+	}
+
+	let effectiveSlot = preSelectedSlot;
+	if (
+		isStrike &&
+		actorId !== null &&
+		actorId !== target.playerId &&
+		target.redHerringMark !== null
+	) {
+		const mark = target.redHerringMark;
+		target.redHerringMark = null;
+		if (
+			target.crewIds[mark.slot] === mark.crewId &&
+			!target.crewTurned[mark.slot]
+		) {
+			effectiveSlot = mark.slot;
+		}
+	}
+
+	const unturnedSlots = ([0, 1] as const).filter(
+		(i) => target.crewIds[i] !== null && !target.crewTurned[i],
+	);
+
+	const resolvedPreSelected =
+		effectiveSlot !== undefined && unturnedSlots.includes(effectiveSlot)
+			? effectiveSlot
+			: null;
+
+	// striking an already face-up crew slot kills it instead of turning it;
+	// only valid when the actor is an enemy of the target (never self-kill)
+	const isFaceUpKillTarget =
+		isStrike &&
+		effectiveSlot !== undefined &&
+		target.crewIds[effectiveSlot] !== null &&
+		target.crewTurned[effectiveSlot] &&
+		actorId !== null &&
+		actorId !== target.playerId;
+
+	const causedByEnemy = actorId !== null && actorId !== target.playerId;
+
+	let result: StrikeOrExecuteOutcome;
+
+	if (isFaceUpKillTarget) {
+		const slot = effectiveSlot!;
+		const { refilledFromReserve } = killCrewAtSlot(state, target, slot);
+		result = { outcome: "crew_killed", slot, refilledFromReserve };
+		triggerBertoOnCrewKill(state, actorId);
+	} else if (resolvedPreSelected !== null) {
+		turnCrewAtSlot(state, target, resolvedPreSelected);
+		recomputePassives(target, state);
+		triggerCrewTurnedEffects(state, target, resolvedPreSelected, causedByEnemy);
+		result = { outcome: "crew_turned", slot: resolvedPreSelected };
+	} else if (unturnedSlots.length === 1) {
+		const slot = unturnedSlots[0]!;
+		turnCrewAtSlot(state, target, slot);
+		recomputePassives(target, state);
+		triggerCrewTurnedEffects(state, target, slot, causedByEnemy);
+		result = { outcome: "crew_turned", slot };
+	} else if (unturnedSlots.length > 1) {
+		const resolvedActorId = actorId ?? target.playerId;
+		const chooserPlayerId = target.derived.hasVoidArms
+			? target.playerId
+			: resolvedActorId;
+
+		state.pendingInteraction = {
+			type: "choose_crew_to_turn",
+			targetPlayerId: target.playerId,
+			actorId: resolvedActorId,
+			chooserPlayerId,
+			eligibleSlots: unturnedSlots,
+			isStrike,
+			causedByEnemy,
+		};
+		return { outcome: "pending" };
+	} else if (target.bossImmunityTurns > 0) {
+		return { outcome: "negated", negatedBy: "immunity" };
+	} else if (target.derived.hasLifeInsurance) {
+		target.bossHp = 1;
+		consumeLifeInsuranceProtecting(state, target);
+		target.lastHpZeroCause = "execution";
+		state.executionAttempts++;
+		state.executionsSurvivedViaLifeInsurance++;
+		result = { outcome: "executed", survivedViaLifeInsurance: true };
+	} else {
+		target.bossHp = 0;
+		target.lastHpZeroCause = "execution";
+		state.executionAttempts++;
+		result = { outcome: "executed", survivedViaLifeInsurance: false };
+	}
+
+	if (isStrike && actorId) {
+		const striker = state.players.get(actorId);
+		if (striker) applyBloodMoneyOnStrike(state, striker);
+	}
+	return result;
+}
+
+// move resolves in one pass.
+export function performSelfStrike(
+	ctx: EffectContext,
+	preSelectedSlot?: 0 | 1,
+): StrikeOrExecuteOutcome | null {
+	const actor = ctx.actor;
+	const faceUpSlots = ([0, 1] as const).filter(
+		(i) => actor.crewIds[i] !== null && actor.crewTurned[i],
+	);
+	if (faceUpSlots.length === 0) return null;
+
+	const slot =
+		preSelectedSlot !== undefined && faceUpSlots.includes(preSelectedSlot)
+			? preSelectedSlot
+			: faceUpSlots.length === 1
+				? faceUpSlots[0]!
+				: null;
+
+	// ambiguous (2 face-up crew) and the client didn't pre-select one: fizzle
+	// rather than half-execute the move (kill nothing, still strike the enemy)
+	if (slot === null) return null;
+
+	const { refilledFromReserve } = killCrewAtSlot(ctx.state, actor, slot);
+	triggerBertoOnCrewKill(ctx.state, actor.playerId);
+
+	return { outcome: "crew_killed", slot, refilledFromReserve };
+}
+
+// kills any crew
+export function triggerBertoOnCrewKill(
+	state: FaceturnServerState,
+	killerId: string,
+): void {
+	const killer = state.players.get(killerId);
+	if (!killer) return;
+	if (killer.derived.crewSkillsDisabled) return;
+
+	for (let i = 0; i < 2; i++) {
+		const slot = i as 0 | 1;
+		if (killer.crewIds[slot] !== CARD_IDS.CREW.BERTO_LOPEZ) continue;
+		if (!killer.crewTurned[slot]) continue;
+		if (killer.disabledPassiveSlots.has(slot)) continue;
+
+		killer.crewTurned[slot] = false;
+		killer.disabledPassiveSlots.delete(slot);
+	}
+	recomputePassives(killer, state);
+}
+
+// blood money: enemies with the passive gain cash when a strike is declared
+export function applyBloodMoneyOnStrike(
+	state: FaceturnServerState,
+	striker: FaceturnServerPlayer,
+): void {
+	for (const enemy of getEnemies(state, striker.playerId)) {
+		if (enemy.derived.cashOnEnemyMoveOrStrike > 0) {
+			enemy.cash += enemy.derived.cashOnEnemyMoveOrStrike;
+		}
+	}
+}
+
+export function performStrike(
+	ctx: EffectContext,
+): StrikeOrExecuteOutcome | null {
+	const target = resolveTarget(ctx);
+	if (!target) return null;
+
+	return resolveStrikeOrExecute(
+		ctx.state,
+		target,
+		ctx.actor.playerId,
+		true,
+		ctx.targetCrewSlot as 0 | 1 | undefined,
+	);
+}
+
+export function executedPlayerIdFrom(
+	outcome: StrikeOrExecuteOutcome | null | undefined,
+	targetPlayerId: string,
+): string | null {
+	return outcome?.outcome === "executed" ? targetPlayerId : null;
+}
+
+// to the death: actor had 2 face-up crew and picked one to kill
+export function resolveChooseOwnCrewToStrike(
+	state: FaceturnServerState,
+	actor: FaceturnServerPlayer,
+	crewSlot: number,
+	eligibleSlots: number[],
+): StrikeOrExecuteOutcome | null {
+	const slot = crewSlot as 0 | 1;
+	if (!eligibleSlots.includes(slot)) return null;
+	if (!actor.crewIds[slot] || !actor.crewTurned[slot]) return null;
+
+	const { refilledFromReserve } = killCrewAtSlot(state, actor, slot);
+	triggerBertoOnCrewKill(state, actor.playerId);
+
+	return { outcome: "crew_killed", slot, refilledFromReserve };
+}
+
+// mama mercy armors ally boss on any ally crew turn; suplex strikes enemy crew only on ally's own turn (not forced)
+function triggerAllyTurnReactions(
+	state: FaceturnServerState,
+	turner: FaceturnServerPlayer,
+	causedByEnemy: boolean,
+): void {
+	for (const holder of getLivingPlayers(state)) {
+		if (holder.derived.crewSkillsDisabled) continue;
+		const isSelfOrTeammate =
+			holder.playerId === turner.playerId ||
+			getTeammates(state, holder.playerId).some(
+				(t) => t.playerId === turner.playerId,
+			);
+		if (!isSelfOrTeammate) continue;
+
+		let mamaSlot: 0 | 1 | null = null;
+		for (let i = 0; i < 2; i++) {
+			if (holder.crewIds[i as 0 | 1] === CARD_IDS.CREW.MAMA_MERCY) {
+				mamaSlot = i as 0 | 1;
+				break;
+			}
+		}
+		if (mamaSlot === null) continue;
+		if (!holder.crewTurned[mamaSlot]) continue;
+		if (holder.disabledPassiveSlots.has(mamaSlot)) continue;
+
+		const mamaArmorAmount = findEffectAmount(
+			getCrew(CARD_IDS.CREW.MAMA_MERCY).passiveEffects,
+			"passive_armor_on_ally_crew_turn",
+		);
+		holder.bossArmor += mamaArmorAmount;
+		holder.hasArmoredBossThisGame = true;
+	}
+
+	if (!causedByEnemy) {
+		for (const holder of getLivingPlayers(state)) {
+			if (holder.derived.crewSkillsDisabled) continue;
+			const isSelfOrTeammate =
+				holder.playerId === turner.playerId ||
+				getTeammates(state, holder.playerId).some(
+					(t) => t.playerId === turner.playerId,
+				);
+			if (!isSelfOrTeammate) continue;
+
+			let suplexSlot: 0 | 1 | null = null;
+			for (let i = 0; i < 2; i++) {
+				if (holder.crewIds[i as 0 | 1] === CARD_IDS.CREW.SUPLEX) {
+					suplexSlot = i as 0 | 1;
+					break;
+				}
+			}
+			if (suplexSlot === null) continue;
+			if (!holder.crewTurned[suplexSlot]) continue;
+			if (holder.disabledPassiveSlots.has(suplexSlot)) continue;
+
+			resolveEffects([{ type: "strike_enemy_crew" }], { state, actor: holder });
+		}
+	}
+}
+
+export function triggerCrewTurnedEffects(
+	state: FaceturnServerState,
+	player: FaceturnServerPlayer,
+	slotIndex: 0 | 1,
+	causedByEnemy = false,
+): void {
+	const crewId = player.crewIds[slotIndex];
+	if (!crewId) return;
+	if (player.derived.crewSkillsDisabled) return;
+
+	const crew = getCrew(crewId);
+	const ctx: EffectContext = {
+		state,
+		actor: player,
+		targetAllySlot: slotIndex,
+		selfTurnedByEnemy: causedByEnemy,
+	};
+
+	resolveEffects(crew.passiveEffects, ctx);
+
+	const suppressedByLighthouse = isTurnedEffectSuppressedByEnemyLighthouse(
+		state,
+		player,
+	);
+
+	const suppressedByCeaseDesist =
+		!suppressedByLighthouse &&
+		crew.turnedEffects.length > 0 &&
+		consumeCeaseDesistIfPresent(state, player);
+
+	if (!suppressedByLighthouse && !suppressedByCeaseDesist) {
+		resolveEffects(crew.turnedEffects, ctx);
+	}
+
+	triggerAllyTurnReactions(state, player, causedByEnemy);
+
+	recomputePassives(player, state);
+}
+
+// checks if any enemy has a face-up, unsuppressed lighthouse suppressing turned effects
+function isTurnedEffectSuppressedByEnemyLighthouse(
+	state: FaceturnServerState,
+	player: FaceturnServerPlayer,
+): boolean {
+	for (const enemy of getEnemies(state, player.playerId)) {
+		if (enemy.derived.crewSkillsDisabled) continue;
+		for (const i of [0, 1] as const) {
+			if (enemy.crewIds[i] !== CARD_IDS.CREW.LIGHTHOUSE) continue;
+			if (!enemy.crewTurned[i]) continue;
+			if (enemy.disabledPassiveSlots.has(i)) continue;
+			return true;
+		}
+	}
+	return false;
+}
+
+// consumes/discards the first enemy Cease & Desist move; unaffected by Blackmail since it's a Move effect, only trigger when a turned effect is resolving
+function consumeCeaseDesistIfPresent(
+	state: FaceturnServerState,
+	player: FaceturnServerPlayer,
+): boolean {
+	for (const enemy of getEnemies(state, player.playerId)) {
+		if (!enemy.derived.hasCeaseDesist) continue;
+		const slot = enemy.activeMoves.findIndex(
+			(id) => id === CARD_IDS.MOVE.CEASE_AND_DESIST,
+		);
+		if (slot === -1) continue;
+		enemy.activeMoves[slot] = null;
+		enemy.discardPile.push(CARD_IDS.MOVE.CEASE_AND_DESIST);
+		enemy.totalCardsDiscarded++;
+		recomputePassives(enemy, state);
+		return true;
+	}
+	return false;
+}
+
+export const strikeHandlers = {
+	strike_enemy_crew(_effect, ctx) {
+		performStrike(ctx);
+	},
+
+	strike_enemy_crew_defendable(_effect, ctx) {
+		const target = resolveTarget(ctx);
+		if (!target) return;
+		ctx.state.pendingDefendableStrikes.push({
+			actorId: ctx.actor.playerId,
+			targetPlayerId: target.playerId,
+			targetCrewSlot: ctx.targetCrewSlot ?? null,
+		});
+	},
+
+	strike_enemy_crew_undefendable_with_cash_cost(effect, ctx) {
+		if (effect.type !== "strike_enemy_crew_undefendable_with_cash_cost") return;
+		if (ctx.actor.cash < effect.cashCost) return; // fizzle: insufficient funds
+		ctx.actor.cash -= effect.cashCost;
+		performStrike(ctx);
+	},
+
+	strike_own_crew(effect, ctx) {
+		if (effect.type !== "strike_own_crew") return;
+		const preSelected =
+			effect.targetSlot !== undefined
+				? (effect.targetSlot as 0 | 1)
+				: (ctx.targetCrewSlot as 0 | 1 | undefined);
+		performSelfStrike(ctx, preSelected);
+	},
+} satisfies Partial<Record<EffectPrimitive["type"], Handler>>;

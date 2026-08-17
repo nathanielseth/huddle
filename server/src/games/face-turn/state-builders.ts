@@ -13,11 +13,9 @@ import type {
 	MoveChainView,
 } from "../../../../shared/games/face-turn/types";
 
-import type {
-	FaceturnServerState,
-	FaceturnServerPlayer,
-	PendingInteraction,
-} from "./types";
+import type { FaceturnServerState, FaceturnServerPlayer } from "./types";
+import type { PendingInteraction } from "./interactions/types";
+import { getInteractionSpec } from "./interactions/registry";
 import { getCrew, getMove, getBoss } from "./cards";
 import { moveHasLegalTarget } from "./effects";
 import { effectiveCost } from "./game";
@@ -86,7 +84,7 @@ function buildCrewSlots(player: FaceturnServerPlayer): readonly CrewSlotView[] {
 			};
 		}
 		const crew = getCrew(crewId);
-		const overrides = player.crewClassOverrides.get(idx);
+		const overrides = player.derived.crewClassOverrides.get(idx);
 		return {
 			slotIndex: idx,
 			status: "face_up",
@@ -163,8 +161,8 @@ function buildPlayerView(
 		totalMovesPlayed: player.totalMovesPlayed,
 		hasArmoredBossThisGame: player.hasArmoredBossThisGame,
 		poisonStacks: totalIncomingPoison,
-		cashGainPerTurn: player.cashGainPerTurn,
-		moveBaseCostReduction: player.moveBaseCostReduction,
+		cashGainPerTurn: player.derived.cashGainPerTurn,
+		moveBaseCostReduction: player.derived.moveBaseCostReduction,
 		isEliminated: state.eliminatedPlayers.has(player.playerId),
 		teamIndex: player.teamIndex,
 		mulliganDecided: player.mulliganDecided,
@@ -191,164 +189,7 @@ function buildMoveChainView(state: FaceturnServerState): MoveChainView | null {
 function buildPendingInteractionView(
 	pi: PendingInteraction,
 ): PendingInteractionView {
-	switch (pi.type) {
-		case "peek_discard":
-			return { type: "peek_discard", actorId: pi.actorId };
-
-		case "crew_reactivate":
-			return {
-				type: "crew_reactivate",
-				actorId: pi.actorId,
-				eligibleSlots: pi.eligibleSlots,
-			};
-
-		case "poison_target_pick":
-			return {
-				type: "poison_target_pick",
-				actorId: pi.actorId,
-				eligibleTargetIds: pi.eligibleTargetIds,
-				damagePerRound: pi.damagePerRound,
-			};
-
-		case "choose_crew_to_turn":
-			return {
-				type: "choose_crew_to_turn",
-				actorId: pi.actorId,
-				targetPlayerId: pi.targetPlayerId,
-				chooserPlayerId: pi.chooserPlayerId,
-				eligibleSlots: pi.eligibleSlots,
-				isStrike: pi.isStrike,
-			};
-
-		case "choose_discard_count":
-			return {
-				type: "choose_discard_count",
-				actorId: pi.actorId,
-				maxCount: pi.maxCount,
-				targetPlayerId: pi.targetPlayerId,
-				damagePerCard: pi.damagePerCard,
-			};
-
-		case "choose_from_discard":
-			return {
-				type: "choose_from_discard",
-				actorId: pi.actorId,
-				discardPileSnapshot: pi.discardPileSnapshot,
-			};
-
-		case "dig_deep_pick":
-			// revealedCards is deliberately omitted, private info, delivered only
-			// via FaceturnsSecret to the owning player
-			return {
-				type: "dig_deep_pick",
-				actorId: pi.actorId,
-				...(pi.maxPicks !== undefined ? { maxPicks: pi.maxPicks } : {}),
-			};
-
-		case "switch_up_pick":
-			return {
-				type: "switch_up_pick",
-				actorId: pi.actorId,
-				faceUpSlots: pi.faceUpSlots,
-				faceDownSlots: pi.faceDownSlots,
-			};
-
-		case "tactical_support_unturn_offer":
-			return {
-				type: "tactical_support_unturn_offer",
-				actorId: pi.actorId,
-				targetPlayerId: pi.targetPlayerId,
-				eligibleSlots: pi.eligibleSlots,
-			};
-
-		case "bear_bones_bonus_strike":
-			return {
-				type: "bear_bones_bonus_strike",
-				actorId: pi.actorId,
-				eligibleTargetIds: pi.eligibleTargetIds,
-				cashCost: pi.cashCost,
-			};
-
-		case "void_legs_choice":
-			return {
-				type: "void_legs_choice",
-				actorId: pi.actorId,
-				hasCardsToDiscard: pi.hasCardsToDiscard,
-			};
-
-		case "background_check_guess":
-			return {
-				type: "background_check_guess",
-				actorId: pi.actorId,
-				targetPlayerId: pi.targetPlayerId,
-				eligibleSlots: pi.eligibleSlots,
-			};
-
-		case "watcher_unturn_offer":
-			return {
-				type: "watcher_unturn_offer",
-				actorId: pi.actorId,
-				eligibleTargets: pi.eligibleTargets,
-			};
-
-		case "tag_out_pick":
-			return {
-				type: "tag_out_pick",
-				actorId: pi.actorId,
-				teammateId: pi.teammateId,
-				ownEligibleSlots: pi.ownEligibleSlots,
-				teammateEligibleSlots: pi.teammateEligibleSlots,
-			};
-
-		case "truth_serum_reveal":
-			return {
-				type: "truth_serum_reveal",
-				actorId: pi.actorId,
-				targetPlayerId: pi.targetPlayerId,
-				eligibleSlots: pi.eligibleSlots,
-			};
-
-		case "lighthouse_disable_pick":
-			return {
-				type: "lighthouse_disable_pick",
-				actorId: pi.actorId,
-				eligibleTargets: pi.eligibleTargets,
-				...(pi.maxPicks !== undefined ? { maxPicks: pi.maxPicks } : {}),
-			};
-
-		case "too_big_swap_pick":
-			return {
-				type: "too_big_swap_pick",
-				actorId: pi.actorId,
-				ownSlot: pi.ownSlot,
-				eligibleTargets: pi.eligibleTargets,
-			};
-
-		case "choose_own_crew_to_strike":
-			return {
-				type: "choose_own_crew_to_strike",
-				actorId: pi.actorId,
-				eligibleSlots: pi.eligibleSlots,
-			};
-
-		case "watcher_steal_pick":
-			// revealedCards is deliberately omitted, private info, delivered only
-			// via FaceturnsSecret to the owning player
-			return {
-				type: "watcher_steal_pick",
-				actorId: pi.actorId,
-				targetPlayerId: pi.targetPlayerId,
-			};
-
-		default: {
-			const _exhaustive: never = pi;
-			throw new Error(
-				`buildPendingInteractionView: unhandled interaction type ${
-					(_exhaustive as PendingInteraction).type
-				}`,
-			);
-		}
-	}
+	return getInteractionSpec(pi).toView(pi);
 }
 
 function buildPublicState(state: FaceturnServerState): FaceturnsState {
@@ -450,56 +291,67 @@ export function getCachedPublicState(
 	return state._cachedPublicState as FaceturnsState;
 }
 
-// builds per-player secret payloads (hand, crew assignments, draft picks)
+// builds the secret payload for a single player: hand, crew assignments,
+// draft picks, and any reveal tied to a pending interaction they own
+export function buildSecretForPlayer(
+	state: FaceturnServerState,
+	player: FaceturnServerPlayer,
+): FaceturnsSecret {
+	const playerId = player.playerId;
+
+	const peekRevealedCards: [string, string] | null =
+		state.pendingInteraction?.type === "peek_discard" &&
+		state.pendingInteraction.actorId === playerId
+			? state.pendingInteraction.revealedCards
+			: null;
+
+	const digDeepRevealedCards: readonly string[] | null =
+		state.pendingInteraction?.type === "dig_deep_pick" &&
+		state.pendingInteraction.actorId === playerId
+			? state.pendingInteraction.revealedCards
+			: null;
+
+	const watcherStealRevealedCards: [string, string] | null =
+		state.pendingInteraction?.type === "watcher_steal_pick" &&
+		state.pendingInteraction.actorId === playerId
+			? state.pendingInteraction.revealedCards
+			: null;
+
+	return {
+		hand: [...player.hand],
+		playableMoveIds:
+			state.phase === "active_turn" && state.activePlayerId === playerId
+				? computePlayableMoveIds(state, player)
+				: [],
+		crewAssignments: Object.fromEntries(
+			player.crewIds
+				.map((id, i): [number, string | null] => [i, id])
+				.filter((entry): entry is [number, string] => entry[1] !== null),
+		),
+		reserveCrewId: player.reserveCrewId,
+		costOverrides: Object.fromEntries(player.costOverrides),
+		draftSelections: player.draftSelections
+			? {
+					bossId: player.draftSelections.bossId,
+					crewIds: [...player.draftSelections.crewIds],
+					moveIds: [...player.draftSelections.moveIds],
+				}
+			: null,
+		peekRevealedCards,
+		digDeepRevealedCards,
+		watcherStealRevealedCards,
+	};
+}
+
+// builds per-player secret payloads for everyone in the game
 export function buildPrivatePayloads(
 	state: FaceturnServerState,
 ): Map<string, FaceturnsSecret> {
 	if (simulationModeActive) return EMPTY_PRIVATE_PAYLOADS;
 	const payloads = new Map<string, FaceturnsSecret>();
 
-	for (const [playerId, player] of state.players) {
-		const peekRevealedCards: [string, string] | null =
-			state.pendingInteraction?.type === "peek_discard" &&
-			state.pendingInteraction.actorId === playerId
-				? state.pendingInteraction.revealedCards
-				: null;
-
-		const digDeepRevealedCards: readonly string[] | null =
-			state.pendingInteraction?.type === "dig_deep_pick" &&
-			state.pendingInteraction.actorId === playerId
-				? state.pendingInteraction.revealedCards
-				: null;
-		
-		const watcherStealRevealedCards: [string, string] | null =
-			state.pendingInteraction?.type === "watcher_steal_pick" &&
-			state.pendingInteraction.actorId === playerId
-				? state.pendingInteraction.revealedCards
-				: null;
-
-		payloads.set(playerId, {
-			hand: [...player.hand],
-			playableMoveIds:
-				state.phase === "active_turn" && state.activePlayerId === playerId
-					? computePlayableMoveIds(state, player)
-					: [],
-			crewAssignments: Object.fromEntries(
-				player.crewIds
-					.map((id, i): [number, string | null] => [i, id])
-					.filter((entry): entry is [number, string] => entry[1] !== null),
-			),
-			reserveCrewId: player.reserveCrewId,
-			costOverrides: Object.fromEntries(player.costOverrides),
-			draftSelections: player.draftSelections
-				? {
-						bossId: player.draftSelections.bossId,
-						crewIds: [...player.draftSelections.crewIds],
-						moveIds: [...player.draftSelections.moveIds],
-					}
-				: null,
-			peekRevealedCards,
-			digDeepRevealedCards,
-			watcherStealRevealedCards,
-		});
+	for (const player of state.players.values()) {
+		payloads.set(player.playerId, buildSecretForPlayer(state, player));
 	}
 
 	return payloads;

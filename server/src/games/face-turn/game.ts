@@ -50,6 +50,7 @@ import {
 } from "./effects";
 import type { StrikeOrExecuteOutcome } from "./effects";
 import { shuffle } from "../lib/random";
+import { makeEmptyDerivedStats } from "./derived";
 
 export function markDirty(state: FaceturnServerState): void {
 	state._publicStateCacheValid = false;
@@ -71,7 +72,6 @@ export function makeServerPlayer(
 		lastHpZeroCause: null,
 		crewIds: [null, null],
 		crewTurned: [false, false],
-		crewClassOverrides: new Map(),
 		reserveCrewId: null,
 		hand: [],
 		deck: [],
@@ -85,36 +85,8 @@ export function makeServerPlayer(
 		hasArmoredBossThisGame: false,
 		hasTurnedAllyCrewThisGame: false,
 		incomingPoison: new Map(),
-		cashGainPerTurn: 0,
-		drawPerTurn: 0,
-		cashOnEnemyMoveOrStrike: 0,
-		healOnMovePlayed: 0,
-		damageRandomEnemyOnMovePlayed: 0,
-		crewSkillsDisabled: false,
-		damageBonusFlat: 0,
-		damageReductionPercent: 0,
-		armorPerTurn: 0,
-		moveBaseCostReduction: 0,
-		burstMoveCostReduction: 0,
-		classActionCostReduction: 0,
-		enemyMoveCostSurcharge: 0,
-		hasSellCards: false,
-		sellCardCashAmount: 0,
-		hasVoidArms: false,
-		hasVoidLegsChoice: false,
-		voidLegsDiscardCost: 0,
-		voidLegsDamage: 0,
-		hasBackgroundCheck: false,
-		hasWatcherPassive: false,
-		hasBastionPassive: false,
-		hasAllDamagePiercingPassive: false,
-		stealCashOnDamageDealtAmount: 0,
-		hasLifeInsurance: false,
 		lifeInsuranceTargets: new Map(),
 		trickleDownTargets: new Map(),
-		hasFalseFlag: false,
-		hasSupplyDrop: false,
-		supplyDropCashAmount: 0,
 		ratQueenDrawUsedThisTurn: false,
 		disabledPassiveSlots: new Set(),
 		playedMoveThisTurn: false,
@@ -123,19 +95,16 @@ export function makeServerPlayer(
 		draftSelections: { bossId: null, crewIds: [], moveIds: [] },
 		isDraftLocked: false,
 		mulliganDecided: false,
-		hasTerminalStrikeDefend: false,
-		cashOnChallengeWinAmount: 0,
-		selfDamagePerTurn: 0,
-		selfDamageCashGainAmount: 0,
-		hasCeaseDesist: false,
 		warrantMarks: new Map(),
 		redHerringMark: null,
+		derived: makeEmptyDerivedStats(),
 	};
 }
 
 export function buildTeamsAndTurnOrder(
 	config: GameConfig,
 	playerIds: string[],
+	rng: () => number = Math.random,
 ): {
 	teams: string[][];
 	turnOrder: string[];
@@ -145,15 +114,24 @@ export function buildTeamsAndTurnOrder(
 	const teamIndexByPlayerId = new Map<string, number>();
 
 	if (config.mode === "teams") {
-		const configTeams = config.teams!;
+		const configTeams = config.teams;
+		if (
+			!configTeams ||
+			configTeams[0].length === 0 ||
+			configTeams[1].length === 0
+		) {
+			throw new Error(
+				"[face-turn] teams mode requires both teams to have at least one player.",
+			);
+		}
 		const teams: string[][] = [configTeams[0], configTeams[1]];
 		for (let ti = 0; ti < teams.length; ti++) {
 			for (const pid of teams[ti]!) {
 				teamIndexByPlayerId.set(pid, ti);
 			}
 		}
-		const repA = teams[0]![Math.floor(Math.random() * teams[0]!.length)]!;
-		const repB = teams[1]![Math.floor(Math.random() * teams[1]!.length)]!;
+		const repA = teams[0]![Math.floor(rng() * teams[0]!.length)]!;
+		const repB = teams[1]![Math.floor(rng() * teams[1]!.length)]!;
 		const playerOrder: [string, string] = [repA, repB];
 
 		const rotateFromRep = (team: string[], rep: string): string[] => {
@@ -175,7 +153,7 @@ export function buildTeamsAndTurnOrder(
 		const teams: string[][] = playerIds.map((pid) => [pid]);
 		playerIds.forEach((pid, i) => teamIndexByPlayerId.set(pid, i));
 		const playerOrder: [string, string] = [playerIds[0]!, playerIds[1]!];
-		const turnOrder = shuffle([...playerIds]);
+		const turnOrder = shuffle([...playerIds], rng);
 		return { teams, turnOrder, playerOrder, teamIndexByPlayerId };
 	}
 
@@ -267,7 +245,10 @@ export function loadDraftSelections(
 	player.draftSelections = { bossId, crewIds, moveIds };
 }
 
-export function finalizeDraft(player: FaceturnServerPlayer): void {
+export function finalizeDraft(
+	player: FaceturnServerPlayer,
+	rng: () => number = Math.random,
+): void {
 	const draft = player.draftSelections!;
 	const boss = getBoss(draft.bossId!);
 
@@ -284,7 +265,7 @@ export function finalizeDraft(player: FaceturnServerPlayer): void {
 		player.reserveCrewId = draft.crewIds[C.CREW_SLOTS] ?? null;
 	}
 
-	player.deck = shuffle(draft.moveIds);
+	player.deck = shuffle(draft.moveIds, rng);
 	player.draftSelections = null;
 }
 
@@ -406,9 +387,12 @@ function fillRemainingIgnoringDeadPicks(
 	}
 }
 
-export function autoFillAndFinalizeDraft(player: FaceturnServerPlayer): void {
-	randomizeEmptyDraftSlots(player);
-	finalizeDraft(player);
+export function autoFillAndFinalizeDraft(
+	player: FaceturnServerPlayer,
+	rng: () => number = Math.random,
+): void {
+	randomizeEmptyDraftSlots(player, rng);
+	finalizeDraft(player, rng);
 	player.isDraftLocked = true;
 }
 
@@ -419,10 +403,11 @@ export function dealOpeningHand(player: FaceturnServerPlayer): void {
 export function mulliganPlayer(
 	player: FaceturnServerPlayer,
 	redraw: boolean,
+	rng: () => number = Math.random,
 ): void {
 	if (!redraw) return;
 	player.deck.push(...player.hand.splice(0));
-	player.deck = shuffle(player.deck);
+	player.deck = shuffle(player.deck, rng);
 	drawCards(player, C.OPENING_HAND_SIZE);
 }
 
@@ -432,12 +417,13 @@ export function resolveRps(
 	p1: string,
 	p2: string,
 	choices: Map<string, RpsChoice>,
+	rng: () => number = Math.random,
 ): RpsOutcome {
 	const c1 = choices.get(p1)!;
 	const c2 = choices.get(p2)!;
 
 	if (!c1 || !c2 || c1 === c2) {
-		return Math.random() < 0.5 ? "player1" : "player2";
+		return rng() < 0.5 ? "player1" : "player2";
 	}
 	if (
 		(c1 === "rock" && c2 === "scissors") ||
@@ -466,21 +452,27 @@ export function startTurn(state: FaceturnServerState, playerId: string): void {
 	drawCards(player, 1);
 	addPassiveCash(player, 1);
 
-	if (player.cashGainPerTurn > 0) {
-		addPassiveCash(player, player.cashGainPerTurn);
+	if (player.derived.cashGainPerTurn > 0) {
+		addPassiveCash(player, player.derived.cashGainPerTurn);
 	}
-	if (player.drawPerTurn > 0) {
-		drawCards(player, player.drawPerTurn);
+	if (player.derived.drawPerTurn > 0) {
+		drawCards(player, player.derived.drawPerTurn);
 	}
-	if (player.armorPerTurn > 0) {
-		player.bossArmor += player.armorPerTurn;
+	if (player.derived.armorPerTurn > 0) {
+		player.bossArmor += player.derived.armorPerTurn;
 		player.hasArmoredBossThisGame = true;
 	}
-	if (player.selfDamagePerTurn > 0 || player.selfDamageCashGainAmount > 0) {
+	if (
+		player.derived.selfDamagePerTurn > 0 ||
+		player.derived.selfDamageCashGainAmount > 0
+	) {
 		resolveEffects(
 			[
-				{ type: "deal_damage_self_boss", amount: player.selfDamagePerTurn },
-				{ type: "gain_cash", amount: player.selfDamageCashGainAmount },
+				{
+					type: "deal_damage_self_boss",
+					amount: player.derived.selfDamagePerTurn,
+				},
+				{ type: "gain_cash", amount: player.derived.selfDamageCashGainAmount },
 			],
 			{ state, actor: player },
 		);
@@ -491,7 +483,7 @@ export function startTurn(state: FaceturnServerState, playerId: string): void {
 	checkRatQueenDrawTrigger(player, state);
 
 	// void legs offer: only opens if there is a card to discard
-	if (player.hasVoidLegsChoice && player.hand.length > 0) {
+	if (player.derived.hasVoidLegsChoice && player.hand.length > 0) {
 		state.pendingInteraction = {
 			type: "void_legs_choice",
 			actorId: playerId,
@@ -764,8 +756,7 @@ export function resolveChallenge(
 
 		// the watcher: won the challenge by successfully defending against it (actor wasn't bluffing)
 		if (state.pendingInteraction === null) {
-			const actor = state.players.get(pending.actorId)!;
-			if (actor.hasWatcherPassive) {
+			if (actor.derived.hasWatcherPassive) {
 				drawCards(actor, 2);
 				const eligibleTargets = watcherEligibleTargets(state, actor);
 				if (eligibleTargets.length > 0) {
@@ -783,8 +774,8 @@ export function resolveChallenge(
 		// pendingInteraction === null the way Watcher is, since that gate
 		// exists purely so Watcher doesn't stack a second interaction on
 		// top of an already-open choose_crew_to_turn.
-		if (actor.cashOnChallengeWinAmount > 0) {
-			actor.cash += actor.cashOnChallengeWinAmount;
+		if (actor.derived.cashOnChallengeWinAmount > 0) {
+			actor.cash += actor.derived.cashOnChallengeWinAmount;
 		}
 
 		return {
@@ -807,7 +798,7 @@ export function resolveChallenge(
 	let strikeOutcome: StrikeOrExecuteOutcome | null = null;
 
 	// false flag: prevents the crew-turning consequence; the challenger still gets credit
-	if (actor.hasFalseFlag) {
+	if (actor.derived.hasFalseFlag) {
 		const ffSlot = actor.activeMoves.findIndex(
 			(id) => id === CARD_IDS.MOVE.FALSE_FLAG_OPERATION,
 		);
@@ -824,7 +815,10 @@ export function resolveChallenge(
 	}
 
 	// the watcher: the challenger also gets this if they just won the challenge
-	if (state.pendingInteraction === null && challenger.hasWatcherPassive) {
+	if (
+		state.pendingInteraction === null &&
+		challenger.derived.hasWatcherPassive
+	) {
 		drawCards(challenger, 2);
 		const eligibleTargets = watcherEligibleTargets(state, challenger);
 		if (eligibleTargets.length > 0) {
@@ -840,8 +834,8 @@ export function resolveChallenge(
 	}
 
 	// extortion: same unconditional-grant reasoning as the actor's branch above
-	if (challenger.cashOnChallengeWinAmount > 0) {
-		challenger.cash += challenger.cashOnChallengeWinAmount;
+	if (challenger.derived.cashOnChallengeWinAmount > 0) {
+		challenger.cash += challenger.derived.cashOnChallengeWinAmount;
 	}
 
 	return {
@@ -950,9 +944,9 @@ export function executeMove(
 
 	actor.totalMovesPlayed++;
 
-	if (actor.healOnMovePlayed > 0) {
+	if (actor.derived.healOnMovePlayed > 0) {
 		actor.bossHp = Math.min(
-			actor.bossHp + actor.healOnMovePlayed,
+			actor.bossHp + actor.derived.healOnMovePlayed,
 			actor.bossMaxHp,
 		);
 	}
@@ -961,8 +955,8 @@ export function executeMove(
 
 	const enemies = getEnemies(state, actor.playerId);
 	for (const enemy of enemies) {
-		if (enemy.cashOnEnemyMoveOrStrike > 0) {
-			enemy.cash += enemy.cashOnEnemyMoveOrStrike;
+		if (enemy.derived.cashOnEnemyMoveOrStrike > 0) {
+			enemy.cash += enemy.derived.cashOnEnemyMoveOrStrike;
 		}
 	}
 
@@ -1094,13 +1088,13 @@ export function getMoveCost(
 	const move = getMove(moveId);
 	const base = player.costOverrides.get(moveId) ?? move.baseCost;
 
-	let reduction = player.moveBaseCostReduction;
+	let reduction = player.derived.moveBaseCostReduction;
 	if (move.moveType === "burst") {
-		reduction += player.burstMoveCostReduction;
+		reduction += player.derived.burstMoveCostReduction;
 	}
 
 	const surcharge = getEnemies(state, player.playerId).reduce(
-		(sum, enemy) => sum + enemy.enemyMoveCostSurcharge,
+		(sum, enemy) => sum + enemy.derived.enemyMoveCostSurcharge,
 		0,
 	);
 
@@ -1138,7 +1132,7 @@ export function getClassActionCost(
 				return C.UNTURN_CASH_COST;
 		}
 	})();
-	return Math.max(0, base - player.classActionCostReduction);
+	return Math.max(0, base - player.derived.classActionCostReduction);
 }
 
 export function computeActorWasBluffing(

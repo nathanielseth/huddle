@@ -560,7 +560,7 @@ const CREW_MECHANICS: Record<
 		turnedEffects: [{ type: "draw_cards", amount: 2 }],
 		passiveEffects: [],
 	},
-	cristatella: {
+	bagman: {
 		turnedEffects: [],
 		passiveEffects: [{ type: "become_also_defender" }],
 	},
@@ -1093,7 +1093,7 @@ export const CARD_IDS = {
 		MAYUMI: "mayumi",
 		TOO_BIG: "too-big",
 		CLAW_MACHINE: "claw-machine",
-		CRISTATELLA: "cristatella",
+		BAGMAN: "bagman",
 		COOL_GUY: "cool-guy",
 		BELLADONNA: "belladonna",
 		RAT_QUEEN: "rat-queen",

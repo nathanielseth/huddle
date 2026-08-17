@@ -5,6 +5,7 @@
 	"type": "module",
 	"scripts": {
 		"dev": "vite",
+		"dev:wait": "wait-on tcp:3001 && vite",
 		"build": "tsc -b && vite build",
 		"lint": "eslint .",
 		"preview": "vite preview"
@@ -40,7 +41,8 @@
 		"jsdom": "^29.1.1",
 		"tailwindcss": "^4.2.2",
 		"typescript": "^6.0.3",
-		"vite": "^8.0.1"
+		"vite": "^8.0.1",
+		"wait-on": "^9.1.0"
 	},
 	"overrides": {
 		"ws": "^8.20.1"
