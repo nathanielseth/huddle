@@ -4,6 +4,7 @@ import type { RoomRegistry } from "../room/registry";
 import type { GameRunner } from "../engine/GameRunner";
 import type { IO } from "../types";
 import { logger } from "../lib/logger";
+import { terminateCpuSearchPoolIfStarted } from "../engine/CpuSearchPool";
 
 const CLEANUP_INTERVAL_MS = 5 * 60 * 1_000;
 const SHUTDOWN_TIMEOUT_MS = 10_000;
@@ -46,9 +47,11 @@ export function registerShutdownHandlers(
 
 		void io.close(() => {
 			httpServer.close(() => {
-				clearTimeout(forceExit);
-				logger.info("shutdown complete");
-				process.exit(0);
+				void terminateCpuSearchPoolIfStarted().finally(() => {
+					clearTimeout(forceExit);
+					logger.info("shutdown complete");
+					process.exit(0);
+				});
 			});
 		});
 	}

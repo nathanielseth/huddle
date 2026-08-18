@@ -12,16 +12,24 @@ export function sampleRolloutAction(
 	seat: string,
 	helpers: EngineHelpers,
 	rng: () => number,
+	precomputedLegal?: readonly FaceturnsAction[],
 ): RolloutChoice {
-	const legal = getLegalActions(state, seat, helpers);
+	const legal = precomputedLegal ?? getLegalActions(state, seat, helpers, rng);
 
-	// block_window only ever offers "block"; give the rollout a real chance
-	// to see the unblocked outcome too, same as the search tree does
-	if (state.phase === "block_window") {
-		const blockAction = legal.find((a) => a.type === "block");
-		if (!blockAction) return { kind: "none" };
-		return rng() < 0.5
-			? { kind: "action", action: blockAction }
+	if (state.phase === "defend_window") {
+		const defendAction = legal.find((a) => a.type === "defend");
+		if (!defendAction) return { kind: "none" };
+
+		const defender = state.players.get(seat);
+		const isBluffing =
+			defender !== undefined &&
+			helpers.computeActorWasBluffing(defender, "defend");
+
+		if (!isBluffing) return { kind: "action", action: defendAction };
+
+		const roll = Math.floor(rng() * 2);
+		return roll === 0
+			? { kind: "action", action: defendAction }
 			: { kind: "decline_via_timeout" };
 	}
 

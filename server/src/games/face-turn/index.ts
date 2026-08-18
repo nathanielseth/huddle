@@ -5,8 +5,8 @@ import type {
 	GameContext,
 	EngineResult,
 } from "../../engine/GameEngine";
-import { decideAction } from "./cpu/cpu-player";
 import { getLegalActions, type EngineHelpers } from "./cpu/legal-actions";
+import { getCpuSearchPool } from "../../engine/CpuSearchPool";
 import type { FaceturnsSecret } from "../../../../shared/games/face-turn/types";
 import type {
 	FaceturnServerState,
@@ -53,7 +53,6 @@ import {
 	validateStart,
 	onPlayerRemoved,
 } from "./config";
-
 
 export function buildStrikeResolution(
 	outcome: StrikeOrExecuteOutcome,
@@ -528,14 +527,17 @@ export const faceturnsEngine: GameEngine &
 		return null;
 	},
 
-	actForCpuSeat(ctx: GameContext, playerId: string): EngineResult {
+	async actForCpuSeat(
+		ctx: GameContext,
+		playerId: string,
+	): Promise<EngineResult> {
 		const state = ctx.room.gamePayload as FaceturnServerState;
-		const action = decideAction(state, playerId, Math.random, undefined);
+		const action = await getCpuSearchPool().decide(state, playerId);
 		if (!action) {
 			return makeResult(state, ctx.room.timer?.duration ?? null);
 		}
 
-		return faceturnsEngine.onAction(ctx, playerId, action) as EngineResult;
+		return faceturnsEngine.onAction(ctx, playerId, action);
 	},
 
 	getPlayerSecret(ctx: GameContext, playerId: string): FaceturnsSecret | null {

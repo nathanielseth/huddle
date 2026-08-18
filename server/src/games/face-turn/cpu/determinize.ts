@@ -7,6 +7,25 @@ import { CREW, isDraftable } from "../cards";
 import { shuffle } from "../../lib/random";
 import { markDeterminized, type DeterminizedState } from "./types";
 
+function cloneMap<K, V>(source: ReadonlyMap<K, V>): Map<K, V> {
+	return source.size === 0 ? new Map<K, V>() : new Map(source);
+}
+
+function cloneSet<T>(source: ReadonlySet<T>): Set<T> {
+	return source.size === 0 ? new Set<T>() : new Set(source);
+}
+
+function cloneCrewClassOverrides<K, V>(
+	source: ReadonlyMap<K, ReadonlySet<V>>,
+): Map<K, Set<V>> {
+	if (source.size === 0) return new Map<K, Set<V>>();
+	const result = new Map<K, Set<V>>();
+	for (const [slot, set] of source) {
+		result.set(slot, cloneSet(set));
+	}
+	return result;
+}
+
 export function cloneServerState(
 	state: FaceturnServerState,
 ): FaceturnServerState {
@@ -20,7 +39,7 @@ export function cloneServerState(
 		players,
 		teams: state.teams.map((t) => [...t]),
 		turnOrder: [...state.turnOrder],
-		eliminatedPlayers: new Set(state.eliminatedPlayers),
+		eliminatedPlayers: cloneSet(state.eliminatedPlayers),
 		pendingAction: state.pendingAction ? { ...state.pendingAction } : null,
 		challengeEligiblePlayerIds: [...state.challengeEligiblePlayerIds],
 		moveChain: state.moveChain
@@ -34,13 +53,16 @@ export function cloneServerState(
 		pendingInteraction: state.pendingInteraction
 			? structuredCloneInteraction(state.pendingInteraction)
 			: null,
+		pendingDefendableStrikes: state.pendingDefendableStrikes.map((s) => ({
+			...s,
+		})),
 		watcherReveal: state.watcherReveal
 			? {
 					forPlayerId: state.watcherReveal.forPlayerId,
 					hand: [...state.watcherReveal.hand],
 				}
 			: null,
-		rpsChoices: new Map(state.rpsChoices),
+		rpsChoices: cloneMap(state.rpsChoices),
 		// invalidate public state cache so the clone recomputes its own view
 		_publicStateCacheValid: false,
 		_cachedPublicState: null,
@@ -52,18 +74,15 @@ function clonePlayer(p: FaceturnServerPlayer): FaceturnServerPlayer {
 		...p,
 		crewIds: [...p.crewIds] as [string | null, string | null],
 		crewTurned: [...p.crewTurned] as [boolean, boolean],
-		crewClassOverrides: new Map(
-			[...p.crewClassOverrides].map(([slot, set]) => [slot, new Set(set)]),
-		),
 		hand: [...p.hand],
 		deck: [...p.deck],
 		discardPile: [...p.discardPile],
 		activeMoves: [...p.activeMoves],
-		incomingPoison: new Map(p.incomingPoison),
-		lifeInsuranceTargets: new Map(p.lifeInsuranceTargets),
-		trickleDownTargets: new Map(p.trickleDownTargets),
-		disabledPassiveSlots: new Set(p.disabledPassiveSlots),
-		costOverrides: new Map(p.costOverrides),
+		incomingPoison: cloneMap(p.incomingPoison),
+		lifeInsuranceTargets: cloneMap(p.lifeInsuranceTargets),
+		trickleDownTargets: cloneMap(p.trickleDownTargets),
+		disabledPassiveSlots: cloneSet(p.disabledPassiveSlots),
+		costOverrides: cloneMap(p.costOverrides),
 		draftSelections: p.draftSelections
 			? {
 					bossId: p.draftSelections.bossId,
@@ -71,6 +90,10 @@ function clonePlayer(p: FaceturnServerPlayer): FaceturnServerPlayer {
 					moveIds: [...p.draftSelections.moveIds],
 				}
 			: null,
+		derived: {
+			...p.derived,
+			crewClassOverrides: cloneCrewClassOverrides(p.derived.crewClassOverrides),
+		},
 	};
 }
 
@@ -102,12 +125,13 @@ const ALL_DRAFTABLE_CREW_IDS: readonly string[] = CREW.filter(isDraftable).map(
 export function determinize(
 	state: FaceturnServerState,
 	observerSeat: string,
+	rng: () => number = Math.random,
 ): DeterminizedState {
 	const next = cloneServerState(state);
 
 	const pinnedTopOfDeck = pinDigDeepReveal(next);
-	redealHiddenCardZones(next, observerSeat, pinnedTopOfDeck);
-	redealFaceDownCrew(next, observerSeat);
+	redealHiddenCardZones(next, observerSeat, pinnedTopOfDeck, rng);
+	redealFaceDownCrew(next, observerSeat, rng);
 
 	return markDeterminized(next);
 }
@@ -129,6 +153,7 @@ function redealHiddenCardZones(
 	state: FaceturnServerState,
 	observerSeat: string,
 	pinnedTopOfDeck: Map<string, readonly string[]>,
+	rng: () => number = Math.random,
 ): void {
 	for (const [seatId, player] of state.players) {
 		if (seatId === observerSeat) continue;
@@ -146,7 +171,7 @@ function redealHiddenCardZones(
 			...player.deck.filter((id) => consumeOne(pinCounts, id)),
 			...player.discardPile,
 		];
-		const shuffledRest = shuffle(rest);
+		const shuffledRest = shuffle(rest, rng);
 
 		const newDeck = [...pin, ...shuffledRest.slice(0, deckSize - pin.length)];
 		const remainder = shuffledRest.slice(deckSize - pin.length);
@@ -178,6 +203,7 @@ function consumeOne(pinCounts: Map<string, number>, id: string): boolean {
 function redealFaceDownCrew(
 	state: FaceturnServerState,
 	observerSeat: string,
+	rng: () => number = Math.random,
 ): void {
 	const visible = new Set<string>();
 	for (const player of state.players.values()) {
@@ -199,7 +225,10 @@ function redealFaceDownCrew(
 		if (observer.reserveCrewId) visible.add(observer.reserveCrewId);
 	}
 
-	const pool = shuffle(ALL_DRAFTABLE_CREW_IDS.filter((id) => !visible.has(id)));
+	const pool = shuffle(
+		ALL_DRAFTABLE_CREW_IDS.filter((id) => !visible.has(id)),
+		rng,
+	);
 
 	for (const [seatId, player] of state.players) {
 		if (seatId === observerSeat) continue;

@@ -3,27 +3,20 @@ import type { FaceturnServerState } from "../types";
 import { determinize } from "./determinize";
 import { getLegalActions, type EngineHelpers } from "./legal-actions";
 import { applyAction, applyTimerExpired, isTerminal } from "./simulate";
-import { evaluate } from "./evaluate";
-import { markDeterminized, type DeterminizedState } from "./types";
-import { sampleRolloutAction } from "./rollout";
+import { evaluate as defaultEvaluate } from "./evaluate";
+import {
+	markDeterminized,
+	type DeterminizedState,
+	type StrategyOverride,
+	type EvaluateFn,
+	type RolloutPolicyFn,
+} from "./types";
+import { sampleRolloutAction as defaultRolloutPolicy } from "./rollout";
 
 const TIMEOUT_DECLINE_KEY = "__timeout_decline__";
 
 function moveKey(action: FaceturnsAction): string {
-	return JSON.stringify(sortedEntries(action));
-}
-
-function sortedEntries(value: unknown): unknown {
-	if (Array.isArray(value)) return value.map(sortedEntries);
-	if (value && typeof value === "object") {
-		return Object.fromEntries(
-			Object.entries(value as Record<string, unknown>)
-				.filter(([, v]) => v !== undefined)
-				.sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))
-				.map(([k, v]) => [k, sortedEntries(v)]),
-		);
-	}
-	return value;
+	return JSON.stringify(action);
 }
 
 interface Edge {
@@ -78,6 +71,7 @@ export interface MoIsmctsConfig {
 	readonly iterations: number;
 	readonly rolloutDepth: number;
 	readonly rng: () => number;
+	readonly strategyOverride?: StrategyOverride;
 }
 
 export interface MoIsmctsResult {
@@ -96,7 +90,7 @@ export function search(
 	helpers: EngineHelpers,
 	config: MoIsmctsConfig,
 ): MoIsmctsResult | null {
-	const rootLegal = getLegalActions(rootState, rootSeat, helpers);
+	const rootLegal = getLegalActions(rootState, rootSeat, helpers, config.rng);
 	if (rootLegal.length === 0) return null;
 	if (rootLegal.length === 1) {
 		return {
@@ -116,8 +110,20 @@ export function search(
 		return tree;
 	};
 
+	const evaluateFn = config.strategyOverride?.evaluate ?? defaultEvaluate;
+	const rolloutPolicyFn =
+		config.strategyOverride?.rolloutPolicy ?? defaultRolloutPolicy;
+
 	for (let i = 0; i < config.iterations; i++) {
-		runIteration(treeFor, rootState, rootSeat, helpers, config);
+		runIteration(
+			treeFor,
+			rootState,
+			rootSeat,
+			helpers,
+			config,
+			evaluateFn,
+			rolloutPolicyFn,
+		);
 	}
 
 	const rootTree = treeFor(rootSeat);
@@ -143,9 +149,11 @@ function runIteration(
 	rootSeat: string,
 	helpers: EngineHelpers,
 	config: MoIsmctsConfig,
+	evaluateFn: EvaluateFn,
+	rolloutPolicyFn: RolloutPolicyFn,
 ): void {
 	// fresh determinization per iteration. reusing one across iterations would overfit the search to a single guessed hidden state
-	let state: DeterminizedState = determinize(rootState, rootSeat);
+	let state: DeterminizedState = determinize(rootState, rootSeat, config.rng);
 
 	// current position within each seat's tree, advanced in lockstep as we descend the sampled determinized line
 	const current = new Map<string, Node>();
@@ -155,13 +163,14 @@ function runIteration(
 	for (;;) {
 		if (isTerminal(state)) break;
 
-		const seat = actingSeatFor(state, helpers);
-		if (!seat) break;
+		const acting = actingSeatFor(state, helpers, config.rng);
+		if (!acting) break;
+		const { seat, legal } = acting;
 
-		const legal = getLegalActions(state, seat, helpers);
 		if (legal.length === 0) break;
 
-		const offersTimeoutDecline = state.phase === "block_window";
+		const offersTimeoutDecline = state.phase === "defend_window";
+		const keys = legal.map(moveKey);
 
 		// selection/expansion happens in every seat's tree, keyed by that seat's view of the move (the "descend all trees in parallel" step). seats other than the actor also advance so their trees learn the game shape even where they don't act.
 		let actorEdge: Edge | null = null;
@@ -170,7 +179,6 @@ function runIteration(
 			const tree = current.get(observerSeat) ?? treeFor(observerSeat);
 			const node = tree;
 
-			const keys = legal.map(moveKey);
 			for (let idx = 0; idx < legal.length; idx++) {
 				const edge = node.edge(keys[idx]!, legal[idx]!, false);
 				edge.availability += 1;
@@ -181,9 +189,12 @@ function runIteration(
 				timeoutEdge.availability += 1;
 			}
 
-			const candidates = keys
-				.map((key) => node.edges.get(key)!)
-				.concat(timeoutEdge ? [timeoutEdge] : []);
+			const candidateCount = keys.length + (timeoutEdge ? 1 : 0);
+			const candidates: Edge[] = new Array<Edge>(candidateCount);
+			for (let idx = 0; idx < keys.length; idx++) {
+				candidates[idx] = node.edges.get(keys[idx]!)!;
+			}
+			if (timeoutEdge) candidates[keys.length] = timeoutEdge;
 
 			const chosen = selectEdge(candidates);
 			current.set(observerSeat, chosen.child);
@@ -205,8 +216,16 @@ function runIteration(
 	}
 
 	const value = isTerminal(state)
-		? evaluate(state, rootSeat)
-		: rollout(state, rootSeat, config.rolloutDepth, helpers, config.rng);
+		? evaluateFn(state, rootSeat)
+		: rollout(
+				state,
+				rootSeat,
+				config.rolloutDepth,
+				helpers,
+				config.rng,
+				evaluateFn,
+				rolloutPolicyFn,
+			);
 
 	for (const { edge } of path) {
 		edge.visits += 1;
@@ -237,10 +256,12 @@ function allSeats(state: FaceturnServerState): readonly string[] {
 function actingSeatFor(
 	state: FaceturnServerState,
 	helpers: EngineHelpers,
-): string | null {
+	rng: () => number,
+): { seat: string; legal: readonly FaceturnsAction[] } | null {
 	for (const seatId of state.players.keys()) {
 		if (state.eliminatedPlayers.has(seatId)) continue;
-		if (getLegalActions(state, seatId, helpers).length > 0) return seatId;
+		const legal = getLegalActions(state, seatId, helpers, rng);
+		if (legal.length > 0) return { seat: seatId, legal };
 	}
 	return null;
 }
@@ -251,16 +272,19 @@ function rollout(
 	maxDepth: number,
 	helpers: EngineHelpers,
 	rng: () => number,
+	evaluateFn: EvaluateFn,
+	rolloutPolicyFn: RolloutPolicyFn,
 ): number {
 	let current: FaceturnServerState = state;
 
 	for (let ply = 0; ply < maxDepth; ply++) {
 		if (isTerminal(current)) break;
 
-		const seat = actingSeatFor(current, helpers);
-		if (!seat) break;
+		const acting = actingSeatFor(current, helpers, rng);
+		if (!acting) break;
+		const { seat, legal } = acting;
 
-		const choice = sampleRolloutAction(current, seat, helpers, rng);
+		const choice = rolloutPolicyFn(current, seat, helpers, rng, legal);
 		if (choice.kind === "none") break;
 
 		current =
@@ -269,5 +293,5 @@ function rollout(
 				: applyAction(current, seat, choice.action);
 	}
 
-	return evaluate(current, rootSeat);
+	return evaluateFn(current, rootSeat);
 }

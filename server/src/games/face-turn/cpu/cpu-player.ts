@@ -9,11 +9,11 @@ import type { EngineHelpers } from "./legal-actions";
 import { getLegalActions } from "./legal-actions";
 import { search } from "./ismcts";
 import { selectFinalAction } from "./select-action";
-import type { CpuTuning } from "./types";
+import type { CpuTuning, StrategyOverride } from "./types";
 
 export const TUNING: CpuTuning = {
-	iterations: 1000,
-	rolloutDepth: 7,
+	iterations: 800,
+	rolloutDepth: 6,
 	actionTemperature: 0.12,
 	thinkMs: [300, 800],
 };
@@ -27,6 +27,7 @@ export function decideAction(
 	seat: string,
 	rng: () => number = Math.random,
 	tuningOverride?: Partial<CpuTuning>,
+	strategyOverride?: StrategyOverride,
 ): FaceturnsAction | null {
 	const helpers: EngineHelpers = {
 		getMoveCost,
@@ -34,7 +35,7 @@ export function decideAction(
 		computeActorWasBluffing,
 	};
 
-	const legal = getLegalActions(state, seat, helpers);
+	const legal = getLegalActions(state, seat, helpers, rng);
 	if (legal.length === 0) return null;
 	if (legal.length === 1) return legal[0]!;
 
@@ -46,6 +47,7 @@ export function decideAction(
 		iterations: tuning.iterations,
 		rolloutDepth: tuning.rolloutDepth,
 		rng,
+		...(strategyOverride ? { strategyOverride } : {}),
 	});
 	if (!result) return legal[0]!; // defensive fallback, shouldnt hit
 

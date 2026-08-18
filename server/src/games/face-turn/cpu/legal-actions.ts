@@ -1,7 +1,11 @@
 import type { FaceturnsAction } from "../../../../../shared/games/face-turn/schemas";
 import type { CrewClass } from "../../../../../shared/games/face-turn/types";
 import { FACETURN_CONSTANTS as C } from "../types";
-import type { FaceturnServerPlayer, FaceturnServerState } from "../types";
+import type {
+	FaceturnServerPlayer,
+	FaceturnServerState,
+	DraftSelections,
+} from "../types";
 import {
 	getMove,
 	getBoss,
@@ -14,17 +18,25 @@ import {
 	getTeammates,
 	firstTurnedSlot,
 	firstUnturnedSlot,
-	isStrikeBlockedByTerminal,
+	isStrikeDefendedByTerminal,
 	getLivingPlayers,
+	moveHasLegalTarget,
+	requiresStrictAllyTarget,
 } from "../effects";
+import {
+	isDraftValid,
+	effectiveCost as sharedEffectiveCost,
+	randomizeDraftSelections,
+} from "../game";
 
 const CREW_CLASSES: readonly CrewClass[] = [
 	"striker",
-	"blocker",
+	"defender",
 	"collector",
-	"turner",
+	"unturner",
 ];
 
+// delegates to game.ts effectiveCost for special cases, keeping getMoveCost for base calc but centralizing overrides in one place
 function effectiveCost(
 	state: FaceturnServerState,
 	player: FaceturnServerPlayer,
@@ -35,14 +47,8 @@ function effectiveCost(
 		moveId: string,
 	) => number,
 ): number {
-	const base = getMoveCost(state, player, moveId);
-	if (
-		moveId === CARD_IDS.MOVE.CLAIM_THE_BOUNTY &&
-		player.hasCalledBluffSuccessfully
-	) {
-		return 0;
-	}
-	return base;
+	void getMoveCost;
+	return sharedEffectiveCost(state, player, moveId);
 }
 
 export interface EngineHelpers {
@@ -53,11 +59,11 @@ export interface EngineHelpers {
 	) => number;
 	readonly getClassActionCost: (
 		player: FaceturnServerPlayer,
-		action: "strike" | "block" | "collect" | "unturn",
+		action: "strike" | "defend" | "collect" | "unturn",
 	) => number;
 	readonly computeActorWasBluffing: (
 		actor: FaceturnServerPlayer,
-		action: "strike" | "collect" | "unturn" | "block",
+		action: "strike" | "collect" | "unturn" | "defend",
 	) => boolean;
 }
 
@@ -66,6 +72,7 @@ export function getLegalActions(
 	state: FaceturnServerState,
 	seat: string,
 	helpers: EngineHelpers,
+	rng: () => number = Math.random,
 ): FaceturnsAction[] {
 	const player = state.players.get(seat);
 	if (!player) return [];
@@ -76,6 +83,12 @@ export function getLegalActions(
 	}
 
 	switch (state.phase) {
+		case "drafting":
+			return legalDraftingActions(player, rng);
+		case "rps":
+			return legalRpsActions(state, seat, rng);
+		case "mulligan":
+			return legalMulliganActions(player);
 		case "active_turn":
 			return state.activePlayerId === seat
 				? legalActiveTurnActions(state, player, helpers)
@@ -84,13 +97,78 @@ export function getLegalActions(
 			return legalMoveChainActions(state, seat, player, helpers);
 		case "challenge_window":
 			return legalChallengeWindowActions(state, seat, helpers);
-		case "block_window":
-			return legalBlockWindowActions(state, seat, helpers);
-		case "block_declared":
-			return legalBlockDeclaredActions(state, seat);
+		case "defend_window":
+			return legalDefendWindowActions(state, seat, helpers);
+		case "defend_declared":
+			return legalDefendDeclaredActions(state, seat);
 		default:
 			return [];
 	}
+}
+
+function legalDraftingActions(
+	player: FaceturnServerPlayer,
+	rng: () => number,
+): FaceturnsAction[] {
+	if (player.isDraftLocked) return [];
+	if (isDraftValid(player)) return [{ type: "lock_draft" }];
+
+	const draft: DraftSelections = { bossId: null, crewIds: [], moveIds: [] };
+	randomizeDraftSelections(draft, rng);
+	return [
+		{
+			type: "load_draft",
+			bossId: draft.bossId!,
+			crewIds: [...draft.crewIds],
+			moveIds: [...draft.moveIds],
+		},
+	];
+}
+
+// only the two seat representatives (duel/teams captains) ever choose in rps;
+// ffa skips the phase entirely
+function legalRpsActions(
+	state: FaceturnServerState,
+	seat: string,
+	rng: () => number,
+): FaceturnsAction[] {
+	if (state.mode === "ffa") return [];
+	const [rep1, rep2] = state.playerOrder;
+	if (seat !== rep1 && seat !== rep2) return [];
+	if (state.rpsChoices.has(seat)) return [];
+
+	const choices = ["rock", "paper", "scissors"] as const;
+	const choice = choices[Math.floor(rng() * choices.length)]!;
+	return [{ type: "rps_choice", choice }];
+}
+
+function legalMulliganActions(player: FaceturnServerPlayer): FaceturnsAction[] {
+	if (player.mulliganDecided) return [];
+	return [{ type: "mulligan", redraw: false }];
+}
+function activeMoveSlotsAreFullAndDefendingAnAffordableHandMove(
+	state: FaceturnServerState,
+	player: FaceturnServerPlayer,
+	getMoveCost: EngineHelpers["getMoveCost"],
+): boolean {
+	const slotsFull =
+		player.activeMoves.filter((m) => m !== null).length >=
+		C.MAX_ACTIVE_MOVE_SLOTS;
+	if (!slotsFull) return false;
+
+	const seenMoveIds = new Set<string>();
+	for (const moveId of player.hand) {
+		if (seenMoveIds.has(moveId)) continue;
+		seenMoveIds.add(moveId);
+
+		const move = getMove(moveId);
+		if (move.moveType !== "active") continue;
+
+		const cost = effectiveCost(state, player, moveId, getMoveCost);
+		if (player.cash >= cost) return true;
+	}
+
+	return false;
 }
 
 function legalActiveTurnActions(
@@ -107,9 +185,28 @@ function legalActiveTurnActions(
 	actions.push(...legalFaceTurnActions(state, player));
 	actions.push({ type: "end_turn" });
 
-	for (let i = 0; i < player.activeMoves.length; i++) {
-		if (player.activeMoves[i] !== null) {
-			actions.push({ type: "discard_active_move", slotIndex: i });
+	// active Moves are lasting engines; only offer discard when all slots are full and hand holds a playable Active Move to swap in
+	// avoids flooding action space with dominated no‑ops
+	if (
+		activeMoveSlotsAreFullAndDefendingAnAffordableHandMove(
+			state,
+			player,
+			helpers.getMoveCost,
+		)
+	) {
+		for (let i = 0; i < player.activeMoves.length; i++) {
+			if (player.activeMoves[i] !== null) {
+				actions.push({ type: "discard_active_move", slotIndex: i });
+			}
+		}
+	}
+
+	if (player.derived.hasSellCards) {
+		const seenSellIds = new Set<string>();
+		for (const moveId of player.hand) {
+			if (seenSellIds.has(moveId)) continue;
+			seenSellIds.add(moveId);
+			actions.push({ type: "sell_move", moveId });
 		}
 	}
 
@@ -141,15 +238,21 @@ function legalPlayMoveActions(
 			continue;
 		}
 
-		const isBlockableStrike = move.effects.some((e) => {
+		// mirror play_move gate: never offer moves without a legal target
+		// prevents CPU from discarding cash/cards on guaranteed no‑ops
+		if (!moveHasLegalTarget(state, player.playerId, move)) continue;
+
+		const isDefendableStrike = move.effects.some((e) => {
 			const eff = unwrapEffect(e);
-			return eff.type === "strike_enemy_crew_blockable";
+			return eff.type === "strike_enemy_crew_defendable";
 		});
 
-		if (isBlockableStrike) {
+		if (isDefendableStrike) {
 			for (const enemy of getEnemies(state, player.playerId)) {
 				const faceDownSlots = eligibleFaceDownSlots(enemy);
-				if (faceDownSlots.length === 0) {
+				const faceUpSlots = eligibleFaceUpSlots(enemy);
+
+				if (faceDownSlots.length === 0 && faceUpSlots.length === 0) {
 					actions.push({
 						type: "play_move",
 						moveId,
@@ -157,12 +260,62 @@ function legalPlayMoveActions(
 					});
 					continue;
 				}
+
 				for (const slot of faceDownSlots) {
 					actions.push({
 						type: "play_move",
 						moveId,
 						targetPlayerId: enemy.playerId,
 						targetCrewSlot: slot,
+					});
+				}
+				// a face-up crew can also be targeted directly to kill it,
+				// regardless of whether a face-down slot is also available
+				for (const slot of faceUpSlots) {
+					actions.push({
+						type: "play_move",
+						moveId,
+						targetPlayerId: enemy.playerId,
+						targetCrewSlot: slot,
+					});
+				}
+			}
+			continue;
+		}
+
+		// warrant of Arrest: requires explicit enemy face‑down slot; no “pick any” fallback, so always enumerate real candidates
+		const needsEnemyFaceDownCrewSlot = move.effects.some(
+			(e) => unwrapEffect(e).type === "mark_enemy_crew_for_delayed_turn",
+		);
+		if (needsEnemyFaceDownCrewSlot) {
+			for (const enemy of getEnemies(state, player.playerId)) {
+				for (const slot of eligibleFaceDownSlots(enemy)) {
+					actions.push({
+						type: "play_move",
+						moveId,
+						targetPlayerId: enemy.playerId,
+						targetCrewSlot: slot,
+					});
+				}
+			}
+			continue;
+		}
+
+		// sabotage: discard_targeted_enemy_active_move likewise has no fallback
+		// fizzles when ctx.targetActiveMoveSlot is undefined
+		// moveHasLegalTarget above already guarantees at least one enemy has
+		// a filled active-move slot; enumerate real candidates for each one
+		const needsEnemyActiveMoveSlot = move.effects.some(
+			(e) => unwrapEffect(e).type === "discard_targeted_enemy_active_move",
+		);
+		if (needsEnemyActiveMoveSlot) {
+			for (const enemy of getEnemies(state, player.playerId)) {
+				for (const slot of eligibleActiveMoveSlots(enemy)) {
+					actions.push({
+						type: "play_move",
+						moveId,
+						targetPlayerId: enemy.playerId,
+						targetActiveMoveSlot: slot,
 					});
 				}
 			}
@@ -175,10 +328,14 @@ function legalPlayMoveActions(
 			continue;
 		}
 
+		// STRICT_ALLY_TARGET_TYPES exclude self entirely
+		// resolveStrictAllyTarget enforces genuine teammate only, never the caster
 		const targets =
 			scope === "enemy"
 				? getEnemies(state, player.playerId)
-				: [player, ...getTeammates(state, player.playerId)];
+				: requiresStrictAllyTarget(move)
+					? getTeammates(state, player.playerId)
+					: [player, ...getTeammates(state, player.playerId)];
 
 		if (targets.length === 0) continue;
 
@@ -216,12 +373,22 @@ function legalClassActionDeclares(
 	tryDeclare("strike", () => {
 		const out: FaceturnsAction[] = [];
 		for (const enemy of getEnemies(state, player.playerId)) {
-			if (isStrikeBlockedByTerminal(enemy)) continue;
+			if (isStrikeDefendedByTerminal(enemy)) continue;
+
 			out.push({
 				type: "declare_class_action",
 				action: "strike",
 				targetPlayerId: enemy.playerId,
 			});
+			// striking an already face-up crew kills it
+			for (const slot of eligibleFaceUpSlots(enemy)) {
+				out.push({
+					type: "declare_class_action",
+					action: "strike",
+					targetPlayerId: enemy.playerId,
+					targetCrewSlot: slot,
+				});
+			}
 		}
 		return out;
 	});
@@ -302,11 +469,23 @@ function legalFaceTurnActions(
 
 	for (const enemy of getEnemies(state, player.playerId)) {
 		const faceDownSlots = eligibleFaceDownSlots(enemy);
-		if (faceDownSlots.length === 0) {
+		const faceUpSlots = eligibleFaceUpSlots(enemy);
+
+		if (faceDownSlots.length === 0 && faceUpSlots.length === 0) {
+			// no crew left at all on this enemy: untargeted use_face_turn
+			// resolves straight to execute
 			actions.push({ type: "use_face_turn", targetPlayerId: enemy.playerId });
 			continue;
 		}
+
 		for (const slot of faceDownSlots) {
+			actions.push({
+				type: "use_face_turn",
+				targetPlayerId: enemy.playerId,
+				targetCrewSlot: slot,
+			});
+		}
+		for (const slot of faceUpSlots) {
 			actions.push({
 				type: "use_face_turn",
 				targetPlayerId: enemy.playerId,
@@ -323,6 +502,23 @@ function eligibleFaceDownSlots(player: FaceturnServerPlayer): (0 | 1)[] {
 	for (let i = 0; i < 2; i++) {
 		const slot = i as 0 | 1;
 		if (player.crewIds[slot] && !player.crewTurned[slot]) slots.push(slot);
+	}
+	return slots;
+}
+
+function eligibleFaceUpSlots(player: FaceturnServerPlayer): (0 | 1)[] {
+	const slots: (0 | 1)[] = [];
+	for (let i = 0; i < 2; i++) {
+		const slot = i as 0 | 1;
+		if (player.crewIds[slot] && player.crewTurned[slot]) slots.push(slot);
+	}
+	return slots;
+}
+
+function eligibleActiveMoveSlots(player: FaceturnServerPlayer): (0 | 1 | 2)[] {
+	const slots: (0 | 1 | 2)[] = [];
+	for (let i = 0; i < player.activeMoves.length; i++) {
+		if (player.activeMoves[i] !== null) slots.push(i as 0 | 1 | 2);
 	}
 	return slots;
 }
@@ -349,11 +545,29 @@ function legalMoveChainActions(
 
 		const cost = effectiveCost(state, player, moveId, helpers.getMoveCost);
 		if (player.cash < cost) continue;
+		if (!moveHasLegalTarget(state, seat, move)) continue;
 
-		const scope = getMoveTargetScope(move);
+		const needsEnemyActiveMoveSlot = move.effects.some(
+			(e) => unwrapEffect(e).type === "discard_targeted_enemy_active_move",
+		);
+		if (needsEnemyActiveMoveSlot && move.moveType === "burst") {
+			for (const enemy of getEnemies(state, seat)) {
+				for (const slot of eligibleActiveMoveSlots(enemy)) {
+					actions.push({
+						type: "chain_play_burst",
+						moveId,
+						targetPlayerId: enemy.playerId,
+						targetActiveMoveSlot: slot,
+					});
+				}
+			}
+			continue;
+		}
+
 		const kind =
 			move.moveType === "burst" ? "chain_play_burst" : "chain_play_slow";
 
+		const scope = getMoveTargetScope(move);
 		if (scope === "none") {
 			actions.push({ type: kind, moveId });
 			continue;
@@ -362,7 +576,9 @@ function legalMoveChainActions(
 		const targets =
 			scope === "enemy"
 				? getEnemies(state, seat)
-				: [player, ...getTeammates(state, seat)];
+				: requiresStrictAllyTarget(move)
+					? getTeammates(state, seat)
+					: [player, ...getTeammates(state, seat)];
 
 		for (const target of targets) {
 			actions.push({
@@ -389,14 +605,17 @@ function legalChallengeWindowActions(
 	];
 
 	if (pending && pending.type === "class_action_strike") {
-		const blocker = state.players.get(seat);
-		if (blocker) {
-			const wouldBeBluffing = helpers.computeActorWasBluffing(blocker, "block");
+		const defender = state.players.get(seat);
+		if (defender) {
+			const wouldBeBluffing = helpers.computeActorWasBluffing(
+				defender,
+				"defend",
+			);
 			const canPayBluff =
-				!wouldBeBluffing || firstUnturnedSlot(blocker) !== null;
-			const cost = helpers.getClassActionCost(blocker, "block");
-			if (canPayBluff && blocker.cash >= cost) {
-				actions.push({ type: "block" });
+				!wouldBeBluffing || firstUnturnedSlot(defender) !== null;
+			const cost = helpers.getClassActionCost(defender, "defend");
+			if (canPayBluff && defender.cash >= cost) {
+				actions.push({ type: "defend" });
 			}
 		}
 	}
@@ -404,27 +623,27 @@ function legalChallengeWindowActions(
 	return actions;
 }
 
-function legalBlockWindowActions(
+function legalDefendWindowActions(
 	state: FaceturnServerState,
 	seat: string,
 	helpers: EngineHelpers,
 ): FaceturnsAction[] {
 	const pending = state.pendingAction;
 	if (!pending?.targetPlayerId) return [];
-	if (!isEligibleBlocker(state, seat, pending.targetPlayerId)) return [];
+	if (!isEligibleDefender(state, seat, pending.targetPlayerId)) return [];
 
-	const blocker = state.players.get(seat);
-	if (!blocker) return [];
+	const defender = state.players.get(seat);
+	if (!defender) return [];
 
-	const wouldBeBluffing = helpers.computeActorWasBluffing(blocker, "block");
-	if (wouldBeBluffing && firstUnturnedSlot(blocker) === null) return [];
-	const cost = helpers.getClassActionCost(blocker, "block");
-	if (blocker.cash < cost) return [];
+	const wouldBeBluffing = helpers.computeActorWasBluffing(defender, "defend");
+	if (wouldBeBluffing && firstUnturnedSlot(defender) === null) return [];
+	const cost = helpers.getClassActionCost(defender, "defend");
+	if (defender.cash < cost) return [];
 
-	return [{ type: "block" }];
+	return [{ type: "defend" }];
 }
 
-function isEligibleBlocker(
+function isEligibleDefender(
 	state: FaceturnServerState,
 	candidateSeat: string,
 	targetPlayerId: string,
@@ -438,16 +657,16 @@ function isEligibleBlocker(
 	);
 }
 
-function legalBlockDeclaredActions(
+function legalDefendDeclaredActions(
 	state: FaceturnServerState,
 	seat: string,
 ): FaceturnsAction[] {
 	const pending = state.pendingAction;
 	if (!pending || pending.targetPlayerId !== seat) return [];
 
-	const actions: FaceturnsAction[] = [{ type: "accept_block" }];
+	const actions: FaceturnsAction[] = [{ type: "accept_defend" }];
 	if (pending.originalActionType !== "card_strike") {
-		actions.push({ type: "challenge_block" });
+		actions.push({ type: "challenge_defend" });
 	}
 	return actions;
 }
@@ -609,20 +828,6 @@ function legalInteractionActions(
 			return actions;
 		}
 
-		case "watcher_unturn_offer": {
-			const actions: FaceturnsAction[] = [
-				{ type: "resolve_watcher_unturn_offer" },
-			];
-			for (const t of interaction.eligibleTargets) {
-				actions.push({
-					type: "resolve_watcher_unturn_offer",
-					slot: t.slot,
-					targetPlayerId: t.playerId,
-				});
-			}
-			return actions;
-		}
-
 		case "lighthouse_disable_pick": {
 			const maxPicks = interaction.maxPicks ?? 1;
 			if (interaction.eligibleTargets.length === 0) return [];
@@ -670,6 +875,13 @@ function legalInteractionActions(
 			return interaction.eligibleSlots.map((slot) => ({
 				type: "resolve_truth_serum_reveal" as const,
 				crewSlot: slot as 0 | 1,
+			}));
+
+		case "too_big_swap_pick":
+			return interaction.eligibleTargets.map((t) => ({
+				type: "resolve_too_big_swap_pick" as const,
+				targetPlayerId: t.playerId,
+				crewSlot: t.slot,
 			}));
 
 		default:

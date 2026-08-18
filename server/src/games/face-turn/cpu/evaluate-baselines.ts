@@ -4,7 +4,6 @@ import { getEnemies, getTeammates, resolveCrewClass } from "../effects";
 import { VOID_PIECE_IDS } from "../cards";
 import type { StateScore } from "./types";
 
-// score is centered at 0 and roughly bounded to [-1, 1], providing a consistent scale for sibling comparison
 const WIN_SCORE = 1;
 const LOSS_SCORE = -1;
 
@@ -16,11 +15,14 @@ const WEIGHTS = {
 	faceUpCrewThreat: 0.05,
 	executionRisk: 0.35,
 	poisonExposure: 0.04,
-	engineValue: 0.02,
+	activeMoveValue: 0.02,
 	voidPieceProgress: 0.12,
 };
 
-export function evaluate(state: FaceturnServerState, seat: string): StateScore {
+export function evaluatePreEngineValueBaseline(
+	state: FaceturnServerState,
+	seat: string,
+): StateScore {
 	if (state.phase === "finished") {
 		return terminalScore(state, seat);
 	}
@@ -69,14 +71,12 @@ function playerScore(
 		player.bossMaxHp > 0 ? player.bossHp / player.bossMaxHp : 0;
 	let score = WEIGHTS.hpDiff * (hpFraction * 2 - 1);
 
-	// cap armor contribution to max hp to prevent overarmor from dominating evaluation
 	const armorFraction = Math.min(
 		1,
 		player.bossMaxHp > 0 ? player.bossArmor / player.bossMaxHp : 0,
 	);
 	score += WEIGHTS.armorFraction * armorFraction;
 
-	// cash has no hard ceiling, so normalize against a soft reference
 	const cashFraction = softNormalize(player.cash, 8);
 	score += WEIGHTS.cashFraction * cashFraction;
 
@@ -86,7 +86,7 @@ function playerScore(
 	score += WEIGHTS.faceUpCrewThreat * faceUpCrewThreatValue(state, player);
 	score += WEIGHTS.executionRisk * executionRiskValue(player);
 	score -= WEIGHTS.poisonExposure * poisonExposureValue(state, player);
-	score += WEIGHTS.engineValue * activeEngineValue(player);
+	score += WEIGHTS.activeMoveValue * activeMoveCount(player);
 	score += WEIGHTS.voidPieceProgress * voidPieceProgress(player);
 
 	return score;
@@ -97,7 +97,6 @@ function softNormalize(value: number, reference: number): number {
 	return Math.min(1, value / reference);
 }
 
-// face-up crew lose bluff value, so use flat per-crew value; strikers weighted higher for immediate impact
 function faceUpCrewThreatValue(
 	state: FaceturnServerState,
 	player: FaceturnServerPlayer,
@@ -136,25 +135,10 @@ function poisonExposureValue(
 	return player.bossMaxHp > 0 ? Math.min(1, total / player.bossMaxHp) : 0;
 }
 
-// scores current Active Moves via recomputePassives fields, ignoring situational passives to avoid double‑counting
-// constants are rough card‑based estimates, not tuned
-function activeEngineValue(player: FaceturnServerPlayer): number {
-	let v = 0;
-	v += softNormalize(player.derived.cashGainPerTurn, 3) * 0.4;
-	v += softNormalize(player.derived.drawPerTurn, 2) * 0.4;
-	v +=
-		softNormalize(
-			player.derived.moveBaseCostReduction + player.derived.burstMoveCostReduction,
-			2,
-		) * 0.3;
-	v += softNormalize(player.derived.damageBonusFlat, 10) * 0.3;
-	v += softNormalize(player.derived.damageReductionPercent, 50) * 0.3;
-	v += player.derived.hasLifeInsurance ? 0.5 : 0;
-	v += softNormalize(player.derived.armorPerTurn, 10) * 0.2;
-	return clamp01(v);
+function activeMoveCount(player: FaceturnServerPlayer): number {
+	return player.activeMoves.filter((m) => m !== null).length / 3;
 }
 
-// partial void piece progress matters because three pieces end the game outright regardless of hp
 function voidPieceProgress(player: FaceturnServerPlayer): number {
 	const owned = VOID_PIECE_IDS.filter((id) =>
 		player.activeMoves.includes(id),
@@ -164,8 +148,4 @@ function voidPieceProgress(player: FaceturnServerPlayer): number {
 
 function clamp(value: number, min: number, max: number): number {
 	return Math.max(min, Math.min(max, value));
-}
-
-function clamp01(value: number): number {
-	return clamp(value, 0, 1);
 }

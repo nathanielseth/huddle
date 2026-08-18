@@ -63,6 +63,7 @@ export class GameRunner {
 			.then(async () => {
 				if (!store.get(roomCode)) return;
 				const result = await task();
+				if (!store.get(roomCode)) return;
 				onSuccess(result);
 			})
 			.catch((error: unknown) => {

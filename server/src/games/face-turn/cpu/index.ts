@@ -1,2 +1,2 @@
 export { decideAction, getTuning } from "./cpu-player";
-export type { CpuTuning } from "./types";
+export type { CpuTuning, StrategyOverride, EvaluateFn, RolloutPolicyFn } from "./types";
