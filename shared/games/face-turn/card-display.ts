@@ -87,9 +87,9 @@ export const BOSS_DISPLAY: readonly BossCardDisplay[] = [
 		name: "The Watcher",
 		effectText: {
 			command:
-				"See 2 random cards from an enemy's hand and take 1, then steal 2 Cash from them.",
+				"See 2 random cards from an enemy's hand and take 1, then steal 2 Cash.",
 			passive:
-				"Whenever you win a challenge, draw 2 cards, and turn one of your face-up Crew face-down.",
+				"Whenever you win a challenge, draw 2, and turn one of your face-up Crew face-down.",
 		},
 		flavorText: "",
 		maxHp: 100,
@@ -115,7 +115,7 @@ export const CREW_DISPLAY: readonly CrewCardDisplay[] = [
 	{
 		id: "black-fist",
 		artSrc: "/assets/games/face-turn/cards/crew/black-fist.avif",
-		name: "Black Fist",
+		name: "Blackfist",
 		class: "striker",
 		effectText: {
 			revealed:
@@ -162,7 +162,7 @@ export const CREW_DISPLAY: readonly CrewCardDisplay[] = [
 		name: "Pektus",
 		class: "striker",
 		effectText: {
-			revealed: "I deal 25 piercing damage to the enemy Boss.",
+			revealed: "I deal 25 piercing damage to an enemy Boss.",
 			passive: "All damage you deal is piercing.",
 		},
 		flavorText: "",
@@ -306,7 +306,7 @@ export const CREW_DISPLAY: readonly CrewCardDisplay[] = [
 		class: "collector",
 		effectText: {
 			passive:
-				"Whenever you successfully challenge an enemy, you may pay 3 Cash to Strike one of their face-down Crew.",
+				"Whenever you successfully challenge an enemy, Strike one of their face-down Crew.",
 		},
 		flavorText: "",
 	},
@@ -325,7 +325,7 @@ export const CREW_DISPLAY: readonly CrewCardDisplay[] = [
 		artSrc: "/assets/games/face-turn/cards/crew/claw-machine.avif",
 		name: "Claw Machine",
 		class: "collector",
-		effectText: { revealed: "You draw 2 cards." },
+		effectText: { revealed: "You draw 2." },
 		flavorText: "",
 	},
 	{
@@ -344,7 +344,7 @@ export const CREW_DISPLAY: readonly CrewCardDisplay[] = [
 		artSrc: "/assets/games/face-turn/cards/crew/mayumi.avif",
 		name: "Mayumi",
 		class: "collector",
-		effectText: { revealed: "You gain 1 Cash and draw 1 card." },
+		effectText: { revealed: "You gain 1 Cash and draw 1." },
 		flavorText: "",
 	},
 	{
@@ -353,8 +353,7 @@ export const CREW_DISPLAY: readonly CrewCardDisplay[] = [
 		name: "Rat Queen",
 		class: "collector",
 		effectText: {
-			passive:
-				"The first time your hand becomes empty each turn, you draw 2 cards.",
+			passive: "The first time your hand becomes empty each turn, you draw 2.",
 		},
 		flavorText: "",
 	},
@@ -377,7 +376,7 @@ export const CREW_DISPLAY: readonly CrewCardDisplay[] = [
 		name: "Andrew",
 		class: "unturner",
 		effectText: {
-			passive: "Draw 1 card at the start of your turn.",
+			passive: "Draw 1 at the start of your turn.",
 		},
 		flavorText: "",
 	},
@@ -443,7 +442,7 @@ export const CREW_DISPLAY: readonly CrewCardDisplay[] = [
 		name: "Terminal",
 		class: "unturner",
 		effectText: {
-			passive: "My Boss cannot be Striked while its HP is greater than 60.",
+			passive: "My Boss cannot be Struck while its HP is greater than 60.",
 		},
 		flavorText: "",
 	},
@@ -453,7 +452,7 @@ export const CREW_DISPLAY: readonly CrewCardDisplay[] = [
 		name: "Zednem",
 		class: "unturner",
 		effectText: {
-			revealed: "Draw 2 cards.",
+			revealed: "Draw 2.",
 			passive: "Your Burst Moves cost 1 less Cash.",
 		},
 		flavorText: "",
@@ -528,7 +527,7 @@ export const MOVE_DISPLAY: readonly MoveCardDisplay[] = [
 		name: "Command Center",
 		baseCost: 3,
 		moveType: "active",
-		effectText: "At the start your turn, draw 1 card and gain 1 Cash.",
+		effectText: "At the start of your turn, draw 1 and gain 1 Cash.",
 		flavorText: "",
 	},
 	{
@@ -537,7 +536,7 @@ export const MOVE_DISPLAY: readonly MoveCardDisplay[] = [
 		name: "Dataminer",
 		baseCost: 1,
 		moveType: "active",
-		effectText: "At the start of your turn, draw 1 card.",
+		effectText: "At the start of your turn, draw 1.",
 		flavorText: "",
 	},
 	{
@@ -684,8 +683,7 @@ export const MOVE_DISPLAY: readonly MoveCardDisplay[] = [
 		name: "All-In",
 		baseCost: 4,
 		moveType: "burst",
-		effectText:
-			"Set an allied Boss's HP to 1. You gain 7 Cash and draw 2 cards.",
+		effectText: "Set an allied Boss's HP to 1. You gain 7 Cash and draw 2.",
 		flavorText: "",
 	},
 	{
@@ -695,7 +693,7 @@ export const MOVE_DISPLAY: readonly MoveCardDisplay[] = [
 		baseCost: 2,
 		moveType: "burst",
 		effectText:
-			"Whoever has the least Cash on your team gains 3 Cash and draws 1 card. If tied, random.",
+			"Whoever has the least Cash on your team gains 3 Cash and draws 1. If tied, random.",
 		flavorText: "",
 	},
 	{
@@ -731,7 +729,7 @@ export const MOVE_DISPLAY: readonly MoveCardDisplay[] = [
 		name: "Cheap Labor",
 		baseCost: 1,
 		moveType: "burst",
-		effectText: "Draw 1 card and gain 2 Cash.",
+		effectText: "Draw 1 and gain 2 Cash.",
 		flavorText: "",
 	},
 	{
@@ -760,7 +758,7 @@ export const MOVE_DISPLAY: readonly MoveCardDisplay[] = [
 		name: "Dead Drop Retrieval",
 		baseCost: 2,
 		moveType: "burst",
-		effectText: "Draw 3 cards.",
+		effectText: "Draw 3.",
 		flavorText: "",
 	},
 	{
@@ -809,7 +807,7 @@ export const MOVE_DISPLAY: readonly MoveCardDisplay[] = [
 		baseCost: 1,
 		moveType: "burst",
 		effectText:
-			"Draw 1 card. If you had no other cards in hand when you played this Move, draw 3 cards instead.",
+			"Draw 1. If you had no other cards in hand when you played this Move, draw 3 instead.",
 		flavorText: "",
 	},
 	{
@@ -836,7 +834,7 @@ export const MOVE_DISPLAY: readonly MoveCardDisplay[] = [
 		name: "My Treat",
 		baseCost: 2,
 		moveType: "burst",
-		effectText: "An allied player gains 2 Cash and draws 1 card.",
+		effectText: "An allied player gains 2 Cash and draws 1.",
 		flavorText: "",
 	},
 	{
@@ -846,7 +844,7 @@ export const MOVE_DISPLAY: readonly MoveCardDisplay[] = [
 		baseCost: 2,
 		moveType: "burst",
 		effectText:
-			"Discard 2 cards. If you do, reactivate one of your face-up Crew's Revealed effect.",
+			"Discard 2 cards. If you do, trigger one of your face-up Crew's Revealed effect.",
 		flavorText: "",
 	},
 	{
@@ -864,7 +862,7 @@ export const MOVE_DISPLAY: readonly MoveCardDisplay[] = [
 		name: "Pull Counter",
 		baseCost: 3,
 		moveType: "burst",
-		effectText: "Retrigger the Revealed Effect of one of your face-up Crew..",
+		effectText: "Trigger one of your face-up Crew's Revealed effect.",
 		flavorText: "",
 	},
 	{
@@ -873,7 +871,7 @@ export const MOVE_DISPLAY: readonly MoveCardDisplay[] = [
 		name: "Reinforcements",
 		baseCost: 2,
 		moveType: "burst",
-		effectText: "Give 15 Armor to an allied Boss. Draw 1 card.",
+		effectText: "Give 15 Armor to an allied Boss. Draw 1.",
 		flavorText: "",
 	},
 	{
@@ -882,7 +880,7 @@ export const MOVE_DISPLAY: readonly MoveCardDisplay[] = [
 		name: "Reload",
 		baseCost: 1,
 		moveType: "burst",
-		effectText: "Draw 2 cards.",
+		effectText: "Draw 2.",
 		flavorText: "",
 	},
 	{
@@ -891,7 +889,7 @@ export const MOVE_DISPLAY: readonly MoveCardDisplay[] = [
 		name: "Restock",
 		baseCost: 1,
 		moveType: "burst",
-		effectText: "Shuffle your discard pile into your deck. Draw 1 card.",
+		effectText: "Shuffle your discard pile into your deck. Draw 1.",
 		flavorText: "",
 	},
 	{
@@ -947,7 +945,8 @@ export const MOVE_DISPLAY: readonly MoveCardDisplay[] = [
 		name: "Tag Out",
 		baseCost: 0,
 		moveType: "burst",
-		effectText: "Swap one of your Crew with a teammate's.",
+		effectText:
+			"Choose one of your Crew and one of a teammate's Crew. Swap them.",
 		flavorText: "",
 	},
 	{
@@ -965,7 +964,7 @@ export const MOVE_DISPLAY: readonly MoveCardDisplay[] = [
 		name: "Triangle of Trust",
 		baseCost: 1,
 		moveType: "burst",
-		effectText: "Discard 1 card. If you do, draw 3 cards.",
+		effectText: "Discard 1 card. If you do, draw 3.",
 		flavorText: "",
 	},
 
@@ -1032,7 +1031,7 @@ export const MOVE_DISPLAY: readonly MoveCardDisplay[] = [
 		name: "Job Application",
 		baseCost: 3,
 		moveType: "slow",
-		effectText: "Set your Cash and an enemy's Cash to 0. Then draw 3 cards.",
+		effectText: "Set your Cash and an enemy's Cash to 0. Then draw 3.",
 		flavorText: "",
 	},
 	{
@@ -1106,7 +1105,7 @@ export const MOVE_DISPLAY: readonly MoveCardDisplay[] = [
 		name: "Strip 'Em Down",
 		baseCost: 1,
 		moveType: "slow",
-		effectText: "Remove all Armor from an enemy Boss. Draw 1 card.",
+		effectText: "Remove all Armor from an enemy Boss. Draw 1.",
 		flavorText: "",
 	},
 	{
@@ -1145,7 +1144,7 @@ export const MOVE_DISPLAY: readonly MoveCardDisplay[] = [
 		baseCost: 1,
 		moveType: "slow",
 		effectText:
-			"You and an enemy each discard your hands, then each draw that many cards.",
+			"You and an enemy each discard your hands, then each draw that many.",
 		flavorText: "",
 	},
 	{
@@ -1186,7 +1185,154 @@ export function getMoveTargetScope(
 	return MOVE_TARGET_SCOPE[moveId] ?? "enemy";
 }
 
-// lookup maps — display-only, safe for client use
+export type MoveTargetKind =
+	| "enemy_boss"
+	| "enemy_crew"
+	| "enemy_active"
+	| "enemy_player"
+	| "ally_crew"
+	| "ally_player"
+	| "ally_self"
+	| "no_target";
+
+export const MOVE_TARGET_KIND: Readonly<Record<string, MoveTargetKind>> = {
+	"background-check": "no_target",
+	"bamboo-wall": "no_target",
+	"big-voucher": "no_target",
+	blackmail: "no_target",
+	"blood-money": "no_target",
+	"cease-and-desist": "no_target",
+	"command-center": "no_target",
+	dataminer: "no_target",
+	equalizer: "no_target",
+	extortion: "no_target",
+	"false-flag-operation": "no_target",
+	"life-insurance": "no_target",
+	"poison-breath": "no_target",
+	"red-herring": "no_target",
+	"sell-out": "no_target",
+	"side-hustle": "no_target",
+	"supply-drop": "no_target",
+	"void-arms": "no_target",
+	"void-legs": "no_target",
+	"void-torso": "no_target",
+	"trickle-down-economics": "no_target",
+	"warrant-of-arrest": "no_target",
+
+	"all-in": "ally_player",
+	"ayuda-slip": "no_target",
+	bailout: "ally_player",
+	"bulletproof-vest": "ally_player",
+	"cash-out": "no_target",
+	"cheap-labor": "no_target",
+	chronotrix: "no_target",
+	"coordinated-strike": "enemy_boss",
+	"dead-drop-retrieval": "no_target",
+	"deleb-i": "no_target",
+	"dig-deep": "no_target",
+	"empty-the-clip": "enemy_boss",
+	"first-aid": "ally_player",
+	"fresh-start": "no_target",
+	"full-moon": "no_target",
+	"heel-turn": "no_target",
+	"my-treat": "ally_player",
+	"neetos-clock": "ally_self",
+	paycheck: "no_target",
+	"pull-counter": "no_target",
+	reinforcements: "ally_player",
+	reload: "no_target",
+	restock: "no_target",
+	sabotage: "enemy_active",
+	"spare-change": "no_target",
+	"sucker-punch": "enemy_boss",
+	"switch-up": "ally_self",
+	"tactical-support": "ally_player",
+	"tag-out": "ally_player",
+	"take-it-back": "no_target",
+	"triangle-of-trust": "no_target",
+
+	ambush: "enemy_crew",
+	"cheap-shot": "enemy_boss",
+	"claim-the-bounty": "enemy_boss",
+	devastate: "enemy_boss",
+	"drive-by": "enemy_boss",
+	interrogation: "enemy_player",
+	"job-application": "enemy_player",
+	kamikaze: "enemy_boss",
+	nope: "no_target",
+	pickpocket: "enemy_player",
+	"prank-call": "enemy_player",
+	ratatatat: "enemy_boss",
+	"reverse-card": "no_target",
+	"scorched-earth": "enemy_player",
+	"strip-em-down": "enemy_boss",
+	"to-the-death": "enemy_crew",
+	"truth-serum": "enemy_player",
+	"unfinished-business": "enemy_crew",
+	"wheel-of-fortune": "enemy_player",
+	wolfblaster: "enemy_boss",
+};
+
+export function getMoveTargetKind(moveId: string): MoveTargetKind {
+	const kind = MOVE_TARGET_KIND[moveId];
+	if (!kind)
+		throw new Error(`[face-turn] no MoveTargetKind for move: "${moveId}"`);
+	return kind;
+}
+
+// secondary target required or optional; null means no pick or handled by pendingInteraction
+export type PostPlacementScope =
+	| "own_crew"
+	| "enemy_crew"
+	| "enemy_player"
+	| "enemy_active";
+
+export type PostPlacementTarget = {
+	readonly required: boolean;
+	readonly scope: PostPlacementScope;
+	// only for own_crew; field splits between targetCrewSlot and targetAllySlot due to schema inconsistency
+	readonly field?: "targetCrewSlot" | "targetAllySlot";
+} | null;
+
+export const MOVE_POST_PLACEMENT_TARGET: Readonly<
+	Record<string, PostPlacementTarget>
+> = {
+	// effect.targetSlot never set; uses internal fallback
+	"heel-turn": null,
+	"pull-counter": {
+		required: false,
+		scope: "own_crew",
+		field: "targetAllySlot",
+	},
+	"red-herring": {
+		required: false,
+		scope: "own_crew",
+		field: "targetCrewSlot",
+	},
+	// effect.targetSlot never set; no client-suppliable slot
+	kamikaze: null,
+	// required when two face-up crew; conservative required
+	"to-the-death": {
+		required: true,
+		scope: "own_crew",
+		field: "targetAllySlot",
+	},
+	"warrant-of-arrest": { required: true, scope: "enemy_crew" },
+	// optional; auto-resolves with one enemy, else pendingInteraction
+	"poison-breath": { required: false, scope: "enemy_player" },
+	// handler returns early without target
+	"trickle-down-economics": { required: true, scope: "enemy_player" },
+	// handler returns early without slot; move still plays on whiff
+	sabotage: { required: true, scope: "enemy_active" },
+	// opens pendingInteraction with computed slots; no client slot
+	"neetos-clock": null,
+};
+
+export function getMovePostPlacementTarget(
+	moveId: string,
+): PostPlacementTarget {
+	return MOVE_POST_PLACEMENT_TARGET[moveId] ?? null;
+}
 
 export const BOSS_DISPLAY_MAP = new Map(BOSS_DISPLAY.map((b) => [b.id, b]));
 export const CREW_DISPLAY_MAP = new Map(CREW_DISPLAY.map((c) => [c.id, c]));

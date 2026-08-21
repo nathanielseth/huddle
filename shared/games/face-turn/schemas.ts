@@ -75,8 +75,8 @@ const RpsChoiceSchema = z.object({
 const PlayMoveSchema = z.object({
 	type: z.literal("play_move"),
 	moveId: z.string(),
-	targetCrewSlot: z.number().int().min(0).max(2).optional(),
-	targetAllySlot: z.number().int().min(0).max(2).optional(),
+	targetCrewSlot: z.number().int().min(0).max(1).optional(),
+	targetAllySlot: z.number().int().min(0).max(1).optional(),
 	targetPlayerId: z.string().optional(),
 	// sabotage: which of the target's active-move slots (0-2) to discard
 	targetActiveMoveSlot: z.number().int().min(0).max(2).optional(),
@@ -86,7 +86,7 @@ const PlayMoveSchema = z.object({
 const DeclareClassActionSchema = z.object({
 	type: z.literal("declare_class_action"),
 	action: z.enum(["strike", "collect", "unturn"]),
-	targetCrewSlot: z.number().int().min(0).max(2).optional(),
+	targetCrewSlot: z.number().int().min(0).max(1).optional(),
 	targetAllySlot: z.number().int().min(0).max(1).optional(),
 	targetPlayerId: z.string().optional(),
 });
@@ -127,8 +127,8 @@ const PassChallengeSchema = z.object({
 const ChainPlayBurstSchema = z.object({
 	type: z.literal("chain_play_burst"),
 	moveId: z.string(),
-	targetCrewSlot: z.number().int().min(0).max(2).optional(),
-	targetAllySlot: z.number().int().min(0).max(2).optional(),
+	targetCrewSlot: z.number().int().min(0).max(1).optional(),
+	targetAllySlot: z.number().int().min(0).max(1).optional(),
 	targetPlayerId: z.string().optional(),
 	// sabotage: which of the target's active-move slots (0-2) to discard
 	targetActiveMoveSlot: z.number().int().min(0).max(2).optional(),
@@ -137,8 +137,8 @@ const ChainPlayBurstSchema = z.object({
 const ChainPlaySlowSchema = z.object({
 	type: z.literal("chain_play_slow"),
 	moveId: z.string(),
-	targetCrewSlot: z.number().int().min(0).max(2).optional(),
-	targetAllySlot: z.number().int().min(0).max(2).optional(),
+	targetCrewSlot: z.number().int().min(0).max(1).optional(),
+	targetAllySlot: z.number().int().min(0).max(1).optional(),
 	targetPlayerId: z.string().optional(),
 });
 
@@ -278,12 +278,6 @@ const ResolveTooBigSwapPickSchema = z.object({
 	crewSlot: z.number().int().min(0).max(1),
 });
 
-// to the death: actor has 2 face-up crew, picks which one to kill
-const ResolveChooseOwnCrewToStrikeSchema = z.object({
-	type: z.literal("resolve_choose_own_crew_to_strike"),
-	crewSlot: z.number().int().min(0).max(1),
-});
-
 // the watcher: actor is shown 2 random cards from the enemy's hand and picks 1 to steal
 const ResolveWatcherStealPickSchema = z.object({
 	type: z.literal("resolve_watcher_steal_pick"),
@@ -333,7 +327,6 @@ export const FaceturnsActionSchema = z.discriminatedUnion("type", [
 	ResolveTruthSerumRevealSchema,
 	ResolveLighthouseDisablePickSchema,
 	ResolveTooBigSwapPickSchema,
-	ResolveChooseOwnCrewToStrikeSchema,
 	ResolveWatcherStealPickSchema,
 ]);
 

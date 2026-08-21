@@ -107,6 +107,10 @@ export interface FaceturnsPlayerView {
 	readonly isEliminated: boolean;
 	readonly teamIndex: number;
 	readonly mulliganDecided: boolean;
+
+	// the-dealer passive: may discard a Move from hand for cash, any time on this player's own turn
+	readonly hasSellCards: boolean;
+	readonly sellCardCashAmount: number;
 }
 
 export type PendingActionType =
@@ -216,7 +220,6 @@ export type PendingInteractionView =
 			type: "bear_bones_bonus_strike";
 			actorId: string;
 			eligibleTargetIds: string[];
-			cashCost: number;
 	  }
 	| {
 			type: "void_legs_choice";
@@ -258,12 +261,6 @@ export type PendingInteractionView =
 			actorId: string;
 			ownSlot: number;
 			eligibleTargets: readonly { playerId: string; slot: number }[];
-	  }
-	| {
-			// to the death: actor has 2 face-up crew, picks which one to kill
-			type: "choose_own_crew_to_strike";
-			actorId: string;
-			eligibleSlots: number[];
 	  }
 	| {
 			// the revealed cards are private to the actor, not exposed in public view
