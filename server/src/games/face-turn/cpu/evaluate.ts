@@ -35,7 +35,9 @@ export function evaluate(state: FaceturnServerState, seat: string): StateScore {
 	const allyScore = teamScore(state, allies);
 	const enemyScore = teamScore(state, enemies);
 
-	return clamp(allyScore - enemyScore, -1.5, 1.5);
+	// use tanh to squash into (‑1,1)
+	// avoids mid‑game heuristics outranking true win/loss scores
+	return Math.tanh(allyScore - enemyScore);
 }
 
 function terminalScore(state: FaceturnServerState, seat: string): StateScore {

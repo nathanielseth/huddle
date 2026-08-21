@@ -19,7 +19,6 @@ import {
 	firstTurnedSlot,
 	firstUnturnedSlot,
 	isStrikeDefendedByTerminal,
-	getLivingPlayers,
 	moveHasLegalTarget,
 	requiresStrictAllyTarget,
 } from "../effects";
@@ -221,6 +220,7 @@ function legalPlayMoveActions(
 ): FaceturnsAction[] {
 	const actions: FaceturnsAction[] = [];
 	const seenMoveIds = new Set<string>();
+	const hasOpenActiveSlot = player.activeMoves.some((s) => s === null);
 
 	for (const moveId of player.hand) {
 		// duplicate move ids in hand have identical legal targets, so expand only once per distinct id
@@ -231,10 +231,7 @@ function legalPlayMoveActions(
 		const cost = effectiveCost(state, player, moveId, helpers.getMoveCost);
 		if (player.cash < cost) continue;
 
-		if (
-			move.moveType === "active" &&
-			player.activeMoves.findIndex((s) => s === null) === -1
-		) {
+		if (move.moveType === "active" && !hasOpenActiveSlot) {
 			continue;
 		}
 
@@ -888,6 +885,3 @@ function legalInteractionActions(
 			return [];
 	}
 }
-
-// re-exported so simulate.ts and cpu-player.ts can import all living-player helpers from one place
-export { getLivingPlayers };

@@ -4,17 +4,16 @@ import type { EffectPrimitive } from "../cards";
 import { CARD_IDS } from "../cards";
 import { shuffle } from "../../lib/random";
 import { recomputePassives } from "../derived";
-import type { Handler } from "./index";
+import type { Handler } from "./shared";
 import {
 	checkVoidPiecesAssembled,
-	firstTurnedSlot,
-	firstUnturnedSlot,
 	getEnemies,
 	resolveAllyTarget,
 	resolveCrewClass,
 	resolveStrictAllyTarget,
 	resolveTarget,
-} from "./index";
+} from "./shared";
+import { firstTurnedSlot, firstUnturnedSlot } from "./strikes";
 import { applyDamage } from "./damage";
 import { drawCards, discardFromHand } from "./draw-discard";
 import {
@@ -28,11 +27,6 @@ import {
 import type { PendingInteraction } from "../interactions/types";
 
 export const miscHandlers = {
-	// warrant of arrest: locks in target player + slot + crewId now;
-	// resolution is entirely owned by processWarrantOfArrestTicks (game.ts
-	// startTurn). Keyed by the caster's own active-move slot so multiple
-	// copies track independently. Fizzles quietly if the target has no
-	// face-down crew at cast time.
 	mark_enemy_crew_for_delayed_turn(_effect, ctx) {
 		if (!ctx.moveId) return;
 		const ownSlot = ctx.actor.activeMoves.indexOf(ctx.moveId) as 0 | 1 | 2 | -1;
@@ -51,10 +45,6 @@ export const miscHandlers = {
 		});
 	},
 
-	// sabotage: ctx.targetActiveMoveSlot is a dedicated 0-2 field, distinct
-	// from targetCrewSlot (see EffectContext / play_move / chain_play_burst).
-	// an empty slot, a slow-move slot, or no slot at all is a clean whiff —
-	// the card still plays and still costs cash by design.
 	discard_targeted_enemy_active_move(_effect, ctx) {
 		const target = resolveTarget(ctx);
 		if (!target) return;
@@ -70,8 +60,6 @@ export const miscHandlers = {
 		recomputePassives(target, ctx.state);
 	},
 
-	// restock: harmless no-op reshuffle when the discard pile is empty,
-	// guarded explicitly to avoid a pointless array-churn/shuffle call
 	shuffle_discard_into_deck_then_draw(_effect, ctx) {
 		if (ctx.actor.discardPile.length > 0) {
 			ctx.actor.deck = shuffle(
@@ -83,10 +71,6 @@ export const miscHandlers = {
 		drawCards(ctx.actor, 1);
 	},
 
-	// red herring: picks (or defaults to) a face-down slot, sets the
-	// redirect mark, then discards itself out of the active zone
-	// immediately — the card text's "then discard this Move" happens at
-	// cast time, same slot-lookup trick passive_life_insurance uses above.
 	choose_red_herring_crew(_effect, ctx) {
 		const actor = ctx.actor;
 		const slot =
@@ -109,9 +93,6 @@ export const miscHandlers = {
 		}
 	},
 
-	// my treat: requires a genuine teammate (moveHasLegalTarget already
-	// guarantees this before the card can be cast); the null-check here is
-	// defense in depth, not a real expected path
 	gain_cash_and_draw_ally(effect, ctx) {
 		if (effect.type !== "gain_cash_and_draw_ally") return;
 		const target = resolveStrictAllyTarget(ctx);
@@ -120,7 +101,6 @@ export const miscHandlers = {
 		drawCards(target, effect.drawAmount);
 	},
 
-	// win condition
 	win_if_void_pieces_assembled(_effect, ctx) {
 		if (!checkVoidPiecesAssembled(ctx.actor)) return;
 		ctx.state.winnerId = ctx.actor.playerId;
@@ -207,12 +187,7 @@ export const miscHandlers = {
 		}
 	},
 
-	// the following are resolved structurally elsewhere (recomputePassiveSwitch
-	// in derived.ts accumulates their magnitude into derived stats, or - for the
-	// two command_* entries - the-razor/the-dealer's hasCustomCommandLogic branch
-	// in index.ts's use_boss_command handles them inline and never reaches
-	// resolveEffects for those bosses). still listed here as no-ops so the
-	// handler map stays exhaustive over EffectPrimitive["type"].
+	// no-ops listed for exhaustiveness; some are handled in derived.ts or boss command logic, others accumulate stats there
 	become_also_striker() {},
 	become_also_unturner() {},
 	become_also_defender() {},
@@ -225,7 +200,6 @@ export const miscHandlers = {
 	passive_steal_cash_on_damage_dealt() {},
 	passive_strike_on_self_turned_ally() {},
 	passive_turn_self_down_on_enemy_crew_kill() {},
-	// stat accumulators or live-triggered; no runtime handler needed here
 	passive_cash_per_turn() {},
 	passive_draw_per_turn() {},
 	passive_cash_on_enemy_move_or_strike() {},
@@ -244,7 +218,6 @@ export const miscHandlers = {
 	passive_defender_chooses_crew_to_turn() {},
 	passive_background_check() {},
 	passive_team_cash_on_ally_collect() {},
-	// life insurance: stores protected target keyed by active move slot
 	passive_life_insurance(_effect, ctx) {
 		if (!ctx.moveId) return;
 		const slot = ctx.actor.activeMoves.indexOf(ctx.moveId) as 0 | 1 | 2 | -1;
@@ -252,7 +225,6 @@ export const miscHandlers = {
 		const protectedAlly = resolveAllyTarget(ctx);
 		ctx.actor.lifeInsuranceTargets.set(slot, protectedAlly.playerId);
 	},
-	// mirrors life insurance: stores watched enemy in trickleDownTargets
 	passive_mirror_enemy_collect_cash(_effect, ctx) {
 		if (!ctx.moveId) return;
 		const slot = ctx.actor.activeMoves.indexOf(ctx.moveId) as 0 | 1 | 2 | -1;
@@ -269,7 +241,6 @@ export const miscHandlers = {
 	passive_watcher_unturn_on_challenge_win() {},
 	passive_optional_strike_on_successful_challenge() {},
 	passive_suppress_enemy_turned_effects() {},
-	// derived stat set in recomputePassiveSwitch; nothing to do at play time
 	passive_cash_on_challenge_win() {},
 	passive_self_damage_and_cash_per_turn() {},
 	passive_cease_and_desist() {},
@@ -356,7 +327,7 @@ export function resolveDigDeepPick(
 		if (actor.hand.length < C.HAND_LIMIT) {
 			actor.hand.push(cardId);
 		} else {
-			remaining.push(cardId); // hand full, shuffle back
+			remaining.push(cardId);
 		}
 	}
 
@@ -388,7 +359,7 @@ export function resolveTacticalSupportUnturn(
 	slot: number | null,
 	eligibleSlots: readonly number[],
 ): void {
-	if (slot === null) return; // declined
+	if (slot === null) return;
 	if (!eligibleSlots.includes(slot)) return;
 	unturnCrewAtSlot(state, target, slot as 0 | 1);
 	recomputePassives(target, state);
@@ -401,7 +372,7 @@ export function resolveWatcherUnturn(
 	slot: number | null,
 	eligibleTargets: readonly { playerId: string; slot: number }[],
 ): void {
-	if (slot === null) return; // declined
+	if (slot === null) return;
 	const resolvedPlayerId = targetPlayerId ?? actor.playerId;
 	const isEligible = eligibleTargets.some(
 		(t) => t.playerId === resolvedPlayerId && t.slot === slot,
@@ -494,9 +465,6 @@ export function resolveTooBigSwapPick(
 	recomputePassives(target, state);
 }
 
-const BEAR_BONES_STRIKE_CASH_COST = 3;
-
-// opens bear bones bonus strike offer if face-up and affordable
 export function maybeOpenBearBonesOffer(
 	state: FaceturnServerState,
 	actor: FaceturnServerPlayer,
@@ -509,13 +477,11 @@ export function maybeOpenBearBonesOffer(
 	if (actor.disabledPassiveSlots.has(slot as 0 | 1)) return;
 	if (!state.players.has(defeatedPlayerId)) return;
 	if (state.eliminatedPlayers.has(defeatedPlayerId)) return;
-	if (actor.cash < BEAR_BONES_STRIKE_CASH_COST) return;
 
 	state.pendingInteraction = {
 		type: "bear_bones_bonus_strike",
 		actorId: actor.playerId,
 		eligibleTargetIds: [defeatedPlayerId],
-		cashCost: BEAR_BONES_STRIKE_CASH_COST,
 	};
 }
 
@@ -528,11 +494,9 @@ export function resolveBearBonesBonusStrike(
 ): StrikeOrExecuteOutcome | null {
 	if (!confirmed) return null;
 	if (!targetPlayerId) return null;
-	if (actor.cash < BEAR_BONES_STRIKE_CASH_COST) return null;
 	const target = state.players.get(targetPlayerId);
 	if (!target || state.eliminatedPlayers.has(targetPlayerId)) return null;
 
-	actor.cash -= BEAR_BONES_STRIKE_CASH_COST;
 	const outcome = resolveStrikeOrExecute(
 		state,
 		target,
@@ -540,12 +504,10 @@ export function resolveBearBonesBonusStrike(
 		true,
 		targetSlot !== null ? (targetSlot as 0 | 1) : undefined,
 	);
-	// a bonus strike still counts as a strike for blood money
 	applyBloodMoneyOnStrike(state, actor);
 	return outcome;
 }
 
-// background check: wrong guess auto-turns one of the guesser's own crew
 export function resolveBackgroundCheckGuess(
 	state: FaceturnServerState,
 	challenger: FaceturnServerPlayer,
@@ -569,7 +531,6 @@ export function resolveBackgroundCheckGuess(
 	return { correct: matches };
 }
 
-// warrant of arrest: on turn start, decrements marks; resolves/discards when countdown hits 0 or crew is invalidated, ensuring cards leave play once their purpose is moot without double-discard
 export function processWarrantOfArrestTicks(
 	state: FaceturnServerState,
 	caster: FaceturnServerPlayer,
@@ -594,7 +555,6 @@ export function processWarrantOfArrestTicks(
 		if (target.crewIds[mark.targetSlot] !== mark.targetCrewId) continue;
 		if (target.crewTurned[mark.targetSlot]) continue;
 
-		// not a strike
 		turnCrewAtSlot(state, target, mark.targetSlot);
 		recomputePassives(target, state);
 		triggerCrewTurnedEffects(state, target, mark.targetSlot, true);

@@ -14,14 +14,13 @@ import { backgroundCheckGuessSpec } from "./background-check-guess";
 import { tagOutPickSpec } from "./tag-out-pick";
 import { truthSerumRevealSpec } from "./truth-serum-reveal";
 import { tooBigSwapPickSpec } from "./too-big-swap-pick";
-import { chooseOwnCrewToStrikeSpec } from "./choose-own-crew-to-strike";
 import { watcherStealPickSpec } from "./watcher-steal-pick";
 import { lighthouseDisablePickSpec } from "./lighthouse-disable-pick";
 import { watcherUnturnOfferSpec } from "./watcher-unturn-offer";
 
 // registry keyed by interaction type; exhaustive mapped type so every PendingInteraction variant has a spec
 // adding a new one without an entry fails to compile
-export const interactionRegistry: {
+const interactionRegistry: {
 	[K in PendingInteraction["type"]]: InteractionSpec<
 		Extract<PendingInteraction, { type: K }>
 	>;
@@ -42,7 +41,6 @@ export const interactionRegistry: {
 	tag_out_pick: tagOutPickSpec,
 	truth_serum_reveal: truthSerumRevealSpec,
 	too_big_swap_pick: tooBigSwapPickSpec,
-	choose_own_crew_to_strike: chooseOwnCrewToStrikeSpec,
 	watcher_steal_pick: watcherStealPickSpec,
 	lighthouse_disable_pick: lighthouseDisablePickSpec,
 };

@@ -10,32 +10,19 @@ export interface CpuTuning {
 	readonly thinkMs: readonly [min: number, max: number];
 }
 
-// state-scoring function signature, matching evaluate.ts's `evaluate` export
 export type EvaluateFn = (
 	state: FaceturnServerState,
 	seat: string,
 ) => StateScore;
 
-// rollout-policy function signature, matching rollout.ts's `sampleRolloutAction` export
 export type RolloutPolicyFn = (
 	state: FaceturnServerState,
 	seat: string,
 	helpers: EngineHelpers,
 	rng: () => number,
-	// see sampleRolloutAction's precomputedLegal param — callers that already
-	// have the legal-action list for this (state, seat) should pass it
-	// through rather than let the policy recompute it.
 	precomputedLegal?: readonly FaceturnsAction[],
 ) => RolloutChoice;
 
-// Injection seam for A/B-comparing two search-quality configs of the SAME
-// codebase (see server/scripts/faceturn-sim/versus.ts). Left undefined in
-// every production call path, so decideAction/search fall back to the real
-// evaluate()/sampleRolloutAction() imports and behavior is unchanged.
-// This exists so a script can run decideAction twice per decision with two
-// different {evaluate, rolloutPolicy} bundles and attribute any win-rate
-// skew to search quality rather than RNG — without needing a second
-// duplicated `cpu2/` implementation tree.
 export interface StrategyOverride {
 	readonly evaluate?: EvaluateFn;
 	readonly rolloutPolicy?: RolloutPolicyFn;

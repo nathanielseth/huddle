@@ -2,8 +2,8 @@ import type { FaceturnServerState, FaceturnServerPlayer } from "../types";
 import { FACETURN_CONSTANTS as C } from "../types";
 import type { EffectPrimitive } from "../cards";
 import { pickRandom } from "../../lib/random";
-import type { Handler } from "./index";
-import { getEnemies, getLivingPlayers, getTeammates, resolveTarget } from "./index";
+import type { Handler } from "./shared";
+import { getEnemies, getLivingPlayers, getTeammates, resolveTarget } from "./shared";
 import { applyDamage } from "./damage";
 import { drawCards } from "./draw-discard";
 

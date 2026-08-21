@@ -4,8 +4,8 @@ import type { EffectPrimitive } from "../cards";
 import { getCrew, getMove, CARD_IDS } from "../cards";
 import { shuffle } from "../../lib/random";
 import { recomputePassives } from "../derived";
-import type { Handler } from "./index";
-import { findEffectAmount, resolveTarget } from "./index";
+import type { Handler } from "./shared";
+import { findEffectAmount, resolveTarget } from "./shared";
 import type { PendingInteraction } from "../interactions/types";
 
 export function drawCards(player: FaceturnServerPlayer, count: number): void {

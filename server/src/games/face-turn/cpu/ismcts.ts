@@ -127,13 +127,17 @@ export function search(
 	}
 
 	const rootTree = treeFor(rootSeat);
-	const rootVisits = [...rootTree.edges.values()]
-		.filter((edge) => !edge.isTimeoutDecline)
-		.map((edge) => ({
-			action: edge.action!,
-			visits: edge.visits,
-			value: edge.visits > 0 ? edge.totalValue / edge.visits : 0,
-		}));
+	const rootVisits = [...rootTree.edges.values()].flatMap((edge) =>
+		edge.isTimeoutDecline
+			? []
+			: [
+					{
+						action: edge.action!,
+						visits: edge.visits,
+						value: edge.visits > 0 ? edge.totalValue / edge.visits : 0,
+					},
+				],
+	);
 
 	if (rootVisits.length === 0) {
 		return { action: rootLegal[0]!, rootVisits: [] };
@@ -215,7 +219,7 @@ function runIteration(
 		if (actorEdge.visits === 0) break;
 	}
 
-	const value = isTerminal(state)
+	const rootValue = isTerminal(state)
 		? evaluateFn(state, rootSeat)
 		: rollout(
 				state,
@@ -227,9 +231,17 @@ function runIteration(
 				rolloutPolicyFn,
 			);
 
-	for (const { edge } of path) {
+	// each seat’s tree backs up with its own reward (ally shares rootValue, opponent gets negation)
+	const rootTeam = state.players.get(rootSeat)?.teamIndex;
+	const valueFor = (seat: string): number => {
+		if (rootTeam === undefined) return rootValue;
+		const seatTeam = state.players.get(seat)?.teamIndex;
+		return seatTeam === rootTeam ? rootValue : -rootValue;
+	};
+
+	for (const { seat, edge } of path) {
 		edge.visits += 1;
-		edge.totalValue += value;
+		edge.totalValue += valueFor(seat);
 	}
 }
 

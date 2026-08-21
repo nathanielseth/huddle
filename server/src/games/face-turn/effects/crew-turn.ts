@@ -1,7 +1,7 @@
 import type { EffectPrimitive } from "../cards";
 import { recomputePassives } from "../derived";
-import type { Handler } from "./index";
-import { getLivingPlayers, getTeammates, resolveTarget } from "./index";
+import type { Handler } from "./shared";
+import { getLivingPlayers, getTeammates, resolveTarget } from "./shared";
 import {
 	turnCrewAtSlot,
 	unturnCrewAtSlot,

@@ -228,18 +228,22 @@ export function loadDraftSelections(
 	const crewCap =
 		bossId === CARD_IDS.BOSS.THE_DEALER ? C.CREW_SLOTS + 1 : C.CREW_SLOTS;
 	const crewIds: string[] = [];
+	const seenCrewIds = new Set<string>();
 	for (const id of proposed.crewIds) {
 		if (crewIds.length >= crewCap) break;
 		const crewDef = CREW_MAP.get(id);
-		if (!crewDef || !isDraftable(crewDef) || crewIds.includes(id)) continue;
+		if (!crewDef || !isDraftable(crewDef) || seenCrewIds.has(id)) continue;
 		crewIds.push(id);
+		seenCrewIds.add(id);
 	}
 
 	const moveIds: string[] = [];
+	const seenMoveIds = new Set<string>();
 	for (const id of proposed.moveIds) {
 		if (moveIds.length >= C.MOVES_PER_DECK) break;
-		if (!MOVE_MAP.has(id) || moveIds.includes(id)) continue;
+		if (!MOVE_MAP.has(id) || seenMoveIds.has(id)) continue;
 		moveIds.push(id);
+		seenMoveIds.add(id);
 	}
 
 	player.draftSelections = { bossId, crewIds, moveIds };
@@ -363,8 +367,8 @@ function fillRemainingIgnoringDeadPicks(
 ): void {
 	if (draft.crewIds.length < maxCrewes) {
 		const rest = shuffle(
-			CREW.filter((h) => isDraftable(h) && !draft.crewIds.includes(h.id)).map(
-				(h) => h.id,
+			CREW.flatMap((h) =>
+				isDraftable(h) && !draft.crewIds.includes(h.id) ? [h.id] : [],
 			),
 			rng,
 		);
@@ -376,7 +380,7 @@ function fillRemainingIgnoringDeadPicks(
 	}
 	if (draft.moveIds.length < maxMoves) {
 		const rest = shuffle(
-			MOVES.filter((s) => !draft.moveIds.includes(s.id)).map((s) => s.id),
+			MOVES.flatMap((s) => (!draft.moveIds.includes(s.id) ? [s.id] : [])),
 			rng,
 		);
 		for (const id of rest) {
@@ -1148,4 +1152,4 @@ export function computeActorWasBluffing(
 	return !playerHasClass(actor, requiredClass[action]);
 }
 
-export { BOSS_MAP, CREW_MAP, MOVE_MAP, getBoss };
+export { getBoss };

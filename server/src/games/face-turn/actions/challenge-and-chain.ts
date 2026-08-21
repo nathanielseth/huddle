@@ -21,7 +21,7 @@ import {
 	firstUnturnedSlot,
 	resolveStrikeOrExecute,
 } from "../effects";
-import { makeResult, afterAction, buildStrikeResolution } from "../index";
+import { makeResult, afterAction, buildStrikeResolution } from "../action-results";
 import { buildPrivatePayloads } from "../state-builders";
 
 export const moveChainWindowAction: PhaseActionHandler = (

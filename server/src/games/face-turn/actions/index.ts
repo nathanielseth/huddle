@@ -3,7 +3,7 @@ import type { FaceturnServerState, FaceturnServerPlayer } from "../types";
 import type { FaceturnsAction } from "../schemas";
 import { noOpResult } from "./types";
 import { getInteractionSpec } from "../interactions/registry";
-import { makeResult, afterAction } from "../index";
+import { makeResult, afterAction } from "../action-results";
 import { buildPrivatePayloads } from "../state-builders";
 import { draftingAction } from "./drafting";
 import { rpsAction } from "./rps";

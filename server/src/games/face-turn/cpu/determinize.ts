@@ -117,8 +117,8 @@ function structuredCloneInteraction<T extends PendingInteraction>(
 }
 
 // pool for face-down crew determinization
-const ALL_DRAFTABLE_CREW_IDS: readonly string[] = CREW.filter(isDraftable).map(
-	(c) => c.id,
+const ALL_DRAFTABLE_CREW_IDS: readonly string[] = CREW.flatMap((c) =>
+	isDraftable(c) ? [c.id] : [],
 );
 
 // must call fresh every tree descent; reusing a determinization across iterations would overfit the search to one guessed hand

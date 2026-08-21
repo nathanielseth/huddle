@@ -2,7 +2,7 @@ import type { PhaseActionHandler } from "./types";
 import { noOpResult } from "./types";
 import { FACETURN_CONSTANTS as C } from "../types";
 import { mulliganPlayer, startTurn } from "../game";
-import { makeResult } from "../index";
+import { makeResult } from "../action-results";
 import { buildPrivatePayloads } from "../state-builders";
 
 export const mulliganAction: PhaseActionHandler = (

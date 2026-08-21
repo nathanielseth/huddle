@@ -1,8 +1,8 @@
 import type { FaceturnServerState } from "../types";
 import type { EffectPrimitive } from "../cards";
 import { getMove } from "../cards";
-import type { Handler } from "./index";
-import { isConditionalEffect } from "./index";
+import type { Handler } from "./shared";
+import { isConditionalEffect } from "./shared";
 import { applyDamage } from "./damage";
 
 export const moveChainHandlers = {

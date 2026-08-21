@@ -9,7 +9,7 @@ import {
 	finalizeDraft,
 	dealOpeningHand,
 } from "../game";
-import { makeResult } from "../index";
+import { makeResult } from "../action-results";
 import { buildPrivatePayloads } from "../state-builders";
 
 export const draftingAction: PhaseActionHandler = (

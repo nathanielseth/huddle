@@ -5,7 +5,7 @@ import {
 	triggerCrewTurnedEffects,
 	applyBloodMoneyOnStrike,
 } from "../effects";
-import { buildStrikeResolution, runDeferredPendingAction } from "../index";
+import { buildStrikeResolution, runDeferredPendingAction } from "../action-results";
 
 type Interaction = Extract<PendingInteraction, { type: "choose_crew_to_turn" }>;
 

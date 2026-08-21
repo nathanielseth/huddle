@@ -2,7 +2,7 @@ import type { PhaseActionHandler } from "./types";
 import { noOpResult } from "./types";
 import { FACETURN_CONSTANTS as C } from "../types";
 import { resolveRps } from "../game";
-import { makeResult, applyRpsWinner } from "../index";
+import { makeResult, applyRpsWinner } from "../action-results";
 
 export const rpsAction: PhaseActionHandler = (
 	state,

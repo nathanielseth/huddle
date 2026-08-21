@@ -1,7 +1,7 @@
 import type { InteractionSpec, PendingInteraction } from "./types";
 import { resolveBackgroundCheckGuess } from "../effects";
 import { resolveChallenge, executePendingAction } from "../game";
-import { buildStrikeResolution, afterAction } from "../index";
+import { buildStrikeResolution, afterAction } from "../action-results";
 
 type Interaction = Extract<
 	PendingInteraction,

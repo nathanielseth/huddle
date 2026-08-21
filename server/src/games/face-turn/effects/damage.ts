@@ -2,8 +2,8 @@ import type { FaceturnServerState, FaceturnServerPlayer } from "../types";
 import type { EffectPrimitive } from "../cards";
 import { CARD_IDS } from "../cards";
 import { recomputePassives } from "../derived";
-import type { Handler } from "./index";
-import { getEnemies, resolveTarget } from "./index";
+import type { Handler } from "./shared";
+import { getEnemies, resolveTarget } from "./shared";
 import type { PendingInteraction } from "../interactions/types";
 
 export function clampHp(hp: number, max: number): number {
@@ -61,7 +61,7 @@ function maybeTriggerMonkeyManCashSteal(
 }
 
 // shared tail once dmg is resolved: applies life insurance, hp clamp, and on-damage triggers
-export function applyResolvedDamageToBoss(
+function applyResolvedDamageToBoss(
 	state: FaceturnServerState,
 	target: FaceturnServerPlayer,
 	dmg: number,
@@ -123,7 +123,7 @@ export function applyDamage(
 }
 
 // piercing damage: bypasses armor, still respects immunity and reduction%
-export function applyDamageIgnoreArmor(
+function applyDamageIgnoreArmor(
 	state: FaceturnServerState,
 	target: FaceturnServerPlayer,
 	rawAmount: number,

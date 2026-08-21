@@ -28,7 +28,7 @@ import {
 	getLivingPlayers,
 	moveHasLegalTarget,
 } from "../effects";
-import { makeResult, afterAction, buildStrikeResolution } from "../index";
+import { makeResult, afterAction, buildStrikeResolution } from "../action-results";
 
 export const activeTurnAction: PhaseActionHandler = (
 	state,

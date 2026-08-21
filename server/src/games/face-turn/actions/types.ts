@@ -1,7 +1,7 @@
 import type { GameContext, EngineResult } from "../../../engine/GameEngine";
 import type { FaceturnServerState, FaceturnServerPlayer } from "../types";
 import type { FaceturnsAction } from "../schemas";
-import { makeResult } from "../index";
+import { makeResult } from "../action-results";
 
 // signature all phase onAction handlers implement
 // player is already looked up by dispatcher, so phase handlers don’t re‑check presence

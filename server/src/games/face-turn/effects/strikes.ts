@@ -2,15 +2,15 @@ import type { FaceturnServerState, FaceturnServerPlayer } from "../types";
 import type { EffectPrimitive } from "../cards";
 import { CARD_IDS, getCrew } from "../cards";
 import { recomputePassives } from "../derived";
-import type { EffectContext, Handler } from "./index";
+import type { EffectContext, Handler } from "./shared";
 import {
 	getEnemies,
 	getLivingPlayers,
 	getTeammates,
 	resolveTarget,
 	findEffectAmount,
-	resolveEffects,
-} from "./index";
+} from "./shared";
+import { resolveEffects } from "./index";
 import { consumeLifeInsuranceProtecting } from "./damage";
 
 // fires when a slot ceases to be "that face-down crew": clears marks, using previousCrewId to treat refill as invalidation not match
@@ -72,7 +72,7 @@ export function unturnCrewAtSlot(
 
 // kills a face-up crew slot: clears it (refilling from reserve if available)
 // invalidates any stale marks pointing at it, and recomputes passives
-export function killCrewAtSlot(
+function killCrewAtSlot(
 	state: FaceturnServerState,
 	owner: FaceturnServerPlayer,
 	slot: 0 | 1,
@@ -232,7 +232,7 @@ export function resolveStrikeOrExecute(
 }
 
 // move resolves in one pass.
-export function performSelfStrike(
+function performSelfStrike(
 	ctx: EffectContext,
 	preSelectedSlot?: 0 | 1,
 ): StrikeOrExecuteOutcome | null {
@@ -260,7 +260,7 @@ export function performSelfStrike(
 }
 
 // kills any crew
-export function triggerBertoOnCrewKill(
+function triggerBertoOnCrewKill(
 	state: FaceturnServerState,
 	killerId: string,
 ): void {
@@ -312,23 +312,6 @@ export function executedPlayerIdFrom(
 	targetPlayerId: string,
 ): string | null {
 	return outcome?.outcome === "executed" ? targetPlayerId : null;
-}
-
-// to the death: actor had 2 face-up crew and picked one to kill
-export function resolveChooseOwnCrewToStrike(
-	state: FaceturnServerState,
-	actor: FaceturnServerPlayer,
-	crewSlot: number,
-	eligibleSlots: number[],
-): StrikeOrExecuteOutcome | null {
-	const slot = crewSlot as 0 | 1;
-	if (!eligibleSlots.includes(slot)) return null;
-	if (!actor.crewIds[slot] || !actor.crewTurned[slot]) return null;
-
-	const { refilledFromReserve } = killCrewAtSlot(state, actor, slot);
-	triggerBertoOnCrewKill(state, actor.playerId);
-
-	return { outcome: "crew_killed", slot, refilledFromReserve };
 }
 
 // mama mercy armors ally boss on any ally crew turn; suplex strikes enemy crew only on ally's own turn (not forced)
@@ -491,10 +474,12 @@ export const strikeHandlers = {
 
 	strike_own_crew(effect, ctx) {
 		if (effect.type !== "strike_own_crew") return;
+		// targetAllySlot carries the actor's own picked slot
 		const preSelected =
 			effect.targetSlot !== undefined
 				? (effect.targetSlot as 0 | 1)
-				: (ctx.targetCrewSlot as 0 | 1 | undefined);
-		performSelfStrike(ctx, preSelected);
+				: (ctx.targetAllySlot as 0 | 1 | undefined);
+		const result = performSelfStrike(ctx, preSelected);
+		if (result === null) return false;
 	},
 } satisfies Partial<Record<EffectPrimitive["type"], Handler>>;

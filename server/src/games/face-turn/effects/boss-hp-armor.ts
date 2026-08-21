@@ -1,6 +1,6 @@
 import type { EffectPrimitive } from "../cards";
-import type { Handler } from "./index";
-import { getTeammates, resolveAllyTarget, resolveTarget } from "./index";
+import type { Handler } from "./shared";
+import { getTeammates, resolveAllyTarget, resolveTarget } from "./shared";
 import { clampHp } from "./damage";
 import { drawCards } from "./draw-discard";
 

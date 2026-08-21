@@ -11,7 +11,7 @@ import {
 	resolveCrewClass,
 	isConditionalEffect,
 	checkVoidPiecesAssembled,
-} from "./effects";
+} from "./effects/shared";
 
 // fully rebuilt from scratch on every recomputePassives call, never mutated incrementally
 export interface FaceturnDerivedPlayerStats {

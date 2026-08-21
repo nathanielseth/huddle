@@ -37,19 +37,17 @@ export function runInSimulationMode<T>(fn: () => T): T {
 
 // hand cards the player could legally play right now: affordable, has a
 // free active-move slot if the move is "active", and has a legal target.
-export function computePlayableMoveIds(
+function computePlayableMoveIds(
 	state: FaceturnServerState,
 	player: FaceturnServerPlayer,
 ): readonly string[] {
 	const playable: string[] = [];
+	const hasOpenActiveSlot = player.activeMoves.some((s) => s === null);
 	for (const moveId of player.hand) {
 		const move = getMove(moveId);
 		const cost = effectiveCost(state, player, moveId);
 		if (player.cash < cost) continue;
-		if (
-			move.moveType === "active" &&
-			player.activeMoves.findIndex((s) => s === null) === -1
-		) {
+		if (move.moveType === "active" && !hasOpenActiveSlot) {
 			continue;
 		}
 		if (!moveHasLegalTarget(state, player.playerId, move)) continue;
@@ -166,6 +164,8 @@ function buildPlayerView(
 		isEliminated: state.eliminatedPlayers.has(player.playerId),
 		teamIndex: player.teamIndex,
 		mulliganDecided: player.mulliganDecided,
+		hasSellCards: player.derived.hasSellCards,
+		sellCardCashAmount: player.derived.sellCardCashAmount,
 	};
 }
 

@@ -1,6 +1,6 @@
 import type { InteractionSpec, PendingInteraction } from "./types";
 import { resolveBearBonesBonusStrike } from "../effects";
-import { buildStrikeResolution, finalizeResolvedChallenge } from "../index";
+import { buildStrikeResolution, finalizeResolvedChallenge } from "../action-results";
 
 type Interaction = Extract<
 	PendingInteraction,
@@ -54,6 +54,5 @@ export const bearBonesBonusStrikeSpec: InteractionSpec<Interaction> = {
 		type: "bear_bones_bonus_strike",
 		actorId: interaction.actorId,
 		eligibleTargetIds: interaction.eligibleTargetIds,
-		cashCost: interaction.cashCost,
 	}),
 };

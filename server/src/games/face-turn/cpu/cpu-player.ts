@@ -11,16 +11,12 @@ import { search } from "./ismcts";
 import { selectFinalAction } from "./select-action";
 import type { CpuTuning, StrategyOverride } from "./types";
 
-export const TUNING: CpuTuning = {
+const TUNING: CpuTuning = {
 	iterations: 800,
 	rolloutDepth: 6,
 	actionTemperature: 0.12,
 	thinkMs: [300, 800],
 };
-
-export function getTuning(): CpuTuning {
-	return TUNING;
-}
 
 export function decideAction(
 	state: FaceturnServerState,
@@ -40,8 +36,8 @@ export function decideAction(
 	if (legal.length === 1) return legal[0]!;
 
 	const tuning: CpuTuning = tuningOverride
-		? { ...getTuning(), ...tuningOverride }
-		: getTuning();
+		? { ...TUNING, ...tuningOverride }
+		: TUNING;
 
 	const result = search(state, seat, helpers, {
 		iterations: tuning.iterations,
