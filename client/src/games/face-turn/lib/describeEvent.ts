@@ -2,7 +2,7 @@ import type {
 	PendingInteractionView,
 	MoveChainResolutionStep,
 } from "@shared/games/face-turn/types";
-import type { LogEntry } from "@shared/games/face-turn/log";
+import type { LogEntry, CrewTurnCause } from "@shared/games/face-turn/log";
 import {
 	getMoveDisplay,
 	getCrewDisplay,
@@ -146,6 +146,26 @@ export function describePendingInteraction(
 	}
 }
 
+function describeCrewTurnCause(via: CrewTurnCause): string | null {
+	switch (via.reason) {
+		case "strike":
+			return null; // implied by context, no extra text needed
+		case "challenge_loss":
+			return "challenge lost";
+		case "face_turn":
+			return "Face Turn";
+		case "class_action":
+			return null; // voluntary hide, always self-initiated — no cause to add
+		case "boss_command":
+		case "boss_passive":
+			return getBossDisplay(via.bossId).name;
+		case "crew_passive":
+			return getCrewDisplay(via.crewId).name;
+		case "move":
+			return getMoveDisplay(via.moveId).name;
+	}
+}
+
 export function describeLogEntry(
 	entry: LogEntry,
 	playerMap: PlayerLookup,
@@ -196,13 +216,17 @@ export function describeLogEntry(
 		case "crew_turned": {
 			const crew = getCrewDisplay(entry.crewId).name;
 			const owner = name(entry.playerId);
-			return entry.causedByActorId
+			const cause = describeCrewTurnCause(entry.via);
+			const base = entry.causedByActorId
 				? `${name(entry.causedByActorId)} turned ${owner}'s ${crew} face-up`
 				: `${owner}'s ${crew} turned face-up`;
+			return cause ? `${base} (${cause})` : base;
 		}
 		case "crew_hidden": {
 			const crew = getCrewDisplay(entry.crewId).name;
-			return `${name(entry.playerId)}'s ${crew} was hidden face-down`;
+			const cause = describeCrewTurnCause(entry.via);
+			const base = `${name(entry.playerId)}'s ${crew} was hidden face-down`;
+			return cause ? `${base} (${cause})` : base;
 		}
 		case "boss_command_used": {
 			const boss = getBossDisplay(entry.bossId).name;
@@ -217,6 +241,8 @@ export function describeLogEntry(
 						: " — wrong.";
 			return `${name(entry.actorId)} used ${boss}'s Boss Command${target}${result}`;
 		}
+		case "challenge_declared":
+			return `${name(entry.challengerId)} is challenging ${name(entry.actorId)}`;
 		case "challenge_resolved":
 			return entry.success
 				? `${name(entry.challengerId)} successfully called a bluff on ${name(entry.actorId)}!`

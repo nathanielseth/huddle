@@ -283,7 +283,10 @@ export const activeTurnAction: PhaseActionHandler = (
 				const matches =
 					overrides?.has(action.guessClass) || crew.class === action.guessClass;
 				if (matches) {
-					turnCrewAtSlot(state, targetPlayer, slot, playerId);
+					turnCrewAtSlot(state, targetPlayer, slot, playerId, {
+						reason: "boss_command",
+						bossId: boss.id,
+					});
 					recomputePassives(targetPlayer, state);
 					triggerCrewTurnedEffects(state, targetPlayer, slot);
 				}
@@ -388,7 +391,7 @@ export const activeTurnAction: PhaseActionHandler = (
 				state,
 				targetPlayer,
 				playerId,
-				true,
+				{ reason: "face_turn" },
 				action.targetCrewSlot as 0 | 1 | undefined,
 			);
 

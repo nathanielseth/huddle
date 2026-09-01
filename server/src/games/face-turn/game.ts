@@ -765,7 +765,7 @@ export function resolveChallenge(
 			state,
 			challenger,
 			pending.actorId,
-			false,
+			{ reason: "challenge_loss" },
 		);
 
 		// challenger gets a face‑up penalty; if 2+ face‑down crew exist, resolveStrikeOrExecute opens a choose_crew_to_turn interaction
@@ -837,7 +837,9 @@ export function resolveChallenge(
 			recomputePassives(actor, state);
 		}
 	} else {
-		strikeOutcome = resolveStrikeOrExecute(state, actor, challengerId, false);
+		strikeOutcome = resolveStrikeOrExecute(state, actor, challengerId, {
+			reason: "challenge_loss",
+		});
 		turned =
 			strikeOutcome.outcome === "crew_turned" ? strikeOutcome.slot : null;
 	}
@@ -929,7 +931,9 @@ export function executePendingAction(
 			const slot =
 				(pending.targetAllySlot as 0 | 1 | null) ?? firstTurnedSlot(hideTarget);
 			if (slot !== null && hideTarget.crewIds[slot]) {
-				hideCrewAtSlot(state, hideTarget, slot);
+				hideCrewAtSlot(state, hideTarget, slot, false, {
+					reason: "class_action",
+				});
 				recomputePassives(hideTarget, state);
 			}
 			return null;
@@ -958,11 +962,18 @@ export function executeMove(
 ): void {
 	const move = getMove(moveId);
 
+	// self is a valid mechanical target for ally-scoped moves with no
+	// teammate present; only record a target when it's someone else
+	const loggedTargetPlayerId =
+		targets.targetPlayerId && targets.targetPlayerId !== actor.playerId
+			? targets.targetPlayerId
+			: null;
+
 	pushLog(state, {
 		kind: "move_played",
 		actorId: actor.playerId,
 		moveId,
-		targetPlayerId: targets.targetPlayerId ?? null,
+		targetPlayerId: loggedTargetPlayerId,
 	});
 
 	actor.costOverrides.delete(moveId);

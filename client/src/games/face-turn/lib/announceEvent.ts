@@ -94,6 +94,14 @@ export function toAnnouncement(
 			break;
 		}
 
+		case "challenge_declared":
+			return {
+				id: `log-${entry.seq}`,
+				headline: "Challenge!",
+				subline: `${who(entry.challengerId)} → ${who(entry.actorId)}`,
+				tone: "neutral",
+			};
+
 		case "challenge_resolved":
 			return entry.success
 				? {

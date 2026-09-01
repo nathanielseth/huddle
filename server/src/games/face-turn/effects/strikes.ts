@@ -1,5 +1,6 @@
 import type { FaceturnServerState, FaceturnServerPlayer } from "../types";
 import type { EffectPrimitive } from "../cards";
+import type { CrewTurnCause } from "../../../../../shared/games/face-turn/log";
 import { CARD_IDS, getCrew } from "../cards";
 import { recomputePassives } from "../derived";
 import type { EffectContext, Handler } from "./shared";
@@ -13,6 +14,18 @@ import {
 import { resolveEffects } from "./index";
 import { consumeLifeInsuranceProtecting } from "./damage";
 import { pushLog } from "../log";
+
+function discardRedHerringMove(
+	state: FaceturnServerState,
+	owner: FaceturnServerPlayer,
+): void {
+	const ownSlot = owner.activeMoves.indexOf(CARD_IDS.MOVE.RED_HERRING);
+	if (ownSlot === -1) return;
+	owner.activeMoves[ownSlot] = null;
+	owner.discardPile.push(CARD_IDS.MOVE.RED_HERRING);
+	owner.totalCardsDiscarded++;
+	recomputePassives(owner, state);
+}
 
 // refill treated as invalidation, not match
 function invalidateStaleCrewMarks(
@@ -44,6 +57,7 @@ function invalidateStaleCrewMarks(
 	const rh = owner.redHerringMark;
 	if (rh && rh.slot === slot && rh.crewId === previousCrewId) {
 		owner.redHerringMark = null;
+		discardRedHerringMove(state, owner);
 	}
 }
 
@@ -51,7 +65,8 @@ export function turnCrewAtSlot(
 	state: FaceturnServerState,
 	player: FaceturnServerPlayer,
 	slot: 0 | 1,
-	causedByActorId: string | null = null,
+	causedByActorId: string | null,
+	via: CrewTurnCause,
 ): void {
 	const crewId = player.crewIds[slot];
 	if (!crewId) return;
@@ -64,6 +79,7 @@ export function turnCrewAtSlot(
 		slot,
 		crewId,
 		causedByActorId,
+		via,
 	});
 }
 
@@ -71,7 +87,8 @@ export function hideCrewAtSlot(
 	state: FaceturnServerState,
 	player: FaceturnServerPlayer,
 	slot: 0 | 1,
-	causedByEnemy = false,
+	causedByEnemy: boolean,
+	via: CrewTurnCause,
 ): void {
 	const crewId = player.crewIds[slot];
 	if (!crewId) return;
@@ -83,6 +100,7 @@ export function hideCrewAtSlot(
 		slot,
 		crewId,
 		causedByEnemy,
+		via,
 	});
 	triggerAllyTurnReactions(state, player, causedByEnemy);
 }
@@ -145,9 +163,11 @@ export function resolveStrikeOrExecute(
 	state: FaceturnServerState,
 	target: FaceturnServerPlayer,
 	actorId: string | null,
-	isStrike: boolean,
+	via: CrewTurnCause,
 	preSelectedSlot?: 0 | 1,
 ): StrikeOrExecuteOutcome {
+	// face_turn and challenge_loss turn crew but never escalate to a kill
+	const isStrike = via.reason === "strike";
 	if (isStrikeDefendedByTerminal(target)) {
 		return { outcome: "negated", negatedBy: "terminal" };
 	}
@@ -161,6 +181,7 @@ export function resolveStrikeOrExecute(
 	) {
 		const mark = target.redHerringMark;
 		target.redHerringMark = null;
+		discardRedHerringMove(state, target);
 		if (
 			target.crewIds[mark.slot] === mark.crewId &&
 			!target.crewTurned[mark.slot]
@@ -197,13 +218,13 @@ export function resolveStrikeOrExecute(
 		result = { outcome: "crew_killed", slot, refilledFromReserve };
 		triggerBertoOnCrewKill(state, actorId);
 	} else if (resolvedPreSelected !== null) {
-		turnCrewAtSlot(state, target, resolvedPreSelected, actorId);
+		turnCrewAtSlot(state, target, resolvedPreSelected, actorId, via);
 		recomputePassives(target, state);
 		triggerCrewTurnedEffects(state, target, resolvedPreSelected, causedByEnemy);
 		result = { outcome: "crew_turned", slot: resolvedPreSelected };
 	} else if (unturnedSlots.length === 1) {
 		const slot = unturnedSlots[0]!;
-		turnCrewAtSlot(state, target, slot, actorId);
+		turnCrewAtSlot(state, target, slot, actorId, via);
 		recomputePassives(target, state);
 		triggerCrewTurnedEffects(state, target, slot, causedByEnemy);
 		result = { outcome: "crew_turned", slot };
@@ -221,6 +242,7 @@ export function resolveStrikeOrExecute(
 			eligibleSlots: unturnedSlots,
 			isStrike,
 			causedByEnemy,
+			via,
 		};
 		return { outcome: "pending" };
 	} else if (target.bossImmunityTurns > 0) {
@@ -314,7 +336,7 @@ export function performStrike(
 		ctx.state,
 		target,
 		ctx.actor.playerId,
-		true,
+		{ reason: "strike" },
 		ctx.targetCrewSlot as 0 | 1 | undefined,
 	);
 }

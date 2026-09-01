@@ -27,6 +27,7 @@ import {
 	afterAction,
 	buildStrikeResolution,
 } from "../action-results";
+import { pushLog } from "../log";
 
 export const moveChainWindowAction: PhaseActionHandler = (
 	state,
@@ -162,6 +163,12 @@ export const challengeWindowAction: PhaseActionHandler = (
 
 	if (action.type === "challenge") {
 		const actor = state.players.get(pending.actorId)!;
+
+		pushLog(state, {
+			kind: "challenge_declared",
+			challengerId: playerId,
+			actorId: pending.actorId,
+		});
 
 		if (actor.derived.hasBackgroundCheck) {
 			const eligibleSlots = ([0, 1] as const).filter(
@@ -388,6 +395,12 @@ export const defendDeclaredAction: PhaseActionHandler = (
 	if (action.type === "challenge_defend") {
 		if (pending.originalActionType === "card_strike") return noOp();
 
+		pushLog(state, {
+			kind: "challenge_declared",
+			challengerId: strikeerId,
+			actorId: pending.actorId,
+		});
+
 		const { actionProceeds: defendWasReal, resolution } = resolveChallenge(
 			state,
 			strikeerId,
@@ -403,7 +416,7 @@ export const defendDeclaredAction: PhaseActionHandler = (
 						state,
 						defender,
 						strikeerId,
-						false,
+						{ reason: "challenge_loss" },
 					);
 					if (outcome.outcome !== "pending") {
 						state.lastResolution = buildStrikeResolution(

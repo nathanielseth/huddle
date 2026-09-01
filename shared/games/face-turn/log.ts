@@ -1,5 +1,11 @@
 import type { MoveChainResolutionStep } from "./types";
 
+export type CrewTurnCause =
+	| { readonly reason: "strike" | "challenge_loss" | "face_turn" | "class_action" }
+	| { readonly reason: "boss_command" | "boss_passive"; readonly bossId: string }
+	| { readonly reason: "crew_passive"; readonly crewId: string }
+	| { readonly reason: "move"; readonly moveId: string };
+
 export type LogEntry =
 	| {
 			readonly seq: number;
@@ -12,6 +18,7 @@ export type LogEntry =
 			readonly kind: "move_played";
 			readonly actorId: string;
 			readonly moveId: string;
+			// null when untargeted, or when the only valid target was the actor
 			readonly targetPlayerId: string | null;
 	  }
 	| {
@@ -47,6 +54,7 @@ export type LogEntry =
 			readonly crewId: string;
 			// null for self-caused turns or when no distinct actor is responsible
 			readonly causedByActorId: string | null;
+			readonly via: CrewTurnCause;
 	  }
 	| {
 			readonly seq: number;
@@ -55,6 +63,7 @@ export type LogEntry =
 			readonly slot: 0 | 1;
 			readonly crewId: string;
 			readonly causedByEnemy: boolean;
+			readonly via: CrewTurnCause;
 	  }
 	| {
 			readonly seq: number;
@@ -64,6 +73,12 @@ export type LogEntry =
 			readonly targetPlayerId: string | null;
 			// only set for guess-based commands like the razor, null otherwise
 			readonly succeeded: boolean | null;
+	  }
+	| {
+			readonly seq: number;
+			readonly kind: "challenge_declared";
+			readonly challengerId: string;
+			readonly actorId: string;
 	  }
 	| {
 			readonly seq: number;

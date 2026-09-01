@@ -26,7 +26,10 @@ export const crewTurnHandlers = {
 				? (effect.targetSlot as 0 | 1)
 				: firstUnturnedSlot(target);
 		if (slot === null) return;
-		turnCrewAtSlot(ctx.state, target, slot, ctx.actor.playerId);
+		turnCrewAtSlot(ctx.state, target, slot, ctx.actor.playerId, {
+			reason: "move",
+			moveId: ctx.moveId!,
+		});
 		recomputePassives(target, ctx.state);
 		triggerCrewTurnedEffects(ctx.state, target, slot);
 	},
@@ -38,7 +41,10 @@ export const crewTurnHandlers = {
 				? (effect.targetSlot as 0 | 1)
 				: firstUnturnedSlot(ctx.actor);
 		if (slot === null) return false;
-		turnCrewAtSlot(ctx.state, ctx.actor, slot);
+		turnCrewAtSlot(ctx.state, ctx.actor, slot, null, {
+			reason: "move",
+			moveId: ctx.moveId!,
+		});
 		recomputePassives(ctx.actor, ctx.state);
 		triggerCrewTurnedEffects(ctx.state, ctx.actor, slot);
 		return true;
@@ -52,7 +58,10 @@ export const crewTurnHandlers = {
 			if (slot === triggeringSlot) continue;
 			if (!actor.crewIds[slot]) continue;
 			if (actor.crewTurned[slot]) continue;
-			turnCrewAtSlot(ctx.state, actor, slot);
+			turnCrewAtSlot(ctx.state, actor, slot, null, {
+				reason: "move",
+				moveId: ctx.moveId!,
+			});
 			recomputePassives(actor, ctx.state);
 			triggerCrewTurnedEffects(ctx.state, actor, slot);
 		}
@@ -65,7 +74,10 @@ export const crewTurnHandlers = {
 				? (effect.targetSlot as 0 | 1)
 				: firstTurnedSlot(ctx.actor);
 		if (slot === null) return;
-		hideCrewAtSlot(ctx.state, ctx.actor, slot);
+		hideCrewAtSlot(ctx.state, ctx.actor, slot, false, {
+			reason: "move",
+			moveId: ctx.moveId!,
+		});
 		recomputePassives(ctx.actor, ctx.state);
 	},
 
@@ -75,7 +87,11 @@ export const crewTurnHandlers = {
 		const otherSlot = (1 - triggeringSlot) as 0 | 1;
 		if (!ctx.actor.crewIds[otherSlot]) return;
 		if (!ctx.actor.crewTurned[otherSlot]) return;
-		hideCrewAtSlot(ctx.state, ctx.actor, otherSlot);
+		// crew turnedEffect reaction (miss-direction), never a move
+		hideCrewAtSlot(ctx.state, ctx.actor, otherSlot, false, {
+			reason: "crew_passive",
+			crewId: ctx.actor.crewIds[triggeringSlot]!,
+		});
 		recomputePassives(ctx.actor, ctx.state);
 	},
 
@@ -85,9 +101,10 @@ export const crewTurnHandlers = {
 				? (ctx.targetAllySlot as 0 | 1)
 				: firstTurnedSlot(ctx.actor);
 		if (slot === null) return;
-		hideCrewAtSlot(ctx.state, ctx.actor, slot);
+		const via = { reason: "move" as const, moveId: ctx.moveId! };
+		hideCrewAtSlot(ctx.state, ctx.actor, slot, false, via);
 		recomputePassives(ctx.actor, ctx.state);
-		turnCrewAtSlot(ctx.state, ctx.actor, slot);
+		turnCrewAtSlot(ctx.state, ctx.actor, slot, null, via);
 		recomputePassives(ctx.actor, ctx.state);
 		triggerCrewTurnedEffects(ctx.state, ctx.actor, slot);
 	},
@@ -115,7 +132,12 @@ export const crewTurnHandlers = {
 	hide_self(_effect, ctx) {
 		const slot = ctx.targetAllySlot;
 		if (slot === undefined) return;
-		hideCrewAtSlot(ctx.state, ctx.actor, slot as 0 | 1);
+		const crewId = ctx.actor.crewIds[slot as 0 | 1];
+		if (!crewId) return;
+		hideCrewAtSlot(ctx.state, ctx.actor, slot as 0 | 1, false, {
+			reason: "crew_passive",
+			crewId,
+		});
 		recomputePassives(ctx.actor, ctx.state);
 	},
 

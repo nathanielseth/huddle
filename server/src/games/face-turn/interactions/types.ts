@@ -1,4 +1,5 @@
 import type { PendingInteractionView } from "../../../../../shared/games/face-turn/types";
+import type { CrewTurnCause } from "../../../../../shared/games/face-turn/log";
 import type { FaceturnsAction } from "../schemas";
 import type { FaceturnServerState, FaceturnServerPlayer } from "../types";
 import type { EngineResult } from "../../../engine/GameEngine";
@@ -30,6 +31,7 @@ export type PendingInteraction =
 			deferredActionPending?: boolean;
 			// true when an enemy (not the crew's owner) caused this turn
 			causedByEnemy: boolean;
+			via: CrewTurnCause;
 	  }
 	| {
 			// target locked at play time

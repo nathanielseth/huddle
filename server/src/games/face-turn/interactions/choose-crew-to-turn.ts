@@ -1,4 +1,5 @@
 import type { InteractionSpec, PendingInteraction } from "./types";
+import type { CrewTurnCause } from "../../../../../shared/games/face-turn/log";
 import {
 	turnCrewAtSlot,
 	recomputePassives,
@@ -11,6 +12,14 @@ import {
 } from "../action-results";
 
 type Interaction = Extract<PendingInteraction, { type: "choose_crew_to_turn" }>;
+
+function strikeResolutionViaFrom(
+	via: CrewTurnCause,
+): "strike" | "face_turn" | "challenge_loss" {
+	if (via.reason === "challenge_loss") return "challenge_loss";
+	if (via.reason === "face_turn") return "face_turn";
+	return "strike";
+}
 
 export const chooseCrewToTurnSpec: InteractionSpec<Interaction> = {
 	// chooser player: attacker unless void arms flips
@@ -25,7 +34,7 @@ export const chooseCrewToTurnSpec: InteractionSpec<Interaction> = {
 		if (!interaction.eligibleSlots.includes(slot)) return null;
 		if (!target.crewIds[slot] || target.crewTurned[slot]) return null;
 
-		turnCrewAtSlot(state, target, slot, interaction.actorId);
+		turnCrewAtSlot(state, target, slot, interaction.actorId, interaction.via);
 		recomputePassives(target, state);
 		triggerCrewTurnedEffects(state, target, slot, interaction.causedByEnemy);
 
@@ -40,7 +49,7 @@ export const chooseCrewToTurnSpec: InteractionSpec<Interaction> = {
 			{ outcome: "crew_turned", slot },
 			interaction.actorId,
 			interaction.targetPlayerId,
-			interaction.isStrike ? "strike" : "challenge_loss",
+			strikeResolutionViaFrom(interaction.via),
 		);
 
 		state.pendingInteraction = null;
@@ -57,7 +66,7 @@ export const chooseCrewToTurnSpec: InteractionSpec<Interaction> = {
 		const target = state.players.get(interaction.targetPlayerId);
 		if (target && interaction.eligibleSlots[0] !== undefined) {
 			const slot = interaction.eligibleSlots[0] as 0 | 1;
-			turnCrewAtSlot(state, target, slot, interaction.actorId);
+			turnCrewAtSlot(state, target, slot, interaction.actorId, interaction.via);
 			recomputePassives(target, state);
 			triggerCrewTurnedEffects(state, target, slot, interaction.causedByEnemy);
 
@@ -71,7 +80,7 @@ export const chooseCrewToTurnSpec: InteractionSpec<Interaction> = {
 				{ outcome: "crew_turned", slot },
 				interaction.actorId,
 				interaction.targetPlayerId,
-				interaction.isStrike ? "strike" : "challenge_loss",
+				strikeResolutionViaFrom(interaction.via),
 			);
 		}
 

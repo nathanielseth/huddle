@@ -1,6 +1,7 @@
 import type { FaceturnServerState, FaceturnServerPlayer } from "../types";
 import { FACETURN_CONSTANTS as C } from "../types";
 import type { EffectPrimitive } from "../cards";
+import type { CrewTurnCause } from "../../../../../shared/games/face-turn/log";
 import { CARD_IDS, getCrew } from "../cards";
 import { shuffle } from "../../lib/random";
 import { recomputePassives } from "../derived";
@@ -352,9 +353,11 @@ export function resolveSwitchUpPick(
 	if (hideSlot === turnSlot) return;
 	if (!faceUpSlots.includes(hideSlot)) return;
 	if (!faceDownSlots.includes(turnSlot)) return;
-	hideCrewAtSlot(state, actor, hideSlot as 0 | 1);
+	// only switch-up ever opens this interaction
+	const via: CrewTurnCause = { reason: "move", moveId: CARD_IDS.MOVE.SWITCH_UP };
+	hideCrewAtSlot(state, actor, hideSlot as 0 | 1, false, via);
 	recomputePassives(actor, state);
-	turnCrewAtSlot(state, actor, turnSlot as 0 | 1);
+	turnCrewAtSlot(state, actor, turnSlot as 0 | 1, null, via);
 	recomputePassives(actor, state);
 	triggerCrewTurnedEffects(state, actor, turnSlot as 0 | 1);
 }
@@ -367,7 +370,11 @@ export function resolveTacticalSupportHide(
 ): void {
 	if (slot === null) return;
 	if (!eligibleSlots.includes(slot)) return;
-	hideCrewAtSlot(state, target, slot as 0 | 1);
+	// only tactical-support ever opens this interaction
+	hideCrewAtSlot(state, target, slot as 0 | 1, false, {
+		reason: "move",
+		moveId: CARD_IDS.MOVE.TACTICAL_SUPPORT,
+	});
 	recomputePassives(target, state);
 }
 
@@ -389,7 +396,10 @@ export function resolveWatcherHide(
 			? actor
 			: state.players.get(resolvedPlayerId);
 	if (!target) return;
-	hideCrewAtSlot(state, target, slot as 0 | 1);
+	hideCrewAtSlot(state, target, slot as 0 | 1, false, {
+		reason: "boss_passive",
+		bossId: CARD_IDS.BOSS.THE_WATCHER,
+	});
 	recomputePassives(target, state);
 }
 
@@ -541,7 +551,7 @@ export function resolveBearBonesBonusStrike(
 		state,
 		target,
 		actor.playerId,
-		true,
+		{ reason: "strike" },
 		targetSlot !== null ? (targetSlot as 0 | 1) : undefined,
 	);
 	applyBloodMoneyOnStrike(state, actor);
@@ -563,7 +573,10 @@ export function resolveBackgroundCheckGuess(
 		const ownSlot =
 			firstUnturnedSlot(challenger) ?? firstTurnedSlot(challenger);
 		if (ownSlot !== null) {
-			turnCrewAtSlot(state, challenger, ownSlot);
+			turnCrewAtSlot(state, challenger, ownSlot, null, {
+				reason: "move",
+				moveId: CARD_IDS.MOVE.BACKGROUND_CHECK,
+			});
 			recomputePassives(challenger, state);
 			triggerCrewTurnedEffects(state, challenger, ownSlot);
 		}
@@ -595,7 +608,10 @@ export function processWarrantOfArrestTicks(
 		if (target.crewIds[mark.targetSlot] !== mark.targetCrewId) continue;
 		if (target.crewTurned[mark.targetSlot]) continue;
 
-		turnCrewAtSlot(state, target, mark.targetSlot, caster.playerId);
+		turnCrewAtSlot(state, target, mark.targetSlot, caster.playerId, {
+			reason: "move",
+			moveId: CARD_IDS.MOVE.WARRANT_OF_ARREST,
+		});
 		recomputePassives(target, state);
 		triggerCrewTurnedEffects(state, target, mark.targetSlot, true);
 	}
