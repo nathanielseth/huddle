@@ -1,10 +1,13 @@
 import { lazy } from "react";
 import type { ComponentType, LazyExoticComponent } from "react";
 
+export type LobbyConfigLayout = "inline" | "panel" | "full";
+
 interface GameEntry {
 	id: string;
 	inGame: LazyExoticComponent<ComponentType>;
 	config?: LazyExoticComponent<ComponentType>;
+	configLayout?: LobbyConfigLayout;
 }
 
 // named exports can't be passed to lazy() directly, so we wrap them in a helper
@@ -57,6 +60,7 @@ export const GAME_REGISTRY: GameEntry[] = [
 			() => import("@/games/face-turn/FaceTurnConfig"),
 			"FaceTurnConfig",
 		),
+		configLayout: "inline",
 	},
 	{
 		id: "blank-slate",

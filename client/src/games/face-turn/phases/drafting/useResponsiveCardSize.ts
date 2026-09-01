@@ -36,8 +36,8 @@ export const DESKTOP_GRID: GridMetrics = {
 	columns: 4,
 	gap: 40,
 	paddingX: 40,
-	sizeMin: 160,
-	sizeMax: 285,
+	sizeMin: 120,
+	sizeMax: 310,
 };
 
 export const MOBILE_GRID: GridMetrics = {
@@ -51,26 +51,11 @@ export const MOBILE_GRID: GridMetrics = {
 function useResponsiveCardSizeFor(metrics: GridMetrics) {
 	const containerRef = useRef<HTMLDivElement | null>(null);
 	const [cardSize, setCardSize] = useState(metrics.sizeMax);
-	// bumped by the ref callback below whenever the underlying DOM node
-	// actually changes (mount, unmount, or swap to a different element),
-	// so it can sit in the effect's dependency array and force a fresh
-	// measurement + ResizeObserver against whatever node is current.
+	// bumps when the DOM node changes (mount/unmount/swap) so the effect re-runs
 	const [generation, setGeneration] = useState(0);
 
-	// stable identity via useCallback ([] deps) is required here — this is
-	// passed straight to JSX as `ref={...}`, and a ref callback with a new
-	// function identity every render gets called by React with null then
-	// the node on *every* render (detach old ref, attach "new" one), which
-	// would call setGeneration on every render and loop forever.
-	//
-	// DraftingPhase swaps between separate mobile and desktop JSX trees as
-	// isMobile flips, unmounting one grid element and mounting a different
-	// one. a bare useRef + effect-with-[]-deps only ever observes whichever
-	// node was attached the first time this hook instance's effect ran; if
-	// the element is later swapped out (mobile -> desktop -> back) the old
-	// ResizeObserver is left watching a detached node and never
-	// reconnects. bumping generation here makes the effect below re-run
-	// and rebuild the observer against the node that's actually mounted.
+	// stable identity avoids react calling the ref callback with null/node every render,
+	// which would loop. generation ensures the observer follows the actually mounted element.
 	const setContainerNode = useCallback((el: HTMLDivElement | null) => {
 		containerRef.current = el;
 		setGeneration((g) => g + 1);

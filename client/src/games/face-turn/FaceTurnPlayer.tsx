@@ -1,4 +1,4 @@
-import type { CSSProperties } from "react";
+import { Fragment, type CSSProperties } from "react";
 import { useFaceturnState } from "./hooks/useFaceturnState";
 import { useFitBoardCardSize } from "./hooks/useFitBoardCardSize";
 import { usePhaseSceneQueue } from "./hooks/usePhaseSceneQueue";
@@ -27,44 +27,72 @@ import { cn } from "../../lib/utils/cn";
 import { makeMoveCostEstimator } from "./lib/cost";
 import "./board.css";
 
-// opponent boards mirrored above local board
-function OpponentsRow() {
-	const { ft, playerId, playerMap } = useFaceturnState();
-	if (!ft) return null;
-	const opponentIds = ft.turnOrder.filter((id) => id !== playerId);
-	if (opponentIds.length === 0) return null;
+const MAX_PER_ROW = 3;
 
-	return (
-		<div className="flex flex-col gap-4 px-2">
-			{opponentIds.map((id) => {
-				const p = ft.players[id];
-				if (!p) return null;
-				return (
-					<div key={id} className="flex flex-col-reverse">
-						<PlayerBoard
-							player={p}
-							name={playerMap[id]?.name ?? id}
-							isActive={ft.turn?.activePlayerId === id}
-						/>
-					</div>
-				);
-			})}
-		</div>
-	);
+function useTableRows(): string[][] {
+	const { ft, playerId } = useFaceturnState();
+	if (!ft) return [];
+
+	const order =
+		ft.turnOrder.length > 0 ? ft.turnOrder : Object.keys(ft.players);
+	const orderIndex = new Map(order.map((id, i) => [id, i]));
+	const byTurnOrder = (a: string, b: string) =>
+		(orderIndex.get(a) ?? 0) - (orderIndex.get(b) ?? 0);
+
+	if (ft.mode === "teams") {
+		const myTeam = ft.teams.find((team) => team.includes(playerId));
+		const otherTeams = ft.teams.filter((team) => team !== myTeam);
+		const allyRow = [
+			playerId,
+			...(myTeam ?? []).filter((id) => id !== playerId).sort(byTurnOrder),
+		];
+		const enemyRows = otherTeams.map((team) => [...team].sort(byTurnOrder));
+		return [...enemyRows, allyRow];
+	}
+
+	if (ft.mode === "duel") {
+		const enemyId = order.find((id) => id !== playerId);
+		return enemyId ? [[enemyId], [playerId]] : [[playerId]];
+	}
+
+	// ffa: chunk everyone into rows of at most 3, in turn order, then move
+	// whichever row has you to the end so you're always on the bottom
+	const others = order.filter((id) => id !== playerId);
+	const rest = [...others, playerId];
+	const rows: string[][] = [];
+	for (let i = 0; i < rest.length; i += MAX_PER_ROW) {
+		rows.push(rest.slice(i, i + MAX_PER_ROW));
+	}
+	const myRowIndex = rows.findIndex((row) => row.includes(playerId));
+	if (myRowIndex !== -1 && myRowIndex !== rows.length - 1) {
+		const [myRow] = rows.splice(myRowIndex, 1);
+		rows.push(myRow);
+	}
+	return rows;
 }
 
-function MyBoard() {
-	const { ft, secret, myPlayer, playerId, playerMap } = useFaceturnState();
-	if (!ft || !myPlayer) return null;
+// horizontal row of boards, always full size — no compact/mini treatment
+function TableRow({ playerIds }: { playerIds: string[] }) {
+	const { ft, secret, playerId, playerMap } = useFaceturnState();
+	if (!ft) return null;
+
 	return (
-		<div className="px-2">
-			<PlayerBoard
-				player={myPlayer}
-				name={playerMap[playerId]?.name ?? "You"}
-				isActive={ft.turn?.activePlayerId === playerId}
-				isMe
-				knownCrewAssignments={secret?.crewAssignments}
-			/>
+		<div className="flex flex-wrap justify-center gap-3 px-2 w-full">
+			{playerIds.map((id) => {
+				const p = ft.players[id];
+				if (!p) return null;
+				const mine = id === playerId;
+				return (
+					<PlayerBoard
+						key={id}
+						player={p}
+						name={playerMap[id]?.name ?? (mine ? "You" : id)}
+						isActive={ft.turn?.activePlayerId === id}
+						isMe={mine}
+						knownCrewAssignments={mine ? secret?.crewAssignments : undefined}
+					/>
+				);
+			})}
 		</div>
 	);
 }
@@ -73,6 +101,7 @@ const HAND_MAX_HEIGHT_PX = 240;
 
 function BoardContent() {
 	const { containerRef, contentRef, cardSize } = useFitBoardCardSize();
+	const rows = useTableRows();
 
 	return (
 		<div
@@ -81,7 +110,7 @@ function BoardContent() {
 		>
 			<div
 				ref={contentRef}
-				className="min-h-full flex flex-col items-center justify-center gap-3 py-3 m-auto"
+				className="min-h-full flex flex-col items-stretch justify-center gap-3 py-3 m-auto"
 				style={
 					{
 						paddingBottom: `${HAND_MAX_HEIGHT_PX}px`,
@@ -89,9 +118,14 @@ function BoardContent() {
 					} as CSSProperties
 				}
 			>
-				<OpponentsRow />
-				<div className="w-full h-px bg-white/10 max-w-md" />
-				<MyBoard />
+				{rows.map((row, i) => (
+					<Fragment key={row.join(",")}>
+						<TableRow playerIds={row} />
+						{i === rows.length - 2 && (
+							<div className="w-full h-px bg-white/10 max-w-md self-center" />
+						)}
+					</Fragment>
+				))}
 			</div>
 			<CardPreviewDock />
 		</div>

@@ -1,11 +1,7 @@
-// active turn bar: move play, class actions, boss, face turn, end turn. move targeting is drag and drop only.
 import { useEffect, useRef, useState } from "react";
-import { getCrewDisplay } from "@shared/games/face-turn/card-display";
-import type { CrewClass } from "@shared/games/face-turn/types";
 import { sendFaceturnAction } from "../../actions";
 import { useFaceturnState } from "../../hooks/useFaceturnState";
 import { useActionLock } from "../../../../hooks/network/useActionLock";
-import { makeMoveCostEstimator } from "../../lib/cost";
 import { resolvePlayMoveAction } from "../../lib/resolvePlayMoveAction";
 import type { BoardTarget } from "../../hooks/boardTargetRegistry";
 import { useArmedMove, useArmedMoveStore } from "../../hooks/useArmedMove";
@@ -16,33 +12,32 @@ import {
 	hideTargets,
 	bossTarget,
 } from "../../hooks/crewSlotPickerAdapters";
-import { isPlayerExposed } from "../../lib/challengeEligibility";
-import { CashChip } from "../BoardPrimitives";
-import { SectionTitle } from "../SectionTitle";
-import { TargetPicker } from "./TargetPicker";
-import { ClassActionRow } from "./ClassActionRow";
+import {
+	getEnemyPlayers,
+	isPlayerExposed,
+} from "../../lib/challengeEligibility";
 import { PlayMoveSection } from "./PlayMoveSection";
 import { BossCommandControl } from "./BossCommandControl";
 import { useBossCommandPopoverStore } from "../../hooks/bossCommandPopoverStore";
-import { OtherActionsRow } from "./OtherActionsRow";
+import { ClassActionPopover } from "./ClassActionPopover";
+import { useClassActionPopoverStore } from "../../hooks/classActionPopoverStore";
 
 export function TurnActionBar() {
-	const { ft, secret, myPlayer, playerId, players, isMyTurn } =
-		useFaceturnState();
-	const [selectedMoveId, setSelectedMoveId] = useState<string | null>(null);
-	const [targetPlayerId, setTargetPlayerId] = useState<string | null>(null);
+	const { ft, secret, myPlayer, playerId, isMyTurn } = useFaceturnState();
 	const armed = useArmedMove();
 	const disarm = useArmedMoveStore((s) => s.disarm);
 	const closeBossCommandPopover = useBossCommandPopoverStore((s) => s.close);
+	const closeClassActionPopover = useClassActionPopoverStore((s) => s.close);
 
-	// one armed board-click pick at a time
+	// one armed board-click pick at a time, opened via a popover confirm
 	const [armedAction, setArmedAction] = useState<
 		"strike" | "hide" | "face_turn" | null
 	>(null);
 
-	// clear armed pick on unmount; store is module-level and outlives this component
+	// clear armed pick on unmount; stores are module-level and outlive this component
 	useEffect(() => disarm, [disarm]);
 	useEffect(() => closeBossCommandPopover, [closeBossCommandPopover]);
+	useEffect(() => closeClassActionPopover, [closeClassActionPopover]);
 
 	// clear armed pick when turn number changes, even if component stays mounted
 	const lastSeenTurnNumber = useRef(ft?.turn?.turnNumber);
@@ -51,6 +46,7 @@ export function TurnActionBar() {
 		disarm();
 		setArmedAction(null);
 		closeBossCommandPopover();
+		closeClassActionPopover();
 	}
 
 	// lock keyed on turn number, cash, hand size; clears stale picks on rejection
@@ -61,11 +57,10 @@ export function TurnActionBar() {
 		lockToken,
 		undefined,
 		() => {
-			setSelectedMoveId(null);
-			setTargetPlayerId(null);
 			setArmedAction(null);
 			disarm();
 			closeBossCommandPopover();
+			closeClassActionPopover();
 		},
 		true,
 	);
@@ -92,8 +87,6 @@ export function TurnActionBar() {
 					resolvePlayMoveAction(moveId, primaryTarget, secondaryPick),
 				);
 			});
-			setSelectedMoveId(null);
-			setTargetPlayerId(null);
 		});
 		return () => setOnComplete(null);
 	}, [setOnComplete, disarm]);
@@ -121,14 +114,6 @@ export function TurnActionBar() {
 		return () => window.removeEventListener("keydown", onKeyDown);
 	}, [armed, armedAction, disarm]);
 
-	const otherPlayers = players.filter((p) => p.id !== playerId);
-	const effectiveTarget =
-		otherPlayers.length > 1
-			? targetPlayerId
-			: (targetPlayerId ?? otherPlayers[0]?.id ?? null);
-	const needsExplicitTarget =
-		otherPlayers.length > 1 && effectiveTarget === null;
-
 	function declareClassAction(
 		action: "strike" | "collect" | "hide",
 		targetPlayerId?: string,
@@ -145,40 +130,38 @@ export function TurnActionBar() {
 		setArmedAction(null);
 	}
 
-	function declareFaceTurn(targetCrewSlot?: number) {
-		if (!effectiveTarget) return;
+	function declareFaceTurn(targetPlayerId: string, targetCrewSlot?: number) {
 		runLocked(() => {
 			sendFaceturnAction({
 				type: "use_face_turn",
-				targetPlayerId: effectiveTarget,
+				targetPlayerId,
 				targetCrewSlot,
 			});
 		});
 		setArmedAction(null);
 	}
 
-	// strike/face-turn target: enemy's occupied crew slots plus boss if exposed —
-	// both are BoardTargets, so one picker session covers the whole eligible set
-	const enemyTargetPlayer =
-		(armedAction === "strike" || armedAction === "face_turn") && effectiveTarget
-			? (ft?.players[effectiveTarget] ?? null)
-			: null;
+	// strike/face-turn target: every enemy's occupied crew slots plus their
+	// boss if exposed, all in one picker session — clicking any lit-up card
+	// across any opponent's board resolves both which opponent and which slot
+	const enemyPlayers =
+		ft && (armedAction === "strike" || armedAction === "face_turn")
+			? getEnemyPlayers(ft, playerId)
+			: [];
 	useTargetPickerSite(
-		enemyTargetPlayer
+		enemyPlayers.length > 0
 			? {
 					mode: "single",
-					eligible: [
+					eligible: enemyPlayers.flatMap((p) => [
 						...strikeTargets(
-							enemyTargetPlayer.crewSlots.reduce<number[]>((slots, s) => {
+							p.crewSlots.reduce<number[]>((slots, s) => {
 								if (s.status !== "empty") slots.push(s.slotIndex);
 								return slots;
 							}, []),
-							effectiveTarget!,
+							p.playerId,
 						),
-						...(isPlayerExposed(enemyTargetPlayer)
-							? [bossTarget(enemyTargetPlayer.playerId)]
-							: []),
-					],
+						...(isPlayerExposed(p) ? [bossTarget(p.playerId)] : []),
+					]),
 				}
 			: null,
 		(result) => {
@@ -186,9 +169,9 @@ export function TurnActionBar() {
 			const slotIndex =
 				result.target.kind === "crew" ? result.target.slotIndex : undefined;
 			if (armedAction === "face_turn") {
-				declareFaceTurn(slotIndex);
+				declareFaceTurn(result.target.playerId, slotIndex);
 			} else {
-				declareClassAction("strike", effectiveTarget!, slotIndex);
+				declareClassAction("strike", result.target.playerId, slotIndex);
 			}
 		},
 	);
@@ -215,35 +198,11 @@ export function TurnActionBar() {
 
 	if (!ft || !myPlayer || !isMyTurn) return null;
 
-	const getCost = makeMoveCostEstimator(
-		secret,
-		myPlayer.hasBluffedSuccessfully,
-		myPlayer.moveBaseCostReduction,
-	);
-
-	const hasFaceDownCrew = myPlayer.crewSlots.some(
-		(s) => s.status === "face_down",
-	);
-	function hasClassLive(cls: CrewClass): boolean {
-		return myPlayer!.crewSlots.some((slot, idx) => {
-			if (slot.status === "face_up") {
-				return slot.crewClass === cls || slot.extraClasses.includes(cls);
-			}
-			if (slot.status === "face_down") {
-				const realId = secret?.crewAssignments[idx];
-				return realId ? getCrewDisplay(realId).class === cls : false;
-			}
-			return false;
-		});
-	}
-
 	// direct play drop for moves without secondary target
 	function playMoveFromDrop(moveId: string, primaryTarget: BoardTarget) {
 		runLocked(() => {
 			sendFaceturnAction(resolvePlayMoveAction(moveId, primaryTarget));
 		});
-		setSelectedMoveId(null);
-		setTargetPlayerId(null);
 	}
 
 	// sell drop: dealer passive
@@ -253,103 +212,38 @@ export function TurnActionBar() {
 		});
 	}
 
-	// collect immediate, strike/hide arm; clicking same again cancels
-	function onArmClassAction(action: "strike" | "collect" | "hide") {
-		if (action === "collect") {
-			declareClassAction("collect");
-			return;
-		}
-		if (action === "strike" && needsExplicitTarget) return;
-		if (armed) disarm();
-		closeBossCommandPopover();
-		setArmedAction((current) => (current === action ? null : action));
-	}
-
 	return (
-		<div className="ft-panel-ink relative flex flex-col gap-3 rounded-2xl border border-white/15 px-5 py-4 pt-4.5 overflow-hidden">
-			<div className="absolute top-0 left-0 right-0 h-0.75 bg-amber-400" />
-			<div className="flex items-center justify-between">
-				<p className="ft-eyebrow text-[10px] text-amber-300/80">Your turn</p>
-				<CashChip amount={myPlayer.cash} />
-			</div>
-
-			{otherPlayers.length > 1 && (
-				<div className="flex flex-col gap-1">
-					<SectionTitle>
-						Target{needsExplicitTarget ? " (pick one)" : ""}
-					</SectionTitle>
-					<TargetPicker
-						players={otherPlayers}
-						selectedId={effectiveTarget}
-						onSelect={setTargetPlayerId}
-					/>
-				</div>
-			)}
-
-			<ClassActionRow
-				cash={myPlayer.cash}
-				classActionCostReduction={myPlayer.classActionCostReduction}
-				hasFaceDownCrew={hasFaceDownCrew}
-				hasClassLive={hasClassLive}
-				classActionUsedThisTurn={Boolean(ft.turn?.classActionUsedThisTurn)}
-				needsExplicitTarget={needsExplicitTarget}
-				armedAction={armedAction === "face_turn" ? null : armedAction}
-				locked={locked}
-				onArm={onArmClassAction}
-			/>
-
+		<>
 			<PlayMoveSection
-				getCost={getCost}
 				getPlayable={(id) => secret?.playableMoveIds.includes(id) ?? false}
-				selectedMoveId={selectedMoveId}
-				onSelectMove={(id) => {
-					const next = id === selectedMoveId ? null : id;
-					setSelectedMoveId(next);
-					setTargetPlayerId(null);
-					if (armed && armed.moveId !== next) disarm();
-					if (armedAction) setArmedAction(null);
-				}}
-				playerId={playerId}
-				state={ft}
 				locked={locked}
-				cash={myPlayer.cash}
 				hasSellCards={myPlayer.hasSellCards}
+				state={ft}
+				playerId={playerId}
 				onDropPlay={playMoveFromDrop}
 				onDropSell={sellMoveFromDrop}
 				onArm={() => setArmedAction(null)}
 			/>
-
-			<div className="flex flex-col gap-1">
-				<SectionTitle>Other actions</SectionTitle>
-				{!myPlayer.boss.commandUsed && (
-					<p className="text-xs text-white/40">
-						Click your Boss to use its command.
-					</p>
-				)}
-				{/* keyed on target so razor/dealer picks reset */}
-				<BossCommandControl
-					key={effectiveTarget ?? "no-target"}
-					effectiveTarget={effectiveTarget}
-					armedElsewhere={armedAction !== null}
-					locked={locked}
-					runLocked={runLocked}
-				/>
-				<OtherActionsRow
-					cash={myPlayer.cash}
-					effectiveTarget={effectiveTarget}
-					armed={armedAction === "face_turn"}
-					locked={locked}
-					onArmFaceTurn={() => {
-						if (!effectiveTarget) return;
-						if (armed) disarm();
-						closeBossCommandPopover();
-						setArmedAction((current) =>
-							current === "face_turn" ? null : "face_turn",
-						);
-					}}
-					runLocked={runLocked}
-				/>
-			</div>
-		</div>
+			<ClassActionPopover
+				armedElsewhere={armed !== null || armedAction !== null}
+				locked={locked}
+				runLocked={runLocked}
+				onArm={(action) => {
+					if (armed) disarm();
+					closeBossCommandPopover();
+					setArmedAction(action);
+				}}
+			/>
+			<BossCommandControl
+				armedElsewhere={armed !== null || armedAction !== null}
+				locked={locked}
+				runLocked={runLocked}
+				onArmFaceTurn={() => {
+					if (armed) disarm();
+					closeClassActionPopover();
+					setArmedAction("face_turn");
+				}}
+			/>
+		</>
 	);
 }

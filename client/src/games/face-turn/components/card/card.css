@@ -598,7 +598,7 @@ button.flip-container {
 .back-panel-logo {
   position: relative;
   z-index: 1;
-  width: 48%;
+  width: 50%;
   height: auto;
   color: #eeeeee;
 }

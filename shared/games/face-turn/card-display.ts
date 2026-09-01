@@ -1,41 +1,38 @@
 import type { CrewClass, MoveType } from "./types";
 
-export interface BossCardDisplay {
+export interface BaseCardDisplay {
 	readonly id: string;
 	readonly name: string;
+	readonly flavorText: string;
+	readonly artSrc?: string;
+	readonly lore?: string;
+	readonly synergyIds?: readonly string[];
+}
+
+export interface BossCardDisplay extends BaseCardDisplay {
 	readonly effectText: {
 		readonly command: string;
 		readonly passive: string;
 	};
-	readonly flavorText: string;
 	readonly maxHp: number;
 	readonly startingArmor?: number;
 	readonly draftable?: boolean;
 	readonly hasCustomCommandLogic?: true;
-	readonly artSrc?: string;
 }
 
-export interface CrewCardDisplay {
-	readonly id: string;
-	readonly name: string;
+export interface CrewCardDisplay extends BaseCardDisplay {
 	readonly class: CrewClass;
 	readonly effectText: {
 		readonly revealed?: string;
 		readonly passive?: string;
 	};
-	readonly flavorText: string;
 	readonly draftable?: boolean;
-	readonly artSrc?: string;
 }
 
-export interface MoveCardDisplay {
-	readonly id: string;
-	readonly name: string;
+export interface MoveCardDisplay extends BaseCardDisplay {
 	readonly baseCost: number;
 	readonly moveType: MoveType;
 	readonly effectText: string;
-	readonly flavorText: string;
-	readonly artSrc?: string;
 }
 
 // bosses
@@ -52,6 +49,8 @@ export const BOSS_DISPLAY: readonly BossCardDisplay[] = [
 				"I start with 15 Armor. Whenever I take damage, you gain 1 Cash.",
 		},
 		flavorText: "Scars can break us, or give us the strength to endure.",
+		lore: "",
+		synergyIds: [],
 		maxHp: 110,
 		startingArmor: 15,
 	},
@@ -65,6 +64,8 @@ export const BOSS_DISPLAY: readonly BossCardDisplay[] = [
 			passive: "On your turn, you may discard a Move to gain 1 Cash.",
 		},
 		flavorText: "The house always wins. Luckily, I run the house.",
+		lore: "",
+		synergyIds: [],
 		maxHp: 100,
 		hasCustomCommandLogic: true,
 	},
@@ -78,6 +79,8 @@ export const BOSS_DISPLAY: readonly BossCardDisplay[] = [
 			passive: "Damage you deal is increased by 7.",
 		},
 		flavorText: "Only a true star player commands a visionary empire.",
+		lore: "",
+		synergyIds: [],
 		maxHp: 110,
 		hasCustomCommandLogic: true,
 	},
@@ -92,6 +95,8 @@ export const BOSS_DISPLAY: readonly BossCardDisplay[] = [
 				"Whenever you win a challenge, draw 2, and turn one of your Crew face-down.",
 		},
 		flavorText: "Nothing dangerous stays unwatched.",
+		lore: "",
+		synergyIds: [],
 		maxHp: 120,
 	},
 ];
@@ -111,6 +116,8 @@ export const CREW_DISPLAY: readonly CrewCardDisplay[] = [
 			passive: "Whenever you kill a Crew, turn me face-down.",
 		},
 		flavorText: "Reeks of cheap scum. Time to take out the trash.",
+		lore: "",
+		synergyIds: [],
 	},
 	{
 		id: "black-fist",
@@ -118,10 +125,11 @@ export const CREW_DISPLAY: readonly CrewCardDisplay[] = [
 		name: "Blackfist",
 		class: "striker",
 		effectText: {
-			revealed:
-				"Discard 2. If you do, I deal 35 damage to an enemy Boss.",
+			revealed: "Discard 2. If you do, I deal 35 damage to an enemy Boss.",
 		},
 		flavorText: "Out of the way! I have business to finish.",
+		lore: "",
+		synergyIds: [],
 	},
 	{
 		id: "g-rone",
@@ -132,6 +140,8 @@ export const CREW_DISPLAY: readonly CrewCardDisplay[] = [
 			passive: "At the end of each round, I deal 10 damage to an enemy Boss.",
 		},
 		flavorText: "The white gazes into the unseen...",
+		lore: "",
+		synergyIds: [],
 	},
 	{
 		id: "hot-girl",
@@ -143,6 +153,8 @@ export const CREW_DISPLAY: readonly CrewCardDisplay[] = [
 				"An enemy discards their hand. I deal 5 damage to their Boss for each card discarded this way.",
 		},
 		flavorText: "FEED THE FLAMES!!",
+		lore: "",
+		synergyIds: [],
 	},
 	{
 		id: "monkey-man",
@@ -155,6 +167,8 @@ export const CREW_DISPLAY: readonly CrewCardDisplay[] = [
 				"Whenever you deal damage to an enemy Boss, steal 1 Cash from them.",
 		},
 		flavorText: "Finders keepers, sucker!",
+		lore: "",
+		synergyIds: [],
 	},
 	{
 		id: "pektus",
@@ -166,6 +180,8 @@ export const CREW_DISPLAY: readonly CrewCardDisplay[] = [
 			passive: "All damage you deal is piercing.",
 		},
 		flavorText: "Bullseye.",
+		lore: "",
+		synergyIds: [],
 	},
 	{
 		id: "shrike",
@@ -176,6 +192,8 @@ export const CREW_DISPLAY: readonly CrewCardDisplay[] = [
 			revealed: "I Strike an enemy Crew.",
 		},
 		flavorText: "Alright. Let's make this quick.",
+		lore: "",
+		synergyIds: [],
 	},
 	{
 		id: "whisper",
@@ -187,6 +205,8 @@ export const CREW_DISPLAY: readonly CrewCardDisplay[] = [
 				"Discard 3. If you do, I do an unstoppable Strike on an enemy Crew. If you have successfully called a bluff this game, discard 1 instead.",
 		},
 		flavorText: "You'll never know what kills you.",
+		lore: "",
+		synergyIds: [],
 	},
 	{
 		id: "wolfman",
@@ -195,6 +215,8 @@ export const CREW_DISPLAY: readonly CrewCardDisplay[] = [
 		class: "striker",
 		effectText: { revealed: "I deal 40 damage to an enemy Boss." },
 		flavorText: "...IN WOLF'S CLOTHING!!",
+		lore: "",
+		synergyIds: [],
 		draftable: false,
 	},
 
@@ -206,10 +228,11 @@ export const CREW_DISPLAY: readonly CrewCardDisplay[] = [
 		name: "Doctor Norman",
 		class: "defender",
 		effectText: {
-			passive:
-				"Whenever you discard, I give my Boss 10 Armor for each.",
+			passive: "Whenever you discard, I give my Boss 10 Armor for each.",
 		},
 		flavorText: "Exquisite! Another breakthrough.",
+		lore: "",
+		synergyIds: [],
 	},
 	{
 		id: "frontline",
@@ -220,6 +243,8 @@ export const CREW_DISPLAY: readonly CrewCardDisplay[] = [
 			revealed: "My Boss cannot be damaged or struck for 2 turns.",
 		},
 		flavorText: "You will survive. I'll make sure of it.",
+		lore: "",
+		synergyIds: [],
 	},
 	{
 		id: "glob",
@@ -231,6 +256,8 @@ export const CREW_DISPLAY: readonly CrewCardDisplay[] = [
 				"If my Boss has any Armor, I give it 40 more Armor. If my Boss has no Armor, steal 1 Cash from an enemy instead.",
 		},
 		flavorText: "glorb. goob. gaaarb.",
+		lore: "",
+		synergyIds: [],
 	},
 	{
 		id: "lighthouse",
@@ -242,6 +269,8 @@ export const CREW_DISPLAY: readonly CrewCardDisplay[] = [
 			passive: "All enemy Revealed Effects are disabled.",
 		},
 		flavorText: "Hope is dead... but the light remains.",
+		lore: "",
+		synergyIds: [],
 	},
 	{
 		id: "lotus",
@@ -252,6 +281,8 @@ export const CREW_DISPLAY: readonly CrewCardDisplay[] = [
 			passive: "I can Strike.",
 		},
 		flavorText: "Don't die. I've already wasted enough time on you.",
+		lore: "",
+		synergyIds: [],
 	},
 	{
 		id: "mama-mercy",
@@ -263,6 +294,8 @@ export const CREW_DISPLAY: readonly CrewCardDisplay[] = [
 				"Whenever the team turns a Crew face-up or face-down, I give my Boss 20 Armor.",
 		},
 		flavorText: "Nobody touches my people.",
+		lore: "",
+		synergyIds: [],
 	},
 	{
 		id: "rilla-gorilla",
@@ -274,6 +307,8 @@ export const CREW_DISPLAY: readonly CrewCardDisplay[] = [
 				"I give 30 Armor to my Boss, then deal 10 damage to an enemy Boss.",
 		},
 		flavorText: "GRRR-AAAAAH!",
+		lore: "",
+		synergyIds: [],
 	},
 	{
 		id: "silencer",
@@ -285,6 +320,8 @@ export const CREW_DISPLAY: readonly CrewCardDisplay[] = [
 			passive: "All enemy Crew Passives are disabled.",
 		},
 		flavorText: "...",
+		lore: "",
+		synergyIds: [],
 	},
 
 	// collectors
@@ -298,6 +335,8 @@ export const CREW_DISPLAY: readonly CrewCardDisplay[] = [
 			passive: "I can Defend.",
 		},
 		flavorText: "Here comes the money.",
+		lore: "",
+		synergyIds: [],
 	},
 	{
 		id: "bear-bones",
@@ -310,6 +349,8 @@ export const CREW_DISPLAY: readonly CrewCardDisplay[] = [
 				"Whenever you successfully challenge an enemy, Strike one of their Crew.",
 		},
 		flavorText: "I would do anything for my Ursula. Especially a felony.",
+		lore: "",
+		synergyIds: [],
 	},
 	{
 		id: "belladonna",
@@ -321,6 +362,8 @@ export const CREW_DISPLAY: readonly CrewCardDisplay[] = [
 			passive: "Class actions cost 1 less Cash.",
 		},
 		flavorText: "Mmm, I like this. I think I'll make one just for me.",
+		lore: "",
+		synergyIds: [],
 	},
 	{
 		id: "claw-machine",
@@ -329,6 +372,8 @@ export const CREW_DISPLAY: readonly CrewCardDisplay[] = [
 		class: "collector",
 		effectText: { revealed: "You draw 3." },
 		flavorText: "That's going in my collection.",
+		lore: "",
+		synergyIds: [],
 	},
 	{
 		id: "cool-guy",
@@ -340,6 +385,8 @@ export const CREW_DISPLAY: readonly CrewCardDisplay[] = [
 				"Whenever you play a Move, I deal 3 damage to a random enemy Boss.",
 		},
 		flavorText: "Ice to meet ya!",
+		lore: "",
+		synergyIds: [],
 	},
 	{
 		id: "mayumi",
@@ -348,6 +395,8 @@ export const CREW_DISPLAY: readonly CrewCardDisplay[] = [
 		class: "collector",
 		effectText: { revealed: "You gain 2 Cash and draw 1." },
 		flavorText: "Curiosity pays surprisingly well...",
+		lore: "",
+		synergyIds: [],
 	},
 	{
 		id: "rat-queen",
@@ -358,6 +407,8 @@ export const CREW_DISPLAY: readonly CrewCardDisplay[] = [
 			passive: "The first time your hand becomes empty each turn, you draw 2.",
 		},
 		flavorText: "We're here! We're there! We're everywhere!",
+		lore: "",
+		synergyIds: [],
 	},
 	{
 		id: "too-big",
@@ -369,6 +420,8 @@ export const CREW_DISPLAY: readonly CrewCardDisplay[] = [
 			passive: "At the start of your turn, deal 5 damage to my Boss.",
 		},
 		flavorText: "You ever tried drowning someone?",
+		lore: "",
+		synergyIds: [],
 	},
 
 	// hiders
@@ -382,6 +435,8 @@ export const CREW_DISPLAY: readonly CrewCardDisplay[] = [
 			passive: "Draw 1 at the start of your turn.",
 		},
 		flavorText: "Just a sheep..",
+		lore: "",
+		synergyIds: [],
 	},
 	{
 		id: "handles",
@@ -393,6 +448,8 @@ export const CREW_DISPLAY: readonly CrewCardDisplay[] = [
 				"If my partner Crew is face-up, turn me face-down and deal 5 damage to my Boss.",
 		},
 		flavorText: "First I steal your ankles, bro, then I take your teeth.",
+		lore: "",
+		synergyIds: [],
 	},
 	{
 		id: "miss-direction",
@@ -404,6 +461,8 @@ export const CREW_DISPLAY: readonly CrewCardDisplay[] = [
 			passive: "At the start of your turn, your Boss gains 10 Armor.",
 		},
 		flavorText: "You'll be safe here.",
+		lore: "",
+		synergyIds: [],
 	},
 	{
 		id: "keeper",
@@ -415,6 +474,8 @@ export const CREW_DISPLAY: readonly CrewCardDisplay[] = [
 			passive: "Enemy Moves cost 1 more Cash.",
 		},
 		flavorText: "Moving things that bite. Looking for a buyer.",
+		lore: "",
+		synergyIds: [],
 	},
 	{
 		id: "retro",
@@ -426,6 +487,8 @@ export const CREW_DISPLAY: readonly CrewCardDisplay[] = [
 				"Chronotrix costs 3. Search your deck for Chronotrix, then shuffle your deck.",
 		},
 		flavorText: "How many times do you think I've tried?",
+		lore: "",
+		synergyIds: [],
 	},
 	{
 		id: "suplex",
@@ -438,6 +501,8 @@ export const CREW_DISPLAY: readonly CrewCardDisplay[] = [
 				"Whenever the team turns a Crew face-up or face-down, I Strike an enemy Crew.",
 		},
 		flavorText: "You picked the wrong ring, brother!",
+		lore: "",
+		synergyIds: [],
 	},
 	{
 		id: "terminal",
@@ -448,6 +513,8 @@ export const CREW_DISPLAY: readonly CrewCardDisplay[] = [
 			passive: "My Boss cannot be Struck while its HP is greater than 60.",
 		},
 		flavorText: "[SYS_FLAG] USER_SURVIVAL :: PRIORITY_MAX",
+		lore: "",
+		synergyIds: [],
 	},
 	{
 		id: "zednem",
@@ -459,6 +526,8 @@ export const CREW_DISPLAY: readonly CrewCardDisplay[] = [
 			passive: "Your Burst Moves cost 1 less Cash.",
 		},
 		flavorText: "THIS CITY HAS ENOUGH MONSTERS!",
+		lore: "",
+		synergyIds: [],
 	},
 ];
 
@@ -475,6 +544,8 @@ export const MOVE_DISPLAY: readonly MoveCardDisplay[] = [
 		effectText:
 			"When an enemy challenges you, they guess the class of one of your face-down Crew. If wrong, you turn one of their Crew face-up.",
 		flavorText: "",
+		lore: "",
+		synergyIds: [],
 	},
 	{
 		id: "bamboo-wall",
@@ -485,6 +556,8 @@ export const MOVE_DISPLAY: readonly MoveCardDisplay[] = [
 		effectText:
 			"At the start of your turn, if your team has a face-up Crew, give your Boss 10 Armor.",
 		flavorText: "",
+		lore: "",
+		synergyIds: [],
 	},
 	{
 		id: "big-voucher",
@@ -494,6 +567,8 @@ export const MOVE_DISPLAY: readonly MoveCardDisplay[] = [
 		moveType: "active",
 		effectText: "Your Move costs are each reduced by 1.",
 		flavorText: "",
+		lore: "",
+		synergyIds: [],
 	},
 	{
 		id: "blackmail",
@@ -503,6 +578,8 @@ export const MOVE_DISPLAY: readonly MoveCardDisplay[] = [
 		moveType: "active",
 		effectText: "All enemy Crew Passives are disabled.",
 		flavorText: "",
+		lore: "",
+		synergyIds: [],
 	},
 	{
 		id: "blood-money",
@@ -513,6 +590,8 @@ export const MOVE_DISPLAY: readonly MoveCardDisplay[] = [
 		effectText:
 			"Whenever an enemy plays a Move or performs a Strike, gain 1 Cash.",
 		flavorText: "",
+		lore: "",
+		synergyIds: [],
 	},
 	{
 		id: "cease-and-desist",
@@ -523,6 +602,8 @@ export const MOVE_DISPLAY: readonly MoveCardDisplay[] = [
 		effectText:
 			"The next time an enemy Crew would resolve its Revealed Effect, prevent it instead. Then discard this Move.",
 		flavorText: "",
+		lore: "",
+		synergyIds: [],
 	},
 	{
 		id: "command-center",
@@ -532,6 +613,8 @@ export const MOVE_DISPLAY: readonly MoveCardDisplay[] = [
 		moveType: "active",
 		effectText: "At the start of your turn, draw 1 and gain 1 Cash.",
 		flavorText: "",
+		lore: "",
+		synergyIds: [],
 	},
 	{
 		id: "dataminer",
@@ -541,6 +624,8 @@ export const MOVE_DISPLAY: readonly MoveCardDisplay[] = [
 		moveType: "active",
 		effectText: "At the start of your turn, draw 1.",
 		flavorText: "",
+		lore: "",
+		synergyIds: [],
 	},
 	{
 		id: "equalizer",
@@ -551,6 +636,8 @@ export const MOVE_DISPLAY: readonly MoveCardDisplay[] = [
 		effectText:
 			"At the start of your turn, if an enemy has more Cash than you, gain 2 Cash.",
 		flavorText: "",
+		lore: "",
+		synergyIds: [],
 	},
 	{
 		id: "extortion",
@@ -560,6 +647,8 @@ export const MOVE_DISPLAY: readonly MoveCardDisplay[] = [
 		moveType: "active",
 		effectText: "Whenever you win a challenge, gain 3 Cash.",
 		flavorText: "",
+		lore: "",
+		synergyIds: [],
 	},
 	{
 		id: "false-flag-operation",
@@ -570,6 +659,8 @@ export const MOVE_DISPLAY: readonly MoveCardDisplay[] = [
 		effectText:
 			"When one of your Crew would be turned face-up after you fail a challenge, prevent it and discard this Move instead.",
 		flavorText: "",
+		lore: "",
+		synergyIds: [],
 	},
 	{
 		id: "life-insurance",
@@ -580,6 +671,8 @@ export const MOVE_DISPLAY: readonly MoveCardDisplay[] = [
 		effectText:
 			"Whenever an allied Boss would die for the first time, it survives with 1 HP instead. Then discard this Move.",
 		flavorText: "",
+		lore: "",
+		synergyIds: [],
 	},
 	{
 		id: "poison-breath",
@@ -589,6 +682,8 @@ export const MOVE_DISPLAY: readonly MoveCardDisplay[] = [
 		moveType: "active",
 		effectText: "At the end of each round, deal 10 damage to an enemy Boss.",
 		flavorText: "",
+		lore: "",
+		synergyIds: [],
 	},
 	{
 		id: "red-herring",
@@ -599,6 +694,8 @@ export const MOVE_DISPLAY: readonly MoveCardDisplay[] = [
 		effectText:
 			"Choose one of your face-down Crew. The next Strike or Face Turn attempt against you must target that Crew. Then discard this Move.",
 		flavorText: "",
+		lore: "",
+		synergyIds: [],
 	},
 	{
 		id: "sell-out",
@@ -609,6 +706,8 @@ export const MOVE_DISPLAY: readonly MoveCardDisplay[] = [
 		effectText:
 			"At the start of your turn, deal 5 damage to your Boss. Then gain 2 Cash.",
 		flavorText: "",
+		lore: "",
+		synergyIds: [],
 	},
 	{
 		id: "side-hustle",
@@ -618,6 +717,8 @@ export const MOVE_DISPLAY: readonly MoveCardDisplay[] = [
 		moveType: "active",
 		effectText: "At the start of your turn, gain 2 Cash.",
 		flavorText: "",
+		lore: "",
+		synergyIds: [],
 	},
 	{
 		id: "supply-drop",
@@ -628,6 +729,8 @@ export const MOVE_DISPLAY: readonly MoveCardDisplay[] = [
 		effectText:
 			"Whenever your team performs a Collector action, gain 1 additional Cash.",
 		flavorText: "",
+		lore: "",
+		synergyIds: [],
 	},
 	{
 		id: "void-arms",
@@ -638,6 +741,8 @@ export const MOVE_DISPLAY: readonly MoveCardDisplay[] = [
 		effectText:
 			"Whenever an enemy would choose which of your face-down Crew to turn face-up, you make that choice instead.",
 		flavorText: "",
+		lore: "",
+		synergyIds: [],
 	},
 	{
 		id: "void-legs",
@@ -648,6 +753,8 @@ export const MOVE_DISPLAY: readonly MoveCardDisplay[] = [
 		effectText:
 			"At the start of your turn, you may discard. If you do, deal 5 damage to an enemy Boss.",
 		flavorText: "",
+		lore: "",
+		synergyIds: [],
 	},
 	{
 		id: "void-torso",
@@ -657,6 +764,8 @@ export const MOVE_DISPLAY: readonly MoveCardDisplay[] = [
 		moveType: "active",
 		effectText: "At the start of your turn, give 5 Armor to your Boss.",
 		flavorText: "",
+		lore: "",
+		synergyIds: [],
 	},
 	{
 		id: "trickle-down-economics",
@@ -667,6 +776,8 @@ export const MOVE_DISPLAY: readonly MoveCardDisplay[] = [
 		effectText:
 			"Whenever an enemy's Collector action resolves, gain the same amount of Cash they gained.",
 		flavorText: "",
+		lore: "",
+		synergyIds: [],
 	},
 	{
 		id: "warrant-of-arrest",
@@ -677,6 +788,8 @@ export const MOVE_DISPLAY: readonly MoveCardDisplay[] = [
 		effectText:
 			"Mark a face-down enemy Crew. At the start of your 2nd turn after this resolves, if that Crew is still face-down, turn it face-up.",
 		flavorText: "",
+		lore: "",
+		synergyIds: [],
 	},
 
 	// burst moves
@@ -688,6 +801,8 @@ export const MOVE_DISPLAY: readonly MoveCardDisplay[] = [
 		moveType: "burst",
 		effectText: "Set an allied Boss's HP to 1. You gain 7 Cash and draw 2.",
 		flavorText: "",
+		lore: "",
+		synergyIds: [],
 	},
 	{
 		id: "ayuda-slip",
@@ -698,6 +813,8 @@ export const MOVE_DISPLAY: readonly MoveCardDisplay[] = [
 		effectText:
 			"Whoever has the least Cash on your team gains 3 Cash and draws 1. If tied, random.",
 		flavorText: "",
+		lore: "",
+		synergyIds: [],
 	},
 	{
 		id: "bailout",
@@ -707,6 +824,8 @@ export const MOVE_DISPLAY: readonly MoveCardDisplay[] = [
 		moveType: "burst",
 		effectText: "Heal an allied Boss for 20 HP. You gain 2 Cash.",
 		flavorText: "",
+		lore: "",
+		synergyIds: [],
 	},
 	{
 		id: "bulletproof-vest",
@@ -716,6 +835,8 @@ export const MOVE_DISPLAY: readonly MoveCardDisplay[] = [
 		moveType: "burst",
 		effectText: "Give 10 Armor to an allied Boss.",
 		flavorText: "",
+		lore: "",
+		synergyIds: [],
 	},
 	{
 		id: "cash-out",
@@ -725,6 +846,8 @@ export const MOVE_DISPLAY: readonly MoveCardDisplay[] = [
 		moveType: "burst",
 		effectText: "Discard 2. If you do, gain 3 Cash.",
 		flavorText: "",
+		lore: "",
+		synergyIds: [],
 	},
 	{
 		id: "cheap-labor",
@@ -734,6 +857,8 @@ export const MOVE_DISPLAY: readonly MoveCardDisplay[] = [
 		moveType: "burst",
 		effectText: "Draw 1 and gain 2 Cash.",
 		flavorText: "",
+		lore: "",
+		synergyIds: [],
 	},
 	{
 		id: "chronotrix",
@@ -744,6 +869,8 @@ export const MOVE_DISPLAY: readonly MoveCardDisplay[] = [
 		effectText:
 			"Return cards from your discard pile to your hand until your hand is full. Gain 10 Cash.",
 		flavorText: "",
+		lore: "",
+		synergyIds: [],
 	},
 	{
 		id: "coordinated-strike",
@@ -754,6 +881,8 @@ export const MOVE_DISPLAY: readonly MoveCardDisplay[] = [
 		effectText:
 			"Deal 15 damage to an enemy Boss. If the team has a face-up Striker, deal 30 damage instead.",
 		flavorText: "",
+		lore: "",
+		synergyIds: [],
 	},
 	{
 		id: "dead-drop-retrieval",
@@ -763,6 +892,8 @@ export const MOVE_DISPLAY: readonly MoveCardDisplay[] = [
 		moveType: "burst",
 		effectText: "Draw 3.",
 		flavorText: "",
+		lore: "",
+		synergyIds: [],
 	},
 	{
 		id: "deleb-i",
@@ -773,6 +904,8 @@ export const MOVE_DISPLAY: readonly MoveCardDisplay[] = [
 		effectText:
 			"If The Iterated Void's Arms, Legs, and Torso are all in your ongoing zone, you win the game.",
 		flavorText: "DELETE. ALL. BUT. I.",
+		lore: "",
+		synergyIds: [],
 	},
 	{
 		id: "dig-deep",
@@ -783,6 +916,8 @@ export const MOVE_DISPLAY: readonly MoveCardDisplay[] = [
 		effectText:
 			"You look at the top 5 cards of your deck. Draw 2, then shuffle your deck.",
 		flavorText: "",
+		lore: "",
+		synergyIds: [],
 	},
 	{
 		id: "empty-the-clip",
@@ -793,6 +928,8 @@ export const MOVE_DISPLAY: readonly MoveCardDisplay[] = [
 		effectText:
 			"You discard any number of cards from your hand. Deal 10 damage to an enemy Boss for each.",
 		flavorText: "",
+		lore: "",
+		synergyIds: [],
 	},
 	{
 		id: "first-aid",
@@ -802,6 +939,8 @@ export const MOVE_DISPLAY: readonly MoveCardDisplay[] = [
 		moveType: "burst",
 		effectText: "Heal an allied Boss for 20 HP.",
 		flavorText: "",
+		lore: "",
+		synergyIds: [],
 	},
 	{
 		id: "fresh-start",
@@ -812,6 +951,8 @@ export const MOVE_DISPLAY: readonly MoveCardDisplay[] = [
 		effectText:
 			"Draw 1. If you had no other cards in hand when you played this Move, draw 3 instead.",
 		flavorText: "",
+		lore: "",
+		synergyIds: [],
 	},
 	{
 		id: "full-moon",
@@ -821,6 +962,8 @@ export const MOVE_DISPLAY: readonly MoveCardDisplay[] = [
 		moveType: "burst",
 		effectText: "Transform Andrew into Wolfman.",
 		flavorText: "",
+		lore: "",
+		synergyIds: [],
 	},
 	{
 		id: "heel-turn",
@@ -830,6 +973,8 @@ export const MOVE_DISPLAY: readonly MoveCardDisplay[] = [
 		moveType: "burst",
 		effectText: "Turn one of your Crew face-down.",
 		flavorText: "",
+		lore: "",
+		synergyIds: [],
 	},
 	{
 		id: "my-treat",
@@ -839,6 +984,8 @@ export const MOVE_DISPLAY: readonly MoveCardDisplay[] = [
 		moveType: "burst",
 		effectText: "An allied player gains 2 Cash and draws 1.",
 		flavorText: "",
+		lore: "",
+		synergyIds: [],
 	},
 	{
 		id: "neetos-clock",
@@ -849,6 +996,8 @@ export const MOVE_DISPLAY: readonly MoveCardDisplay[] = [
 		effectText:
 			"Discard 2. If you do, trigger one of your face-up Crew's Revealed effect.",
 		flavorText: "",
+		lore: "",
+		synergyIds: [],
 	},
 	{
 		id: "paycheck",
@@ -858,6 +1007,8 @@ export const MOVE_DISPLAY: readonly MoveCardDisplay[] = [
 		moveType: "burst",
 		effectText: "Gain 4 Cash.",
 		flavorText: "",
+		lore: "",
+		synergyIds: [],
 	},
 	{
 		id: "pull-counter",
@@ -867,6 +1018,8 @@ export const MOVE_DISPLAY: readonly MoveCardDisplay[] = [
 		moveType: "burst",
 		effectText: "Trigger one of your face-up Crew's Revealed effect.",
 		flavorText: "",
+		lore: "",
+		synergyIds: [],
 	},
 	{
 		id: "reinforcements",
@@ -876,6 +1029,8 @@ export const MOVE_DISPLAY: readonly MoveCardDisplay[] = [
 		moveType: "burst",
 		effectText: "Give 15 Armor to an allied Boss. Draw 1.",
 		flavorText: "",
+		lore: "",
+		synergyIds: [],
 	},
 	{
 		id: "reload",
@@ -885,6 +1040,8 @@ export const MOVE_DISPLAY: readonly MoveCardDisplay[] = [
 		moveType: "burst",
 		effectText: "Draw 2.",
 		flavorText: "",
+		lore: "",
+		synergyIds: [],
 	},
 	{
 		id: "restock",
@@ -894,6 +1051,8 @@ export const MOVE_DISPLAY: readonly MoveCardDisplay[] = [
 		moveType: "burst",
 		effectText: "Shuffle your discard pile into your deck. Draw 1.",
 		flavorText: "",
+		lore: "",
+		synergyIds: [],
 	},
 	{
 		id: "sabotage",
@@ -901,8 +1060,11 @@ export const MOVE_DISPLAY: readonly MoveCardDisplay[] = [
 		name: "Sabotage",
 		baseCost: 2,
 		moveType: "burst",
-		effectText: "Choose an Ongoing Move in an enemy's ongoing zone. Discard it.",
+		effectText:
+			"Choose an Ongoing Move in an enemy's ongoing zone. Discard it.",
 		flavorText: "",
+		lore: "",
+		synergyIds: [],
 	},
 	{
 		id: "spare-change",
@@ -912,6 +1074,8 @@ export const MOVE_DISPLAY: readonly MoveCardDisplay[] = [
 		moveType: "burst",
 		effectText: "Gain 3 Cash.",
 		flavorText: "",
+		lore: "",
+		synergyIds: [],
 	},
 	{
 		id: "sucker-punch",
@@ -921,6 +1085,8 @@ export const MOVE_DISPLAY: readonly MoveCardDisplay[] = [
 		moveType: "burst",
 		effectText: "Deal 15 damage to an enemy Boss.",
 		flavorText: "",
+		lore: "",
+		synergyIds: [],
 	},
 	{
 		id: "switch-up",
@@ -931,6 +1097,8 @@ export const MOVE_DISPLAY: readonly MoveCardDisplay[] = [
 		effectText:
 			"Turn one of your Crew face-down and a different one of your Crew face-up.",
 		flavorText: "",
+		lore: "",
+		synergyIds: [],
 	},
 	{
 		id: "tactical-support",
@@ -941,6 +1109,8 @@ export const MOVE_DISPLAY: readonly MoveCardDisplay[] = [
 		effectText:
 			"An allied player gains 2 Cash. You may then turn one of their face-up Crew face-down.",
 		flavorText: "",
+		lore: "",
+		synergyIds: [],
 	},
 	{
 		id: "tag-out",
@@ -951,6 +1121,8 @@ export const MOVE_DISPLAY: readonly MoveCardDisplay[] = [
 		effectText:
 			"Choose one of your Crew and one of a teammate's Crew. Swap them.",
 		flavorText: "",
+		lore: "",
+		synergyIds: [],
 	},
 	{
 		id: "take-it-back",
@@ -960,6 +1132,8 @@ export const MOVE_DISPLAY: readonly MoveCardDisplay[] = [
 		moveType: "burst",
 		effectText: "Return 1 card from your discard pile to your hand.",
 		flavorText: "",
+		lore: "",
+		synergyIds: [],
 	},
 	{
 		id: "triangle-of-trust",
@@ -969,6 +1143,8 @@ export const MOVE_DISPLAY: readonly MoveCardDisplay[] = [
 		moveType: "burst",
 		effectText: "Discard 1. If you do, draw 3.",
 		flavorText: "",
+		lore: "",
+		synergyIds: [],
 	},
 
 	// slow moves
@@ -980,6 +1156,8 @@ export const MOVE_DISPLAY: readonly MoveCardDisplay[] = [
 		moveType: "slow",
 		effectText: "Strike an enemy Crew. This can be defended against.",
 		flavorText: "",
+		lore: "",
+		synergyIds: [],
 	},
 	{
 		id: "cheap-shot",
@@ -989,6 +1167,8 @@ export const MOVE_DISPLAY: readonly MoveCardDisplay[] = [
 		moveType: "slow",
 		effectText: "Deal 20 damage to an enemy Boss.",
 		flavorText: "",
+		lore: "",
+		synergyIds: [],
 	},
 	{
 		id: "claim-the-bounty",
@@ -999,6 +1179,8 @@ export const MOVE_DISPLAY: readonly MoveCardDisplay[] = [
 		effectText:
 			"Deal 25 damage to an enemy Boss. If you have successfully called a bluff this game, this costs 0 Cash instead.",
 		flavorText: "",
+		lore: "",
+		synergyIds: [],
 	},
 	{
 		id: "devastate",
@@ -1008,6 +1190,8 @@ export const MOVE_DISPLAY: readonly MoveCardDisplay[] = [
 		moveType: "slow",
 		effectText: "Deal damage equal to 50% of an enemy Boss's current HP.",
 		flavorText: "",
+		lore: "",
+		synergyIds: [],
 	},
 	{
 		id: "drive-by",
@@ -1017,6 +1201,8 @@ export const MOVE_DISPLAY: readonly MoveCardDisplay[] = [
 		moveType: "slow",
 		effectText: "Deal 30 damage to an enemy Boss.",
 		flavorText: "",
+		lore: "",
+		synergyIds: [],
 	},
 	{
 		id: "interrogation",
@@ -1027,6 +1213,8 @@ export const MOVE_DISPLAY: readonly MoveCardDisplay[] = [
 		effectText:
 			"Look at 2 random cards from an enemy's hand. You may discard 1 of them.",
 		flavorText: "",
+		lore: "",
+		synergyIds: [],
 	},
 	{
 		id: "job-application",
@@ -1036,6 +1224,8 @@ export const MOVE_DISPLAY: readonly MoveCardDisplay[] = [
 		moveType: "slow",
 		effectText: "Set your Cash and an enemy's Cash to 0. Then draw 3.",
 		flavorText: "",
+		lore: "",
+		synergyIds: [],
 	},
 	{
 		id: "kamikaze",
@@ -1046,6 +1236,8 @@ export const MOVE_DISPLAY: readonly MoveCardDisplay[] = [
 		effectText:
 			"Turn one of your Crew face-up. If you do, deal 30 damage to an enemy Boss.",
 		flavorText: "",
+		lore: "",
+		synergyIds: [],
 	},
 	{
 		id: "nope",
@@ -1055,6 +1247,8 @@ export const MOVE_DISPLAY: readonly MoveCardDisplay[] = [
 		moveType: "slow",
 		effectText: "Stop an enemy Slow Move.",
 		flavorText: "",
+		lore: "",
+		synergyIds: [],
 	},
 	{
 		id: "pickpocket",
@@ -1064,6 +1258,8 @@ export const MOVE_DISPLAY: readonly MoveCardDisplay[] = [
 		moveType: "slow",
 		effectText: "Steal 2 Cash from an enemy.",
 		flavorText: "",
+		lore: "",
+		synergyIds: [],
 	},
 	{
 		id: "prank-call",
@@ -1073,6 +1269,8 @@ export const MOVE_DISPLAY: readonly MoveCardDisplay[] = [
 		moveType: "slow",
 		effectText: "If you have ever bluffed, steal 4 Cash from an enemy.",
 		flavorText: "",
+		lore: "",
+		synergyIds: [],
 	},
 	{
 		id: "ratatatat",
@@ -1082,6 +1280,8 @@ export const MOVE_DISPLAY: readonly MoveCardDisplay[] = [
 		moveType: "slow",
 		effectText: "Deal 20 piercing damage to an enemy Boss.",
 		flavorText: "",
+		lore: "",
+		synergyIds: [],
 	},
 	{
 		id: "reverse-card",
@@ -1092,6 +1292,8 @@ export const MOVE_DISPLAY: readonly MoveCardDisplay[] = [
 		effectText:
 			"Stop an enemy Slow Move. If that Move deals damage, its damage is dealt to its caster instead.",
 		flavorText: "",
+		lore: "",
+		synergyIds: [],
 	},
 	{
 		id: "scorched-earth",
@@ -1101,6 +1303,8 @@ export const MOVE_DISPLAY: readonly MoveCardDisplay[] = [
 		moveType: "slow",
 		effectText: "Discard all Ongoing Moves from an enemy's ongoing zone.",
 		flavorText: "",
+		lore: "",
+		synergyIds: [],
 	},
 	{
 		id: "strip-em-down",
@@ -1110,6 +1314,8 @@ export const MOVE_DISPLAY: readonly MoveCardDisplay[] = [
 		moveType: "slow",
 		effectText: "Remove all Armor from an enemy Boss. Draw 1.",
 		flavorText: "",
+		lore: "",
+		synergyIds: [],
 	},
 	{
 		id: "to-the-death",
@@ -1120,6 +1326,8 @@ export const MOVE_DISPLAY: readonly MoveCardDisplay[] = [
 		effectText:
 			"Kill one of your face-up Crew. Then perform an unstoppable Strike.",
 		flavorText: "",
+		lore: "",
+		synergyIds: [],
 	},
 	{
 		id: "truth-serum",
@@ -1129,6 +1337,8 @@ export const MOVE_DISPLAY: readonly MoveCardDisplay[] = [
 		moveType: "slow",
 		effectText: "An enemy reveals the class of one of their face-down Crew.",
 		flavorText: "",
+		lore: "",
+		synergyIds: [],
 	},
 	{
 		id: "unfinished-business",
@@ -1139,6 +1349,8 @@ export const MOVE_DISPLAY: readonly MoveCardDisplay[] = [
 		effectText:
 			"If the team has a face-up Defender, perform an unstoppable Strike on an enemy Crew.",
 		flavorText: "",
+		lore: "",
+		synergyIds: [],
 	},
 	{
 		id: "wheel-of-fortune",
@@ -1149,6 +1361,8 @@ export const MOVE_DISPLAY: readonly MoveCardDisplay[] = [
 		effectText:
 			"You and an enemy each discard your hands, then each draw that many.",
 		flavorText: "",
+		lore: "",
+		synergyIds: [],
 	},
 	{
 		id: "wolfblaster",
@@ -1158,8 +1372,11 @@ export const MOVE_DISPLAY: readonly MoveCardDisplay[] = [
 		moveType: "slow",
 		effectText: "Deal 40 damage to an enemy Boss.",
 		flavorText: "",
+		lore: "",
+		synergyIds: [],
 	},
 ];
+
 export type MoveTargetKind =
 	| "enemy_boss"
 	| "enemy_crew"
@@ -1308,6 +1525,18 @@ export function getMovePostPlacementTarget(
 export const BOSS_DISPLAY_MAP = new Map(BOSS_DISPLAY.map((b) => [b.id, b]));
 export const CREW_DISPLAY_MAP = new Map(CREW_DISPLAY.map((c) => [c.id, c]));
 export const MOVE_DISPLAY_MAP = new Map(MOVE_DISPLAY.map((m) => [m.id, m]));
+
+export type CardId = string;
+
+export const ALL_CARDS_MAP = new Map<CardId, BaseCardDisplay>([
+	...BOSS_DISPLAY.map((c) => [c.id, c] as const),
+	...CREW_DISPLAY.map((c) => [c.id, c] as const),
+	...MOVE_DISPLAY.map((c) => [c.id, c] as const),
+]);
+
+export function getCardById(id: CardId): BaseCardDisplay | undefined {
+	return ALL_CARDS_MAP.get(id);
+}
 
 export function getBossDisplay(id: string): BossCardDisplay {
 	const card = BOSS_DISPLAY_MAP.get(id);

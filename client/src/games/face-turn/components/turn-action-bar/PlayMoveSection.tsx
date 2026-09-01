@@ -1,7 +1,6 @@
 import "../../board.css";
 import { useCallback, useEffect } from "react";
 import { getMovePostPlacementTarget } from "@shared/games/face-turn/card-display";
-import { SectionTitle } from "../SectionTitle";
 import type { DragPosition } from "../../hooks/useCardDrag";
 import {
 	boardTargetRegistry,
@@ -14,27 +13,19 @@ import { useHandControllerStore } from "../../hooks/handControllerStore";
 import type { FaceturnsState } from "@shared/games/face-turn/types";
 
 export function PlayMoveSection({
-	getCost,
 	getPlayable,
-	selectedMoveId,
-	onSelectMove,
 	playerId,
 	state,
 	locked,
-	cash,
 	hasSellCards,
 	onDropPlay,
 	onDropSell,
 	onArm,
 }: {
-	getCost: (moveId: string) => number;
 	getPlayable: (moveId: string) => boolean;
-	selectedMoveId: string | null;
-	onSelectMove: (moveId: string) => void;
 	playerId: string;
 	state: FaceturnsState;
 	locked: boolean;
-	cash: number;
 	hasSellCards: boolean;
 	onDropPlay: (moveId: string, primaryTarget: BoardTarget) => void;
 	onDropSell: (moveId: string) => void;
@@ -74,8 +65,6 @@ export function PlayMoveSection({
 		[hasSellCards, state, playerId],
 	);
 
-	const cost = selectedMoveId ? getCost(selectedMoveId) : 0;
-
 	const handleDrop = useCallback(
 		(moveId: string, target: BoardTarget) => {
 			if (target.kind === "discard") {
@@ -98,44 +87,15 @@ export function PlayMoveSection({
 	useEffect(() => {
 		setHandController<BoardTarget>({
 			getPlayable,
-			selectedId: selectedMoveId,
-			armedId: armed?.moveId ?? null,
 			disabled: locked,
-			onSelect: onSelectMove,
+			armedId: armed?.moveId ?? null,
 			dragEnabled: !locked && !armed,
 			getTargetAt,
 			isValidTarget,
 			onDrop: handleDrop,
 		});
 		return () => setHandController(null);
-	}, [
-		setHandController,
-		getPlayable,
-		selectedMoveId,
-		armed,
-		locked,
-		onSelectMove,
-		getTargetAt,
-		isValidTarget,
-		handleDrop,
-	]);
+	}, [setHandController, getPlayable, armed, locked, getTargetAt, isValidTarget, handleDrop]);
 
-	return (
-		<div className="flex flex-col gap-1">
-			<SectionTitle>
-				Play a move
-				{hasSellCards && (
-					<span className="text-white/30">
-						{" "}
-						— or drag to the discard pile to sell
-					</span>
-				)}
-			</SectionTitle>
-			{selectedMoveId && cost > cash && (
-				<p className="text-[10px] text-white/25">
-					Need ₱{cost}, you have ₱{cash}
-				</p>
-			)}
-		</div>
-	);
+	return null;
 }

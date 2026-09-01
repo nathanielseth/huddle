@@ -2,6 +2,8 @@ import { useRef, useState } from "react";
 import { cn } from "../../../lib/utils/cn";
 import type { FaceturnsPlayerView } from "@shared/games/face-turn/types";
 import { FACETURN_CONSTANTS } from "@shared/games/face-turn/constants";
+import { sendFaceturnAction } from "../actions";
+import { useActionLock } from "../../../hooks/network/useActionLock";
 import {
 	BossPanel,
 	CrewSlotBadge,
@@ -16,6 +18,7 @@ import { useBoardTarget, type BoardTarget } from "../hooks/boardTargetRegistry";
 import { useFaceturnState } from "../hooks/useFaceturnState";
 import { useFaceturnInteraction } from "../hooks/useFaceturnInteraction";
 import { useBossCommandPopoverStore } from "../hooks/bossCommandPopoverStore";
+import { useClassActionPopoverStore } from "../hooks/classActionPopoverStore";
 import { useArmedMove, useArmedMoveStore } from "../hooks/useArmedMove";
 import {
 	useTargetPickerSession,
@@ -108,8 +111,7 @@ function BossCell({
 			? !myPlayer.boss.commandUsed
 			: false;
 
-	// own-boss command popover takes priority
-	const clickable = canOpenCommand || pickerClickable;
+	const isPulsing = pickerClickable || commandPopoverOpen;
 	const onClick = canOpenCommand
 		? () => {
 				if (armedMove) disarmMove();
@@ -123,7 +125,7 @@ function BossCell({
 		<div ref={setRef}>
 			<BossPanel
 				boss={boss}
-				highlighted={bossHighlighted || clickable || commandPopoverOpen}
+				highlighted={bossHighlighted || isPulsing}
 				exposed={exposed}
 				onClick={onClick}
 			/>
@@ -147,8 +149,15 @@ function CrewSlotCell({
 			: null;
 	const armed = useArmedMove();
 	const pickSecondaryTarget = useArmedMoveStore((s) => s.pickSecondaryTarget);
-	const { ft, playerId } = useFaceturnState();
+	const { ft, playerId, isMyTurn, myPlayer } = useFaceturnState();
 	const { locked: interactionLocked } = useFaceturnInteraction();
+	const toggleClassActionPopover = useClassActionPopoverStore((s) => s.toggle);
+	const classActionPopoverOpen = useClassActionPopoverStore(
+		(s) =>
+			crewTarget !== null &&
+			crewTarget.playerId === playerId &&
+			s.openForSlotIndex === crewTarget.slotIndex,
+	);
 
 	const isArmedTarget =
 		Boolean(armed) &&
@@ -179,7 +188,20 @@ function CrewSlotCell({
 	// drag-legal highlight separate from armed/picker, same gold visual
 	const isDragLegalTarget = useIsLegalDropTarget(target);
 
-	const clickable = isArmedTarget || isPickerTarget;
+	// own face-down crew, my turn, nothing else already being resolved:
+	// clicking opens the Collect/Strike/Hide popover for that card
+	const isOwnFaceDownActionable =
+		crewTarget !== null &&
+		crewTarget.playerId === playerId &&
+		slot.status === "face_down" &&
+		isMyTurn &&
+		Boolean(myPlayer) &&
+		!armed &&
+		!pickerSession;
+	const canOpenClassAction = isOwnFaceDownActionable || classActionPopoverOpen;
+
+	const clickable = isArmedTarget || isPickerTarget || canOpenClassAction;
+	const isPulsing = isArmedTarget || isPickerTarget || classActionPopoverOpen;
 
 	return (
 		<div
@@ -192,7 +214,7 @@ function CrewSlotCell({
 				slot={slot}
 				knownCrewId={knownCrewId}
 				selectable={clickable}
-				armed={clickable || isDragLegalTarget}
+				armed={isPulsing || isDragLegalTarget}
 				onClick={
 					clickable
 						? () => {
@@ -200,6 +222,9 @@ function CrewSlotCell({
 								// resolve both systems if both eligible, avoid stranding a prompt
 								if (isPickerTarget && crewTarget)
 									pickTarget({ kind: "crew", ...crewTarget });
+								if (canOpenClassAction && crewTarget && anchorEl) {
+									toggleClassActionPopover(crewTarget.slotIndex, anchorEl);
+								}
 							}
 						: undefined
 				}
@@ -421,13 +446,43 @@ export function PlayerBoard({
 				/>
 			)}
 
-			<BoardFooter player={player} handFull={handFull} isMe={isMe} />
+			<div className="flex items-end justify-between gap-2">
+				<BoardFooter player={player} handFull={handFull} isMe={isMe} />
+				{isMe && <EndTurnButton />}
+			</div>
 			{player.isEliminated && (
 				<span className="ft-eyebrow text-[9px] text-red-400/60">
 					Eliminated
 				</span>
 			)}
 		</div>
+	);
+}
+
+// bottom-right of your own board, only live during your active turn;
+// scoped action lock so it doesn't share state with other board actions
+function EndTurnButton() {
+	const { isMyTurn } = useFaceturnState();
+	const { locked, runLocked } = useActionLock(undefined);
+	if (!isMyTurn) return null;
+	return (
+		<button
+			type="button"
+			disabled={locked}
+			onClick={() => {
+				runLocked(() => {
+					sendFaceturnAction({ type: "end_turn" });
+				});
+			}}
+			className={cn(
+				"shrink-0 px-3 py-1.5 rounded-lg border text-xs font-bold transition-all",
+				locked
+					? "border-white/10 bg-white/5 text-white/20 cursor-not-allowed"
+					: "border-amber-400/60 bg-amber-400/10 text-amber-200 cursor-pointer hover:bg-amber-400/20",
+			)}
+		>
+			Pass turn
+		</button>
 	);
 }
 

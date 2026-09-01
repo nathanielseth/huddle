@@ -6,11 +6,11 @@ import {
 } from "react";
 import { useNavigate } from "react-router";
 import { m, AnimatePresence } from "motion/react";
-import { LogOut, Copy, Check } from "lucide-react";
+import { LogOut, Copy, Check, Users, Settings2 } from "lucide-react";
 import { QRCodeSVG } from "qrcode.react";
 import { useGameStore } from "../../app/store";
 import { GAMES } from "../../data/games";
-import { GAME_REGISTRY } from "../../app/registry";
+import { GAME_REGISTRY, type LobbyConfigLayout } from "../../app/registry";
 import { PlayerList } from "./PlayerList";
 
 export function RoomLobby() {
@@ -39,6 +39,9 @@ export function RoomLobby() {
 	const canStart = connectedCount >= minPlayers;
 	const isPartyLeader = players[0]?.id === playerId;
 
+	const ConfigPanel = gameEntry?.config ?? null;
+	const configLayout: LobbyConfigLayout = gameEntry?.configLayout ?? "inline";
+
 	function handleLeave() {
 		leaveRoom();
 		void navigate("/");
@@ -53,9 +56,8 @@ export function RoomLobby() {
 	}
 
 	return (
-		<div className="flex flex-col min-h-screen bg-bg">
-			{/* Top bar */}
-			<div className="flex items-center justify-between px-6 py-5 border-b border-border">
+		<div className="flex flex-col h-dvh bg-bg overflow-hidden">
+			<div className="flex items-center justify-between px-6 py-4 border-b border-border shrink-0">
 				<div className="flex items-center gap-3">
 					{game && (
 						<span className="text-xs font-semibold tracking-[0.2em] uppercase text-white/40">
@@ -78,7 +80,7 @@ export function RoomLobby() {
 				</button>
 			</div>
 
-			<div className="flex flex-col flex-1 items-center justify-center gap-12 px-6 py-12">
+			<div className="flex-1 min-h-0 overflow-hidden">
 				{role === "host" ? (
 					<HostLobby
 						roomCode={roomCode}
@@ -89,7 +91,8 @@ export function RoomLobby() {
 						minPlayers={minPlayers}
 						onStart={startGame}
 						onKick={kickPlayer}
-						ConfigPanel={gameEntry?.config ?? null}
+						ConfigPanel={ConfigPanel}
+						configLayout={configLayout}
 						supportsCpuSeats={game?.supportsCpuSeats ?? false}
 						onAddCpu={addCpuSeat}
 						onRemoveCpu={removeCpuSeat}
@@ -107,6 +110,8 @@ export function RoomLobby() {
 						minPlayers={minPlayers}
 						isPartyLeader={isPartyLeader}
 						onStart={startGame}
+						ConfigPanel={ConfigPanel}
+						configLayout={configLayout}
 					/>
 				)}
 			</div>
@@ -128,6 +133,7 @@ interface HostLobbyProps {
 	onStart: () => void;
 	onKick: (id: string) => void;
 	ConfigPanel: LazyExoticComponent<ComponentType> | null;
+	configLayout: LobbyConfigLayout;
 	supportsCpuSeats: boolean;
 	onAddCpu: () => void;
 	onRemoveCpu: (id: string) => void;
@@ -147,6 +153,7 @@ function HostLobby({
 	onStart,
 	onKick,
 	ConfigPanel,
+	configLayout,
 	supportsCpuSeats,
 	onAddCpu,
 	onRemoveCpu,
@@ -155,64 +162,171 @@ function HostLobby({
 	onJoinAsPlayer,
 	onLeavePlayerSeat,
 }: HostLobbyProps) {
+	const isFullConfig = configLayout === "full" && ConfigPanel !== null;
+	const isPanelConfig = configLayout === "panel" && ConfigPanel !== null;
+	const isInlineConfig = configLayout === "inline" && ConfigPanel !== null;
+
 	return (
-		<>
-			<m.div
-				className="flex flex-col items-center gap-4"
-				initial={{ opacity: 0, y: 16 }}
-				animate={{ opacity: 1, y: 0 }}
-				transition={{ duration: 0.3 }}
+		<div className="flex flex-col h-full">
+			{(isFullConfig || isPanelConfig) && (
+				<IdentityStrip roomCode={roomCode} copied={copied} onCopy={onCopy} />
+			)}
+
+			<div
+				className={`flex-1 min-h-0 ${
+					isFullConfig || isPanelConfig
+						? "grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]"
+						: "flex flex-col items-center justify-center overflow-y-auto"
+				}`}
 			>
-				<p className="text-xs font-semibold tracking-[0.25em] uppercase text-white/40">
-					Players, enter this code
+				{/* players column */}
+				<div
+					className={`flex flex-col min-h-0 px-6 ${
+						isFullConfig || isPanelConfig
+							? "py-5 lg:border-r border-border"
+							: "w-full max-w-md py-8 gap-8"
+					}`}
+				>
+					{!(isFullConfig || isPanelConfig) && (
+						<IdentityBlock
+							roomCode={roomCode}
+							copied={copied}
+							onCopy={onCopy}
+						/>
+					)}
+
+					<div className="flex flex-col min-h-0 w-full gap-4">
+						<PlayerList
+							players={players}
+							playerId={hostPlayerId}
+							onKick={onKick}
+							onRemoveCpu={onRemoveCpu}
+						/>
+
+						<div className="flex flex-wrap items-center gap-2 shrink-0">
+							<HostSeatControl
+								isHostSeated={isHostSeated}
+								onJoin={onJoinAsPlayer}
+								onLeave={onLeavePlayerSeat}
+							/>
+							{supportsCpuSeats && (
+								<button
+									type="button"
+									onClick={onAddCpu}
+									className="flex items-center gap-2 px-4 h-9 rounded-lg text-xs font-semibold uppercase tracking-widest text-white/50 bg-white/5 hover:bg-white/10 hover:text-white/80 transition-all cursor-pointer"
+								>
+									+ Add CPU
+								</button>
+							)}
+						</div>
+					</div>
+				</div>
+
+				{(isFullConfig || isPanelConfig) && ConfigPanel && (
+					<div className="flex flex-col min-h-0 px-6 py-5 overflow-y-auto">
+						<ConfigZoneHeader />
+						<Suspense fallback={<ConfigFallback />}>
+							<ConfigPanel />
+						</Suspense>
+					</div>
+				)}
+			</div>
+
+			<div className="flex flex-col items-center gap-4 px-6 py-6 border-t border-border shrink-0">
+				{isInlineConfig && ConfigPanel && (
+					<Suspense fallback={null}>
+						<ConfigPanel />
+					</Suspense>
+				)}
+				<StartButton
+					canStart={canStart}
+					minPlayers={minPlayers}
+					onStart={onStart}
+				/>
+			</div>
+		</div>
+	);
+}
+
+function IdentityStrip({
+	roomCode,
+	copied,
+	onCopy,
+}: {
+	roomCode: string;
+	copied: boolean;
+	onCopy: () => void;
+}) {
+	return (
+		<m.div
+			className="flex items-center justify-center gap-6 px-6 py-4 border-b border-border shrink-0"
+			initial={{ opacity: 0, y: -8 }}
+			animate={{ opacity: 1, y: 0 }}
+			transition={{ duration: 0.25 }}
+		>
+			<div className="flex flex-col items-center gap-1">
+				<p className="text-[10px] font-semibold tracking-[0.25em] uppercase text-white/40">
+					Room Code
 				</p>
-				<div className="flex items-center gap-4">
-					<span className="font-display text-7xl font-black tracking-[0.12em] uppercase text-white leading-none">
+				<div className="flex items-center gap-3">
+					<span className="font-display text-4xl font-black tracking-widest uppercase text-white leading-none">
 						{roomCode}
 					</span>
-					<button
-						type="button"
-						onClick={onCopy}
-						className="flex items-center justify-center w-10 h-10 rounded-lg bg-white/5 hover:bg-white/10 text-white/40 hover:text-white/80 transition-all cursor-pointer"
-						aria-label="Copy room code"
-					>
-						<AnimatePresence mode="wait">
-							{copied ? (
-								<m.span
-									key="check"
-									initial={{ scale: 0.7, opacity: 0 }}
-									animate={{ scale: 1, opacity: 1 }}
-									exit={{ scale: 0.7, opacity: 0 }}
-									transition={{ duration: 0.15 }}
-								>
-									<Check size={16} className="text-green-400" />
-								</m.span>
-							) : (
-								<m.span
-									key="copy"
-									initial={{ scale: 0.7, opacity: 0 }}
-									animate={{ scale: 1, opacity: 1 }}
-									exit={{ scale: 0.7, opacity: 0 }}
-									transition={{ duration: 0.15 }}
-								>
-									<Copy size={16} />
-								</m.span>
-							)}
-						</AnimatePresence>
-					</button>
+					<CopyButton copied={copied} onCopy={onCopy} />
 				</div>
-			</m.div>
+			</div>
 
-			<m.div
-				className="flex flex-col items-center gap-3"
-				initial={{ opacity: 0, scale: 0.95 }}
-				animate={{ opacity: 1, scale: 1 }}
-				transition={{ duration: 0.25 }}
-			>
+			<div className="hidden sm:flex items-center gap-3 pl-6 border-l border-border">
+				<div className="p-2 rounded-xl bg-white shrink-0">
+					<QRCodeSVG
+						value={`${window.location.origin}/join/${roomCode}`}
+						size={72}
+						level="M"
+						bgColor="#ffffff"
+						fgColor="#0f0f0f"
+					/>
+				</div>
+				<p className="text-[10px] font-semibold tracking-[0.15em] uppercase text-white/30 max-w-16 leading-tight">
+					Scan to join
+				</p>
+			</div>
+		</m.div>
+	);
+}
+
+function IdentityBlock({
+	roomCode,
+	copied,
+	onCopy,
+}: {
+	roomCode: string;
+	copied: boolean;
+	onCopy: () => void;
+}) {
+	return (
+		<m.div
+			className="flex flex-col items-center gap-5"
+			initial={{ opacity: 0, y: -8 }}
+			animate={{ opacity: 1, y: 0 }}
+			transition={{ duration: 0.25 }}
+		>
+			<div className="flex flex-col items-center gap-2">
+				<p className="text-[10px] font-semibold tracking-[0.25em] uppercase text-white/40">
+					Room Code
+				</p>
+				<div className="flex items-center gap-3">
+					<span className="font-display text-6xl font-black tracking-widest uppercase text-white leading-none">
+						{roomCode}
+					</span>
+					<CopyButton copied={copied} onCopy={onCopy} />
+				</div>
+			</div>
+
+			<div className="flex flex-col items-center gap-2">
 				<div className="p-3 rounded-xl bg-white">
 					<QRCodeSVG
 						value={`${window.location.origin}/join/${roomCode}`}
-						size={120}
+						size={104}
 						level="M"
 						bgColor="#ffffff"
 						fgColor="#0f0f0f"
@@ -221,43 +335,49 @@ function HostLobby({
 				<p className="text-[10px] font-semibold tracking-[0.2em] uppercase text-white/30">
 					Scan to join
 				</p>
-			</m.div>
+			</div>
+		</m.div>
+	);
+}
 
-			<PlayerList
-				players={players}
-				playerId={hostPlayerId}
-				onKick={onKick}
-				onRemoveCpu={onRemoveCpu}
-			/>
-
-			<HostSeatControl
-				isHostSeated={isHostSeated}
-				onJoin={onJoinAsPlayer}
-				onLeave={onLeavePlayerSeat}
-			/>
-
-			{supportsCpuSeats && (
-				<button
-					type="button"
-					onClick={onAddCpu}
-					className="flex items-center gap-2 px-4 h-9 rounded-lg text-xs font-semibold uppercase tracking-widest text-white/50 bg-white/5 hover:bg-white/10 hover:text-white/80 transition-all cursor-pointer"
-				>
-					+ Add CPU Player
-				</button>
-			)}
-
-			{ConfigPanel && (
-				<Suspense fallback={null}>
-					<ConfigPanel />
-				</Suspense>
-			)}
-
-			<StartButton
-				canStart={canStart}
-				minPlayers={minPlayers}
-				onStart={onStart}
-			/>
-		</>
+function CopyButton({
+	copied,
+	onCopy,
+}: {
+	copied: boolean;
+	onCopy: () => void;
+}) {
+	return (
+		<button
+			type="button"
+			onClick={onCopy}
+			className="flex items-center justify-center w-9 h-9 rounded-lg bg-white/5 hover:bg-white/10 text-white/40 hover:text-white/80 transition-all cursor-pointer shrink-0"
+			aria-label="Copy room code"
+		>
+			<AnimatePresence mode="wait">
+				{copied ? (
+					<m.span
+						key="check"
+						initial={{ scale: 0.7, opacity: 0 }}
+						animate={{ scale: 1, opacity: 1 }}
+						exit={{ scale: 0.7, opacity: 0 }}
+						transition={{ duration: 0.15 }}
+					>
+						<Check size={15} className="text-green-400" />
+					</m.span>
+				) : (
+					<m.span
+						key="copy"
+						initial={{ scale: 0.7, opacity: 0 }}
+						animate={{ scale: 1, opacity: 1 }}
+						exit={{ scale: 0.7, opacity: 0 }}
+						transition={{ duration: 0.15 }}
+					>
+						<Copy size={15} />
+					</m.span>
+				)}
+			</AnimatePresence>
+		</button>
 	);
 }
 
@@ -342,6 +462,8 @@ interface GuestLobbyProps {
 	minPlayers: number;
 	isPartyLeader: boolean;
 	onStart: () => void;
+	ConfigPanel: LazyExoticComponent<ComponentType> | null;
+	configLayout: LobbyConfigLayout;
 }
 
 function GuestLobby({
@@ -352,62 +474,120 @@ function GuestLobby({
 	minPlayers,
 	isPartyLeader,
 	onStart,
+	ConfigPanel,
+	configLayout,
 }: GuestLobbyProps) {
+	const isFullConfig = configLayout === "full" && ConfigPanel !== null;
+	const isPanelConfig = configLayout === "panel" && ConfigPanel !== null;
+	const isInlineConfig = configLayout === "inline" && ConfigPanel !== null;
+
 	return (
-		<>
-			<m.div
-				className="flex flex-col items-center gap-2"
-				initial={{ opacity: 0, y: 16 }}
-				animate={{ opacity: 1, y: 0 }}
-				transition={{ duration: 0.3 }}
+		<div className="flex flex-col h-full">
+			<div
+				className={`flex-1 min-h-0 ${
+					isFullConfig || isPanelConfig
+						? "grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]"
+						: "flex flex-col items-center justify-center overflow-y-auto"
+				}`}
 			>
-				<p className="text-xs font-semibold tracking-[0.25em] uppercase text-white/40">
-					Room
-				</p>
-				<span className="font-display text-4xl font-black tracking-[0.12em] uppercase text-white">
-					{roomCode}
-				</span>
-			</m.div>
-
-			{isPartyLeader ? (
-				<m.div
-					className="flex flex-col items-center gap-2"
-					initial={{ opacity: 0 }}
-					animate={{ opacity: 1 }}
-					transition={{ delay: 0.15, duration: 0.3 }}
+				<div
+					className={`flex flex-col min-h-0 px-6 ${
+						isFullConfig || isPanelConfig
+							? "py-5 lg:border-r border-border"
+							: "w-full max-w-md py-8 gap-6"
+					}`}
 				>
-					<p className="text-xs font-semibold tracking-[0.2em] uppercase text-huddle">
-						👑 You're the Party Leader
-					</p>
-					<p className="text-white/40 text-xs">
-						You can start the game whenever you're ready.
-					</p>
-				</m.div>
-			) : (
-				<m.p
-					className="text-white/50 text-sm"
-					initial={{ opacity: 0 }}
-					animate={{ opacity: 1 }}
-					transition={{ delay: 0.15, duration: 0.3 }}
-				>
-					Waiting for the host to start...
-				</m.p>
-			)}
+					<m.div
+						className="flex flex-col items-center gap-1 shrink-0"
+						initial={{ opacity: 0, y: -8 }}
+						animate={{ opacity: 1, y: 0 }}
+						transition={{ duration: 0.25 }}
+					>
+						<p className="text-[10px] font-semibold tracking-[0.25em] uppercase text-white/40">
+							Room Code
+						</p>
+						<span className="font-display text-4xl font-black tracking-widest uppercase text-white leading-none">
+							{roomCode}
+						</span>
+					</m.div>
 
-			<PlayerList players={players} playerId={playerId} />
+					{isPartyLeader ? (
+						<m.div
+							className="flex flex-col items-center gap-1 shrink-0"
+							initial={{ opacity: 0 }}
+							animate={{ opacity: 1 }}
+							transition={{ delay: 0.1, duration: 0.3 }}
+						>
+							<p className="text-xs font-semibold tracking-[0.2em] uppercase text-huddle">
+								👑 You're the Party Leader
+							</p>
+							<p className="text-white/40 text-xs">
+								You can start the game whenever you're ready.
+							</p>
+						</m.div>
+					) : (
+						<m.p
+							className="text-white/50 text-sm text-center shrink-0"
+							initial={{ opacity: 0 }}
+							animate={{ opacity: 1 }}
+							transition={{ delay: 0.1, duration: 0.3 }}
+						>
+							Waiting for the host to start...
+						</m.p>
+					)}
 
-			{isPartyLeader && (
-				<StartButton
-					canStart={canStart}
-					minPlayers={minPlayers}
-					onStart={onStart}
-				/>
-			)}
-		</>
+					<PlayerList players={players} playerId={playerId} />
+				</div>
+
+				{(isFullConfig || isPanelConfig) && ConfigPanel && (
+					<div className="flex flex-col min-h-0 px-6 py-5 overflow-y-auto">
+						<ConfigZoneHeader />
+						<Suspense fallback={<ConfigFallback />}>
+							<ConfigPanel />
+						</Suspense>
+					</div>
+				)}
+			</div>
+
+			<div className="flex flex-col items-center gap-4 px-6 py-6 border-t border-border shrink-0">
+				{isInlineConfig && ConfigPanel && (
+					<Suspense fallback={null}>
+						<ConfigPanel />
+					</Suspense>
+				)}
+				{isPartyLeader && (
+					<StartButton
+						canStart={canStart}
+						minPlayers={minPlayers}
+						onStart={onStart}
+					/>
+				)}
+			</div>
+		</div>
 	);
 }
 
 // shared
+
+function ConfigZoneHeader() {
+	return (
+		<div className="flex items-center gap-2 mb-4 shrink-0">
+			<Settings2 size={13} className="text-white/30" />
+			<p className="text-xs font-semibold tracking-[0.2em] uppercase text-white/40">
+				Settings
+			</p>
+		</div>
+	);
+}
+
+function ConfigFallback() {
+	return (
+		<div className="flex items-center gap-2 text-white/20 text-xs">
+			<Users size={13} className="animate-pulse" />
+			Loading settings…
+		</div>
+	);
+}
 
 function StartButton({
 	canStart,
@@ -423,7 +603,7 @@ function StartButton({
 			className="flex flex-col items-center gap-2"
 			initial={{ opacity: 0 }}
 			animate={{ opacity: 1 }}
-			transition={{ delay: 0.2, duration: 0.3 }}
+			transition={{ delay: 0.15, duration: 0.3 }}
 		>
 			<button
 				type="button"

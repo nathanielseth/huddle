@@ -1,7 +1,7 @@
 import { Card } from "../card/Card";
 import { useCardHoverPreview } from "./cardHoverPreviewStore";
 
-const PREVIEW_SIZE = 300;
+const PREVIEW_SIZE = 325;
 
 export function CardPreviewDock() {
 	const card = useCardHoverPreview();

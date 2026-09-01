@@ -50,7 +50,6 @@ export function CrewSlotBadge({
 	onClick?: () => void;
 }) {
 	const { inspect, modal: inspectModal } = useCardInspect();
-	const [isHovered, setIsHovered] = useState(false);
 
 	const revealedId =
 		slot.status === "empty"
@@ -79,9 +78,6 @@ export function CrewSlotBadge({
 	}
 
 	const isFaceDown = slot.status === "face_down";
-	const revealOnHover = isFaceDown && knownCrewId != null;
-	const isPreviewingOwnFaceDown = revealOnHover && isHovered;
-	const displayFlipped = isFaceDown && !isPreviewingOwnFaceDown;
 	const canInspect = revealedId != null;
 
 	const cardProps = revealedId
@@ -92,8 +88,7 @@ export function CrewSlotBadge({
 		<Card
 			{...cardProps}
 			size={CREW_SLOT_CARD_SIZE}
-			flipped={displayFlipped}
-			previewOnly={isPreviewingOwnFaceDown}
+			flipped={isFaceDown}
 			selected={selected}
 			armed={armed}
 			onClick={selectable ? onClick : undefined}
@@ -109,14 +104,8 @@ export function CrewSlotBadge({
 					e.preventDefault();
 					inspect(cardProps);
 				}}
-				onMouseEnter={() => {
-					if (revealOnHover) setIsHovered(true);
-					hoverPreviewProps?.onPointerEnter();
-				}}
-				onMouseLeave={() => {
-					if (revealOnHover) setIsHovered(false);
-					hoverPreviewProps?.onPointerLeave();
-				}}
+				onMouseEnter={() => hoverPreviewProps?.onPointerEnter()}
+				onMouseLeave={() => hoverPreviewProps?.onPointerLeave()}
 			>
 				{card}
 				{slot.status === "face_up" && slot.isPassiveDisabled && (

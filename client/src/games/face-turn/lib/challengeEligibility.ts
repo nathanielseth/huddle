@@ -9,6 +9,21 @@ export function isPlayerExposed(player: FaceturnsPlayerView): boolean {
 	return player.crewSlots.every((slot) => slot.status === "face_up");
 }
 
+export function getEnemyPlayers(
+	ft: FaceturnsState,
+	playerId: string,
+): FaceturnsPlayerView[] {
+	const me = ft.players[playerId];
+	if (!me) return [];
+	return ft.turnOrder
+		.filter((id) => id !== playerId && !ft.eliminatedPlayers.includes(id))
+		.map((id) => ft.players[id])
+		.filter(
+			(p): p is FaceturnsPlayerView =>
+				p !== undefined && p.teamIndex !== me.teamIndex,
+		);
+}
+
 export function isPlayerOrTeammate(
 	ft: FaceturnsState,
 	candidateId: string,

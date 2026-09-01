@@ -987,7 +987,7 @@ export function DraftingPhase() {
 							onChange={(e) => {
 								setQuery(e.target.value);
 							}}
-							placeholder="Search name or effect…"
+							placeholder="Search cards…"
 							className="w-full pl-8 pr-3 py-1.5 rounded-lg bg-white/5 border border-white/10 text-xs font-bold text-white placeholder:text-white/30 outline-none focus:border-white/30 transition-colors"
 						/>
 					</div>
