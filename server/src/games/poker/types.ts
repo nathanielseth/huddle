@@ -4,11 +4,11 @@ import type {
 	PokerPhase,
 	LastAction,
 	HandResult,
-} from "../../../../shared/games/poker.js";
-import type { AIPersonality } from "./ai/types.js";
-import type { PokerLogger } from "./logger.js";
-import type { ActiveLine } from "./ai/strategy/lines.js";
-import type { NameDispenser } from "./ai/personality.js";
+} from "../../../../shared/games/poker//index";
+import type { AIPersonality } from "./ai/types";
+import type { PokerLogger } from "./logger";
+import type { ActiveLine } from "./ai/strategy/lines";
+import type { NameDispenser } from "./ai/personality";
 
 // scoped to current street, reset each new street
 export interface BettingRoundState {

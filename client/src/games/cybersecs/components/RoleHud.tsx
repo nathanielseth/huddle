@@ -2,7 +2,7 @@ import { useState } from "react";
 import { AnimatePresence, m } from "motion/react";
 import { cn } from "../../../lib/utils/cn";
 import { ROLE_META } from "../constants";
-import type { CybsecsSecret } from "@shared/games/cybersecs";
+import type { CybsecsSecret } from "@shared/games/breachpoint/index";
 
 interface RoleHudProps {
   secret: CybsecsSecret;

@@ -1,11 +1,34 @@
-import type { FaceturnServerState, FaceturnServerPlayer } from "../types";
+import type {
+	FaceturnServerState,
+	FaceturnServerPlayer,
+	PendingInteraction,
+} from "../types";
 import { FACETURN_CONSTANTS as C } from "../types";
 import type { EffectPrimitive } from "../cards";
 import { pickRandom } from "../../lib/random";
 import type { Handler } from "./shared";
-import { getEnemies, getLivingPlayers, getTeammates, resolveTarget } from "./shared";
+import {
+	getEnemies,
+	getLivingPlayers,
+	getTeammates,
+	resolveTarget,
+} from "./shared";
 import { applyDamage } from "./damage";
 import { drawCards } from "./draw-discard";
+
+// shared by two steal paths; same logic as steal_cash
+export function stealCashFromVictim(
+	source: FaceturnServerPlayer,
+	victimPlayerId: string,
+	amount: number,
+	state: FaceturnServerState,
+): void {
+	const victim = state.players.get(victimPlayerId);
+	if (!victim || state.eliminatedPlayers.has(victimPlayerId)) return;
+	const stolen = Math.min(amount, victim.cash);
+	victim.cash -= stolen;
+	source.cash += stolen;
+}
 
 export function applyCoolGuyDamageOnMovePlayed(
 	state: FaceturnServerState,
@@ -15,10 +38,15 @@ export function applyCoolGuyDamageOnMovePlayed(
 	const enemies = getEnemies(state, actor.playerId);
 	if (enemies.length === 0) return;
 	const target = pickRandom(enemies, state.rng);
-	applyDamage(state, target, actor.derived.damageRandomEnemyOnMovePlayed, actor);
+	applyDamage(
+		state,
+		target,
+		actor.derived.damageRandomEnemyOnMovePlayed,
+		actor,
+	);
 }
 
-// supply drop: team-wide cash on any collector class action, one payout per supply drop holder on the team
+// one payout per supply drop holder on the team
 export function applySupplyDropOnCollect(
 	state: FaceturnServerState,
 	collector: FaceturnServerPlayer,
@@ -36,7 +64,6 @@ export function applySupplyDropOnCollect(
 	}
 }
 
-// trickle-down economics: mirrors cash gained by a watched collector
 export function applyTrickleDownOnCollect(
 	state: FaceturnServerState,
 	collector: FaceturnServerPlayer,
@@ -65,6 +92,40 @@ export const cashHandlers = {
 		const stolen = Math.min(effect.amount, target.cash);
 		target.cash -= stolen;
 		ctx.actor.cash += stolen;
+	},
+
+	steal_cash_choose_target(effect, ctx) {
+		if (effect.type !== "steal_cash_choose_target") return;
+
+		if (ctx.targetPlayerId) {
+			stealCashFromVictim(
+				ctx.actor,
+				ctx.targetPlayerId,
+				effect.amount,
+				ctx.state,
+			);
+			return;
+		}
+
+		const enemies = getEnemies(ctx.state, ctx.actor.playerId);
+		if (enemies.length === 0) return;
+
+		if (enemies.length === 1) {
+			stealCashFromVictim(
+				ctx.actor,
+				enemies[0]!.playerId,
+				effect.amount,
+				ctx.state,
+			);
+			return;
+		}
+
+		ctx.state.pendingInteraction = {
+			type: "bear_bones_steal_pick",
+			actorId: ctx.actor.playerId,
+			eligibleTargetIds: enemies.map((e) => e.playerId),
+			amount: effect.amount,
+		} satisfies PendingInteraction;
 	},
 
 	steal_random_card(_effect, ctx) {

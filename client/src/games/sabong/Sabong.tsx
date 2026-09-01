@@ -1,24 +1,21 @@
-import { useRef, type FC } from "react";
+import { useRef, type ComponentType } from "react";
 import { useGameStore } from "../../app/store";
 import { useSabongState } from "./hooks/useSabongState";
 import { usePhaseWipe } from "./hooks/usePhaseWipe";
 import { WipeCanvas, type WipeHandle } from "./components/WipeCanvas";
 import { PreTournamentPlayer, PreTournamentHost } from "./phases/PreTournament";
 import { BettingPlayer, BettingHost } from "./phases/Betting";
+import { ShopPlayer, ShopHost } from "./phases/Shop";
 import { FightingPlayer, FightingHost } from "./phases/Fighting";
 import { PayoutPlayer, PayoutHost } from "./phases/Payout";
 import { FinishedPlayer, FinishedHost } from "./phases/Finished";
+import type { SabongPhase } from "@shared/games/sabong/index";
 
-type SabongPhase =
-	| "pre_tournament"
-	| "betting"
-	| "fighting"
-	| "payout"
-	| "finished";
-type PhaseMap = Partial<Record<SabongPhase, FC>>;
+type PhaseMap = Partial<Record<SabongPhase, ComponentType>>;
 
 const PLAYER_PHASES: PhaseMap = {
 	pre_tournament: PreTournamentPlayer,
+	shop: ShopPlayer,
 	betting: BettingPlayer,
 	fighting: FightingPlayer,
 	payout: PayoutPlayer,
@@ -27,6 +24,7 @@ const PLAYER_PHASES: PhaseMap = {
 
 const HOST_PHASES: PhaseMap = {
 	pre_tournament: PreTournamentHost,
+	shop: ShopHost,
 	betting: BettingHost,
 	fighting: FightingHost,
 	payout: PayoutHost,
@@ -36,6 +34,7 @@ const HOST_PHASES: PhaseMap = {
 const WIPE_COLOR: [number, number, number] = [0.3, 0.04, 0.04];
 
 export function Sabong() {
+	"use no memo";
 	const role = useGameStore((s) => s.role);
 	const { sabong } = useSabongState();
 	const wipeRef = useRef<WipeHandle>(null);
@@ -43,7 +42,7 @@ export function Sabong() {
 	const phaseMap = role === "host" ? HOST_PHASES : PLAYER_PHASES;
 
 	const visiblePhase = usePhaseWipe<SabongPhase>({
-		source: sabong?.phase as SabongPhase | undefined,
+		source: sabong?.phase,
 		onWipe: (swap) => wipeRef.current?.wipe(swap),
 	});
 

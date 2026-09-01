@@ -2,16 +2,23 @@ import type { FaceturnServerState, FaceturnServerPlayer } from "../types";
 import type { EffectPrimitive } from "../cards";
 import { CARD_IDS } from "../cards";
 import { recomputePassives } from "../derived";
-import type { Handler } from "./shared";
+import type { EffectContext, Handler } from "./shared";
 import { getEnemies, resolveTarget } from "./shared";
+import { pushLog } from "../log";
+
+// accumulates damage for chain resolution steps when an accumulator exists
+function accumulate(ctx: EffectContext, dmgDealt: number): void {
+	if (ctx.damageAccumulator) {
+		ctx.damageAccumulator.value += dmgDealt;
+	}
+}
 import type { PendingInteraction } from "../interactions/types";
 
 export function clampHp(hp: number, max: number): number {
 	return Math.max(0, Math.min(max, Math.round(hp)));
 }
 
-// life insurance: prevents lethal damage once, sets hp to 1, then discards itself
-// exported: also used by resolveStrikeOrExecute's execute branch in strikes.ts
+// consumes life insurance, sets hp to 1, also used by strikes.ts execute branch
 export function consumeLifeInsuranceProtecting(
 	state: FaceturnServerState,
 	target: FaceturnServerPlayer,
@@ -36,13 +43,13 @@ export function consumeLifeInsuranceProtecting(
 	recomputePassives(target, state);
 }
 
-// bastion cash on damage taken passive: fires on every instance of damage taken, not silenced (boss passives always apply)
+// bastion passive fires on every damage instance, boss passives aren't silenced
 function maybeTriggerBastionCashBonus(target: FaceturnServerPlayer): void {
 	if (!target.derived.hasBastionPassive) return;
 	target.cash += 1;
 }
 
-// monkey man: steals cash from the boss he just damaged, once per damage instance, capped by their available cash
+// monkey man steals cash once per damage instance, capped by available cash
 function maybeTriggerMonkeyManCashSteal(
 	target: FaceturnServerPlayer,
 	sourceActor: FaceturnServerPlayer,
@@ -60,15 +67,24 @@ function maybeTriggerMonkeyManCashSteal(
 	sourceActor.cash += stolen;
 }
 
-// shared tail once dmg is resolved: applies life insurance, hp clamp, and on-damage triggers
+// applies life insurance, hp clamp, and on-damage triggers after damage resolved
 function applyResolvedDamageToBoss(
 	state: FaceturnServerState,
 	target: FaceturnServerPlayer,
 	dmg: number,
 	rawAmount: number,
 	sourceActor: FaceturnServerPlayer,
+	moveId?: string,
 ): number {
 	if (dmg <= 0) return 0;
+
+	pushLog(state, {
+		kind: "damage_dealt",
+		sourceActorId: sourceActor.playerId,
+		targetPlayerId: target.playerId,
+		amount: dmg,
+		...(moveId ? { moveId } : {}),
+	});
 
 	if (target.derived.hasLifeInsurance && target.bossHp - dmg <= 0) {
 		target.bossHp = 1;
@@ -88,7 +104,7 @@ function applyResolvedDamageToBoss(
 }
 
 // damage pipeline: flat bonus, reduction%, immunity, armor, life insurance
-// undefendable skips armor/immunity/reduction; cannotBeMultiplied skips actor's flat bonus
+// undefendable skips armor/immunity/reduction; cannotBeMultiplied skips flat bonus
 export function applyDamage(
 	state: FaceturnServerState,
 	target: FaceturnServerPlayer,
@@ -96,14 +112,16 @@ export function applyDamage(
 	sourceActor: FaceturnServerPlayer,
 	undefendable = false,
 	cannotBeMultiplied = false,
+	moveId?: string,
 ): number {
 	let dmg =
 		undefendable || cannotBeMultiplied
 			? rawAmount
 			: rawAmount + sourceActor.derived.damageBonusFlat;
 
-	// pektus: all damage from this source bypasses armor, same as undefendable's armor step
-	const skipsArmor = undefendable || sourceActor.derived.hasAllDamagePiercingPassive;
+	// pektus passive makes all damage bypass armor
+	const skipsArmor =
+		undefendable || sourceActor.derived.hasAllDamagePiercingPassive;
 
 	if (!undefendable) {
 		if (target.derived.damageReductionPercent > 0) {
@@ -119,15 +137,23 @@ export function applyDamage(
 		}
 	}
 
-	return applyResolvedDamageToBoss(state, target, dmg, rawAmount, sourceActor);
+	return applyResolvedDamageToBoss(
+		state,
+		target,
+		dmg,
+		rawAmount,
+		sourceActor,
+		moveId,
+	);
 }
 
-// piercing damage: bypasses armor, still respects immunity and reduction%
+// bypasses armor but respects immunity and reduction%
 function applyDamageIgnoreArmor(
 	state: FaceturnServerState,
 	target: FaceturnServerPlayer,
 	rawAmount: number,
 	sourceActor: FaceturnServerPlayer,
+	moveId?: string,
 ): number {
 	let dmg = rawAmount + sourceActor.derived.damageBonusFlat;
 
@@ -136,7 +162,14 @@ function applyDamageIgnoreArmor(
 		dmg = Math.floor(dmg * (1 - target.derived.damageReductionPercent / 100));
 	}
 
-	return applyResolvedDamageToBoss(state, target, dmg, rawAmount, sourceActor);
+	return applyResolvedDamageToBoss(
+		state,
+		target,
+		dmg,
+		rawAmount,
+		sourceActor,
+		moveId,
+	);
 }
 
 export function applyPoisonToVictim(
@@ -156,20 +189,35 @@ export const damageHandlers = {
 		if (effect.type !== "deal_damage") return;
 		const target = resolveTarget(ctx);
 		if (!target) return;
-		applyDamage(
-			ctx.state,
-			target,
-			effect.amount,
-			ctx.actor,
-			effect.undefendable,
-			effect.cannotBeMultiplied,
+		accumulate(
+			ctx,
+			applyDamage(
+				ctx.state,
+				target,
+				effect.amount,
+				ctx.actor,
+				effect.undefendable,
+				effect.cannotBeMultiplied,
+				ctx.moveId,
+			),
 		);
 	},
 
 	deal_damage_all_enemy_bosses(effect, ctx) {
 		if (effect.type !== "deal_damage_all_enemy_bosses") return;
 		for (const enemy of getEnemies(ctx.state, ctx.actor.playerId)) {
-			applyDamage(ctx.state, enemy, effect.amount, ctx.actor);
+			accumulate(
+				ctx,
+				applyDamage(
+					ctx.state,
+					enemy,
+					effect.amount,
+					ctx.actor,
+					false,
+					false,
+					ctx.moveId,
+				),
+			);
 		}
 	},
 
@@ -181,7 +229,18 @@ export const damageHandlers = {
 		const allyCount = actor.crewIds.filter(
 			(id, i) => id && actor.crewTurned[i as 0 | 1],
 		).length;
-		applyDamage(ctx.state, target, effect.amountPerAlly * allyCount, actor);
+		accumulate(
+			ctx,
+			applyDamage(
+				ctx.state,
+				target,
+				effect.amountPerAlly * allyCount,
+				actor,
+				false,
+				false,
+				ctx.moveId,
+			),
+		);
 	},
 
 	deal_damage_percent_current_hp(effect, ctx) {
@@ -189,13 +248,17 @@ export const damageHandlers = {
 		const target = resolveTarget(ctx);
 		if (!target) return;
 		const dmg = Math.floor(target.bossHp * (effect.percent / 100));
-		applyDamage(
-			ctx.state,
-			target,
-			dmg,
-			ctx.actor,
-			false,
-			effect.cannotBeMultiplied,
+		accumulate(
+			ctx,
+			applyDamage(
+				ctx.state,
+				target,
+				dmg,
+				ctx.actor,
+				false,
+				effect.cannotBeMultiplied,
+				ctx.moveId,
+			),
 		);
 	},
 
@@ -203,7 +266,16 @@ export const damageHandlers = {
 		if (effect.type !== "deal_damage_ignore_armor") return;
 		const target = resolveTarget(ctx);
 		if (!target) return;
-		applyDamageIgnoreArmor(ctx.state, target, effect.amount, ctx.actor);
+		accumulate(
+			ctx,
+			applyDamageIgnoreArmor(
+				ctx.state,
+				target,
+				effect.amount,
+				ctx.actor,
+				ctx.moveId,
+			),
+		);
 	},
 
 	deal_damage_per_discarded_variable(effect, ctx) {
@@ -226,25 +298,58 @@ export const damageHandlers = {
 		if (count <= 0) return;
 		const target = resolveTarget(ctx);
 		if (!target) return;
-		applyDamage(ctx.state, target, count * effect.damagePerCard, ctx.actor);
+		accumulate(
+			ctx,
+			applyDamage(
+				ctx.state,
+				target,
+				count * effect.damagePerCard,
+				ctx.actor,
+				false,
+				false,
+				ctx.moveId,
+			),
+		);
 	},
 
 	deal_damage_self_boss(effect, ctx) {
 		if (effect.type !== "deal_damage_self_boss") return;
-		applyDamage(ctx.state, ctx.actor, effect.amount, ctx.actor);
+		accumulate(
+			ctx,
+			applyDamage(
+				ctx.state,
+				ctx.actor,
+				effect.amount,
+				ctx.actor,
+				false,
+				false,
+				ctx.moveId,
+			),
+		);
 	},
 
-	// bastion command: damage equal to armor total, then empty armor regardless
+	// bastion command empties armor then deals that amount
 	command_deal_damage_equal_to_armor(effect, ctx) {
 		if (effect.type !== "command_deal_damage_equal_to_armor") return;
 		const target = resolveTarget(ctx);
 		const totalArmor = ctx.actor.bossArmor;
 		ctx.actor.bossArmor = 0;
 		if (!target || totalArmor <= 0) return;
-		applyDamage(ctx.state, target, totalArmor, ctx.actor, false, false);
+		accumulate(
+			ctx,
+			applyDamage(
+				ctx.state,
+				target,
+				totalArmor,
+				ctx.actor,
+				false,
+				false,
+				ctx.moveId,
+			),
+		);
 	},
 
-	// poison stacks per-source in incomingPoison, ticked in triggerRoundEndPassives
+	// poison stacks per-source, ticked at round end
 	passive_poison_per_round(effect, ctx) {
 		if (effect.type !== "passive_poison_per_round") return;
 

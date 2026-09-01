@@ -6,9 +6,10 @@ interface Props {
 	players: Player[];
 	playerId: string | null;
 	onKick?: (playerId: string) => void;
+	onRemoveCpu?: (playerId: string) => void;
 }
 
-export function PlayerList({ players, playerId, onKick }: Props) {
+export function PlayerList({ players, playerId, onKick, onRemoveCpu }: Props) {
 	return (
 		<m.div
 			className="flex flex-col gap-3 w-full max-w-sm"
@@ -52,21 +53,43 @@ export function PlayerList({ players, playerId, onKick }: Props) {
 								{player.id === playerId && (
 									<span className="ml-2 text-xs text-white/30">(you)</span>
 								)}
+								{player.isCpu && (
+									<span className="ml-2 text-xs text-white/30 uppercase tracking-widest">
+										CPU
+									</span>
+								)}
 							</span>
 							<span
 								className={`w-2 h-2 rounded-full shrink-0 transition-colors duration-300 ${
 									player.isConnected ? "bg-green-400" : "bg-white/20"
 								}`}
 							/>
-							{onKick && index !== 0 && (
+							{player.isCpu && onRemoveCpu ? (
 								<button
 									type="button"
-									onClick={() => { onKick(player.id); }}
-									aria-label={`Kick ${player.name}`}
+									onClick={() => {
+										onRemoveCpu(player.id);
+									}}
+									aria-label={`Remove CPU ${player.name}`}
 									className="shrink-0 flex items-center justify-center w-6 h-6 rounded-md opacity-0 group-hover:opacity-100 text-white/50 hover:text-red-400 hover:bg-red-400/10 transition-all cursor-pointer"
 								>
 									<X size={12} />
 								</button>
+							) : (
+								onKick &&
+								index !== 0 &&
+								!player.isCpu && (
+									<button
+										type="button"
+										onClick={() => {
+											onKick(player.id);
+										}}
+										aria-label={`Kick ${player.name}`}
+										className="shrink-0 flex items-center justify-center w-6 h-6 rounded-md opacity-0 group-hover:opacity-100 text-white/50 hover:text-red-400 hover:bg-red-400/10 transition-all cursor-pointer"
+									>
+										<X size={12} />
+									</button>
+								)
 							)}
 						</m.div>
 					))

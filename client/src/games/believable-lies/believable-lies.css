@@ -1,0 +1,632 @@
+/*
+ * believable-lies.css
+ * Scoped 80s Memphis theme for the Believable Lies game.
+ * Import this once in BelievableLies.tsx — it applies only to .bl-* classes
+ * and does not affect the global Tailwind design system.
+ *
+ * Tailwind v4: add to your CSS entry with @import "./believable-lies.css"
+ * or import directly in the component via a side-effect import.
+ */
+
+/* ─── Google Fonts ─────────────────────────────────────────────────────────── */
+/* Must stay above every other statement — @import is only valid before any
+   other rule (besides @charset or an empty @layer); a style rule before it
+   invalidates the import and the font silently fails to load. */
+
+@import url('https://fonts.googleapis.com/css2?family=Fredoka+One&display=swap');
+
+/* ─── Design tokens ────────────────────────────────────────────────────────── */
+
+:root {
+  --bl-bg:       #1A0030;
+  --bl-surface:  #2A0050;
+  --bl-purple:   #6B10CC;
+  --bl-pink:     #FF3CAC;
+  --bl-yellow:   #FFE600;
+  --bl-cyan:     #00F5FF;
+  --bl-coral:    #FF6B6B;
+  --bl-green:    #00FF94;
+  --bl-white:    #F5F0FF;
+
+  --bl-border:        3px solid #000;
+  --bl-shadow-sm:     3px 3px 0 #000;
+  --bl-shadow-md:     4px 4px 0 #000;
+  --bl-shadow-lg:     5px 5px 0 #000;
+  --bl-shadow-purple: 4px 4px 0 var(--bl-purple);
+  --bl-shadow-pink:   4px 4px 0 var(--bl-pink);
+  --bl-shadow-cyan:   4px 4px 0 var(--bl-cyan);
+
+  --bl-radius-sm: 10px;
+  --bl-radius:    16px;
+  --bl-radius-lg: 20px;
+
+  --bl-font: 'Fredoka One', 'Boogaloo', system-ui, sans-serif;
+}
+
+/* ─── Root wrapper ─────────────────────────────────────────────────────────── */
+
+.bl-root {
+  font-family: var(--bl-font);
+  background: var(--bl-bg);
+  color: var(--bl-white);
+  min-height: 100svh;
+  position: relative;
+  overflow: hidden;
+}
+
+/* ─── Memphis background ───────────────────────────────────────────────────── */
+
+.bl-memphis {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+  overflow: hidden;
+}
+
+.bl-memphis > svg {
+  width: 100%;
+  height: 100%;
+}
+
+.bl-content {
+  position: relative;
+  z-index: 1;
+}
+
+/* ─── Layout primitives ────────────────────────────────────────────────────── */
+
+.bl-screen {
+  display: flex;
+  flex-direction: column;
+  min-height: 100svh;
+  padding: 20px 16px 32px;
+  box-sizing: border-box;
+}
+
+.bl-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 12px;
+}
+
+.bl-center {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  flex: 1;
+  gap: 24px;
+}
+
+/* ─── Typography ───────────────────────────────────────────────────────────── */
+
+.bl-eyebrow {
+  font-size: 10px;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  color: rgba(245, 240, 255, 0.4);
+}
+
+.bl-eyebrow-yellow { color: var(--bl-yellow); }
+.bl-eyebrow-cyan   { color: var(--bl-cyan);   }
+.bl-eyebrow-pink   { color: var(--bl-pink);   }
+
+.bl-title {
+  font-family: var(--bl-font);
+  font-size: 28px;
+  line-height: 1.15;
+  color: var(--bl-white);
+}
+
+.bl-subtitle {
+  font-family: var(--bl-font);
+  font-size: 20px;
+  color: var(--bl-white);
+}
+
+.bl-muted {
+  font-size: 13px;
+  color: rgba(245, 240, 255, 0.4);
+}
+
+/* ─── Pill / badge ─────────────────────────────────────────────────────────── */
+
+.bl-pill {
+  display: inline-block;
+  font-family: var(--bl-font);
+  font-size: 10px;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  padding: 4px 12px;
+  border: 2px solid #000;
+  border-radius: 20px;
+}
+
+.bl-pill-yellow { background: var(--bl-yellow); color: #000; }
+.bl-pill-green  { background: var(--bl-green);  color: #000; }
+.bl-pill-pink   { background: var(--bl-pink);   color: #000; }
+.bl-pill-cyan   { background: var(--bl-cyan);   color: #000; }
+
+/* ─── Prompt card ──────────────────────────────────────────────────────────── */
+
+.bl-prompt {
+  background: var(--bl-purple);
+  border: var(--bl-border);
+  border-radius: var(--bl-radius);
+  padding: 18px 20px;
+  box-shadow: var(--bl-shadow-md);
+}
+
+.bl-prompt-dark {
+  background: var(--bl-surface);
+}
+
+.bl-prompt-text {
+  font-family: var(--bl-font);
+  font-size: 20px;
+  line-height: 1.35;
+  color: var(--bl-white);
+}
+
+.bl-blank {
+  display: inline-block;
+  border-bottom: 3px solid var(--bl-cyan);
+  color: var(--bl-cyan);
+  min-width: 80px;
+  padding-bottom: 1px;
+}
+
+.bl-blank-pink {
+  border-color: var(--bl-pink);
+  color: var(--bl-pink);
+}
+
+/* ─── Timer bar ────────────────────────────────────────────────────────────── */
+
+.bl-timer {
+  margin-bottom: 12px;
+}
+
+.bl-timer-track {
+  height: 6px;
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 3px;
+  overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.bl-timer-fill {
+  height: 100%;
+  border-radius: 3px;
+  background: var(--bl-cyan);
+  transition: width 0.1s linear;
+}
+
+.bl-timer-fill-pink   { background: var(--bl-pink);   }
+.bl-timer-fill-yellow { background: var(--bl-yellow); }
+.bl-timer-fill-coral  { background: var(--bl-coral);  }
+
+/* ─── Answer buttons ───────────────────────────────────────────────────────── */
+
+.bl-answer {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  padding: 14px 18px;
+  background: #000;
+  color: var(--bl-white);
+  border: var(--bl-border);
+  border-radius: var(--bl-radius);
+  font-family: var(--bl-font);
+  font-size: 17px;
+  text-align: left;
+  cursor: pointer;
+  box-shadow: var(--bl-shadow-purple);
+  transition: transform 0.08s ease, box-shadow 0.08s ease;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.bl-answer:active {
+  transform: translate(2px, 2px);
+  box-shadow: 2px 2px 0 var(--bl-purple);
+}
+
+.bl-answer-selected {
+  background: var(--bl-yellow);
+  color: #000;
+  box-shadow: var(--bl-shadow-md);
+}
+
+.bl-answer-disabled {
+  background: var(--bl-surface);
+  color: rgba(245, 240, 255, 0.3);
+  box-shadow: var(--bl-shadow-sm);
+  cursor: default;
+}
+
+.bl-answer-truth {
+  background: var(--bl-green);
+  color: #000;
+  box-shadow: var(--bl-shadow-md);
+  cursor: default;
+}
+
+.bl-answer-lie {
+  background: var(--bl-coral);
+  color: #000;
+  box-shadow: var(--bl-shadow-md);
+  cursor: default;
+}
+
+.bl-answer-static {
+  cursor: default;
+}
+
+.bl-answer-num {
+  font-size: 13px;
+  font-family: monospace;
+  opacity: 0.45;
+  min-width: 18px;
+  flex-shrink: 0;
+}
+
+.bl-answer-badge {
+  margin-left: auto;
+  font-size: 10px;
+  letter-spacing: 0.5px;
+  padding: 3px 8px;
+  border-radius: 20px;
+  background: rgba(0, 0, 0, 0.25);
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+/* ─── Text input ───────────────────────────────────────────────────────────── */
+
+.bl-input {
+  width: 100%;
+  box-sizing: border-box;
+  background: #000;
+  border: var(--bl-border);
+  border-radius: var(--bl-radius);
+  padding: 14px 16px;
+  color: var(--bl-white);
+  font-family: var(--bl-font);
+  font-size: 18px;
+  outline: none;
+  box-shadow: var(--bl-shadow-pink);
+  transition: border-color 0.15s;
+  -webkit-appearance: none;
+}
+
+.bl-input::placeholder {
+  color: rgba(245, 240, 255, 0.25);
+}
+
+.bl-input:focus {
+  border-color: var(--bl-pink);
+}
+
+/* ─── Buttons ──────────────────────────────────────────────────────────────── */
+
+.bl-btn {
+  font-family: var(--bl-font);
+  font-size: 18px;
+  padding: 13px 28px;
+  border: var(--bl-border);
+  border-radius: var(--bl-radius);
+  cursor: pointer;
+  box-shadow: var(--bl-shadow-md);
+  transition: transform 0.08s ease, box-shadow 0.08s ease;
+  -webkit-tap-highlight-color: transparent;
+  white-space: nowrap;
+}
+
+.bl-btn:active {
+  transform: translate(2px, 2px);
+  box-shadow: 2px 2px 0 #000;
+}
+
+.bl-btn:disabled {
+  opacity: 0.35;
+  pointer-events: none;
+}
+
+.bl-btn-pink   { background: var(--bl-pink);   color: #000; }
+.bl-btn-yellow { background: var(--bl-yellow); color: #000; }
+.bl-btn-cyan   { background: var(--bl-cyan);   color: #000; }
+.bl-btn-green  { background: var(--bl-green);  color: #000; }
+
+/* ─── Category pick buttons ────────────────────────────────────────────────── */
+
+.bl-cat-btn {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  width: 100%;
+  padding: 16px 18px;
+  background: var(--bl-surface);
+  border: var(--bl-border);
+  border-radius: var(--bl-radius);
+  box-shadow: var(--bl-shadow-cyan);
+  cursor: pointer;
+  transition: transform 0.08s ease, box-shadow 0.08s ease;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.bl-cat-btn:active {
+  transform: translate(2px, 2px);
+  box-shadow: 2px 2px 0 var(--bl-cyan);
+}
+
+.bl-cat-icon  { font-size: 26px; }
+.bl-cat-label { font-family: var(--bl-font); font-size: 19px; color: var(--bl-white); }
+
+/* ─── Truth reveal banner ──────────────────────────────────────────────────── */
+
+.bl-truth-banner {
+  background: var(--bl-green);
+  color: #000;
+  border: var(--bl-border);
+  border-radius: var(--bl-radius);
+  padding: 16px 20px;
+  box-shadow: var(--bl-shadow-lg);
+}
+
+.bl-truth-label {
+  font-size: 10px;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  opacity: 0.55;
+  margin-bottom: 4px;
+}
+
+.bl-truth-text {
+  font-family: var(--bl-font);
+  font-size: 24px;
+}
+
+/* ─── Pickers / who-picked tags ────────────────────────────────────────────── */
+
+.bl-pickers {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 6px;
+}
+
+.bl-picker-tag {
+  font-size: 10px;
+  padding: 2px 9px;
+  border-radius: 20px;
+  background: rgba(0, 0, 0, 0.25);
+  letter-spacing: 0.5px;
+}
+
+/* ─── Score delta list ─────────────────────────────────────────────────────── */
+
+.bl-delta-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 7px 0;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.07);
+}
+
+.bl-delta-name {
+  font-size: 15px;
+  color: rgba(245, 240, 255, 0.65);
+}
+
+.bl-delta-val {
+  font-size: 17px;
+  font-family: monospace;
+  font-weight: 600;
+}
+
+.bl-delta-pos  { color: var(--bl-green); }
+.bl-delta-neg  { color: var(--bl-coral); }
+.bl-delta-zero { color: rgba(245, 240, 255, 0.25); }
+
+/* ─── Leaderboard rows ─────────────────────────────────────────────────────── */
+
+.bl-lb-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 16px;
+  border: var(--bl-border);
+  border-radius: var(--bl-radius);
+  box-shadow: var(--bl-shadow-sm);
+  font-family: var(--bl-font);
+}
+
+.bl-lb-row + .bl-lb-row { margin-top: 6px; }
+
+.bl-lb-gold   { background: var(--bl-yellow); color: #000; }
+.bl-lb-silver { background: var(--bl-purple); color: var(--bl-white); }
+.bl-lb-bronze { background: var(--bl-pink);   color: #000; }
+.bl-lb-plain  { background: var(--bl-surface); color: var(--bl-white); }
+
+.bl-lb-rank  { font-size: 20px; width: 28px; text-align: center; flex-shrink: 0; }
+.bl-lb-name  { font-size: 17px; letter-spacing: 0.5px; }
+.bl-lb-lie   { font-size: 11px; opacity: 0.55; letter-spacing: 0.5px; margin-top: 1px; }
+.bl-lb-score { font-size: 20px; font-family: monospace; letter-spacing: -1px; margin-left: auto; flex-shrink: 0; }
+
+/* ─── Status dots (submission / pick progress) ─────────────────────────────── */
+
+.bl-dots {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.bl-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  border: 2px solid rgba(245, 240, 255, 0.2);
+  background: rgba(245, 240, 255, 0.1);
+  transition: background 0.3s, border-color 0.3s;
+}
+
+.bl-dot-done { background: var(--bl-green); border-color: var(--bl-green); }
+
+/* Named player dots (picking phase) */
+.bl-player-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 12px;
+  border-radius: 20px;
+  font-size: 12px;
+  border: 2px solid rgba(245, 240, 255, 0.12);
+  background: var(--bl-surface);
+  color: rgba(245, 240, 255, 0.3);
+  transition: all 0.25s;
+}
+
+.bl-player-chip-done {
+  background: rgba(0, 255, 148, 0.15);
+  border-color: var(--bl-green);
+  color: var(--bl-green);
+}
+
+.bl-player-chip-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: currentColor;
+  flex-shrink: 0;
+}
+
+/* ─── Host: blurred answer list ────────────────────────────────────────────── */
+
+.bl-host-answer {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 16px;
+  background: var(--bl-surface);
+  border: var(--bl-border);
+  border-radius: var(--bl-radius);
+  box-shadow: var(--bl-shadow-sm);
+}
+
+.bl-host-answer-text {
+  font-family: var(--bl-font);
+  font-size: 15px;
+  color: rgba(245, 240, 255, 0.5);
+  filter: blur(5px);
+  user-select: none;
+}
+
+/* ─── Waiting / submitted state ────────────────────────────────────────────── */
+
+.bl-waiting {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  padding: 28px 0;
+}
+
+.bl-waiting-icon {
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  background: rgba(0, 255, 148, 0.15);
+  border: 2px solid var(--bl-green);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 22px;
+  color: var(--bl-green);
+}
+
+.bl-waiting-text {
+  font-size: 14px;
+  color: rgba(245, 240, 255, 0.45);
+}
+
+/* ─── Section divider label ────────────────────────────────────────────────── */
+
+.bl-section {
+  font-size: 10px;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  color: rgba(245, 240, 255, 0.3);
+  margin: 20px 0 8px;
+}
+
+/* ─── Host top bar ─────────────────────────────────────────────────────────── */
+
+.bl-topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 24px;
+  border-bottom: 3px solid #000;
+  background: rgba(26, 0, 48, 0.9);
+  backdrop-filter: blur(4px);
+}
+
+.bl-topbar-game {
+  font-family: var(--bl-font);
+  font-size: 18px;
+  color: var(--bl-yellow);
+  letter-spacing: 1px;
+}
+
+.bl-topbar-phase {
+  font-size: 11px;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  color: rgba(245, 240, 255, 0.45);
+}
+
+.bl-topbar-q {
+  font-size: 11px;
+  color: rgba(245, 240, 255, 0.3);
+}
+
+/* HostTimerBar is now a fixed full-width bottom bar — fully inline-styled.
+   No CSS classes needed here. */
+
+/* ─── Game over / winner screen ────────────────────────────────────────────── */
+
+.bl-winner-emoji {
+  font-size: 64px;
+  line-height: 1;
+}
+
+.bl-winner-name {
+  font-family: var(--bl-font);
+  font-size: 36px;
+  color: var(--bl-yellow);
+  text-align: center;
+}
+
+.bl-winner-score {
+  font-size: 14px;
+  color: rgba(245, 240, 255, 0.4);
+  text-align: center;
+  margin-top: 4px;
+}
+
+/* ─── Utility spacing helpers ──────────────────────────────────────────────── */
+
+.bl-stack-2 { display: flex; flex-direction: column; gap: 8px;  }
+.bl-stack-3 { display: flex; flex-direction: column; gap: 12px; }
+.bl-stack-4 { display: flex; flex-direction: column; gap: 16px; }
+.bl-stack-6 { display: flex; flex-direction: column; gap: 24px; }
+
+.bl-mt-auto { margin-top: auto; }
+.bl-mb-4    { margin-bottom: 16px; }
+.bl-mb-5    { margin-bottom: 20px; }
+.bl-mb-6    { margin-bottom: 24px; }
+
+.bl-full-width { width: 100%; }

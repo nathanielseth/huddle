@@ -10,12 +10,13 @@ import type {
 	BlankSlatePlayerView,
 	BlankSlateClueResult,
 	BlankSlateRoundResult,
-} from "../../../../shared/games/blank-slate";
+} from "../../../../shared/games/blank-slate/index";
 import {
 	CLUE_WRITING_MS,
 	GUESSING_MS,
 	RESULT_MS,
 	MIN_PLAYERS,
+	MAX_PLAYERS,
 } from "./constants";
 import { BlankSlateActionSchema, parseBlankSlateAction } from "./schemas";
 import { scoreRound } from "./scoring";
@@ -77,12 +78,18 @@ function buildPublicState(
 		state.phase === "finished";
 	const showResult = state.phase === "result" || state.phase === "finished";
 
-	const survivingClues =
-		showClues && state.resolvedClues !== null
-			? state.resolvedClues
-					.filter((c) => !c.eliminated)
-					.map(({ playerId, raw }) => ({ playerId, text: raw }))
-			: null;
+	let survivingClues: { playerId: string; text: string }[] | null = null;
+	const resolvedByPlayerId = new Map<string, BlankSlateResolvedClue>();
+
+	if (showClues && state.resolvedClues !== null) {
+		survivingClues = [];
+		for (const clue of state.resolvedClues) {
+			resolvedByPlayerId.set(clue.playerId, clue);
+			if (!clue.eliminated) {
+				survivingClues.push({ playerId: clue.playerId, text: clue.raw });
+			}
+		}
+	}
 
 	const players: Record<string, BlankSlatePlayerView> = {};
 	for (const playerId of state.guesserRotation) {
@@ -93,7 +100,7 @@ function buildPublicState(
 			if (isGuesser) {
 				clueResult = { kind: "guesser" };
 			} else {
-				const entry = state.resolvedClues?.find((c) => c.playerId === playerId);
+				const entry = resolvedByPlayerId.get(playerId);
 				clueResult = entry
 					? entry.eliminated
 						? { kind: "eliminated", text: entry.raw }
@@ -262,8 +269,8 @@ export const blankSlateEngine: GameEngine = {
 		const state = room.gamePayload as BlankSlateServerState;
 
 		invariant(
-			room.players.size >= MIN_PLAYERS,
-			`BlankSlate requires at least ${MIN_PLAYERS} players, got ${room.players.size}`,
+			room.players.size >= MIN_PLAYERS && room.players.size <= MAX_PLAYERS,
+			`BlankSlate requires ${MIN_PLAYERS}–${MAX_PLAYERS} players, got ${room.players.size}`,
 		);
 
 		state.guesserRotation = [...room.players.keys()];

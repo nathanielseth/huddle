@@ -2,8 +2,7 @@ import type {
 	BelievableLiesPhase,
 	BelievableLiesRound,
 	BelievableLiesRoundResult,
-	BelievableLiesState,
-} from "../../../../shared/games/believable-lies";
+} from "../../../../shared/games/believable-lies/index";
 
 export interface BelievableLiesQuestion {
 	id: string;

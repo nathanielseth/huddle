@@ -4,9 +4,9 @@ import type { FaceturnsAction } from "../schemas";
 import { noOpResult } from "./types";
 import { getInteractionSpec } from "../interactions/registry";
 import { makeResult, afterAction } from "../action-results";
-import { buildPrivatePayloads } from "../state-builders";
 import { draftingAction } from "./drafting";
 import { rpsAction } from "./rps";
+import { rpsOrderChoiceAction } from "./rps-order-choice";
 import { mulliganAction } from "./mulligan";
 import { activeTurnAction } from "./active-turn";
 import {
@@ -34,7 +34,8 @@ export function dispatchAction(
 		state.eliminatedPlayers.has(playerId) &&
 		state.phase !== "drafting" &&
 		state.phase !== "mulligan" &&
-		state.phase !== "rps"
+		state.phase !== "rps" &&
+		state.phase !== "rps_order_choice"
 	) {
 		return makeResult(state, ctx.room.timer?.duration ?? null);
 	}
@@ -45,6 +46,10 @@ export function dispatchAction(
 
 	if (state.phase === "rps") {
 		return rpsAction(state, player, playerId, action, ctx);
+	}
+
+	if (state.phase === "rps_order_choice") {
+		return rpsOrderChoiceAction(state, player, playerId, action, ctx);
 	}
 
 	if (state.phase === "mulligan") {
@@ -101,9 +106,7 @@ function dispatchPendingInteraction(
 		case "after_action":
 			return afterAction(state);
 		case "raw_result":
-			return makeResult(state, ctx.room.timer?.duration ?? null, {
-				privatePayloads: buildPrivatePayloads(state),
-			});
+			return makeResult(state, ctx.room.timer?.duration ?? null);
 		case "custom":
 			return outcome.result;
 	}

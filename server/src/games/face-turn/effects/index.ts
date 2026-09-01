@@ -20,7 +20,7 @@ import { readPeekHandlers } from "./read-peek";
 import { moveChainHandlers } from "./move-chain";
 import { miscHandlers } from "./misc";
 
-// compile error if any effect type lacks a handler; see per-category satisfies usage
+// compile error if any effect type lacks a handler
 const assembledHandlers = {
 	...damageHandlers,
 	...strikeHandlers,
@@ -100,7 +100,7 @@ export { recomputePassives };
 export { resolveReflectedSlowMoveDamage } from "./move-chain";
 export {
 	turnCrewAtSlot,
-	unturnCrewAtSlot,
+	hideCrewAtSlot,
 	firstTurnedSlot,
 	firstUnturnedSlot,
 	isStrikeDefendedByTerminal,
@@ -122,6 +122,7 @@ export {
 	applySupplyDropOnCollect,
 	applyTrickleDownOnCollect,
 	applyCoolGuyDamageOnMovePlayed,
+	stealCashFromVictim,
 } from "./cash";
 export {
 	resolveWatcherStealPick,
@@ -134,10 +135,11 @@ export {
 	resolveChooseFromDiscard,
 	resolveDigDeepPick,
 	resolveSwitchUpPick,
-	resolveTacticalSupportUnturn,
-	resolveWatcherUnturn,
+	resolveTacticalSupportHide,
+	resolveWatcherHide,
 	resolveTagOutPick,
 	resolveTooBigSwapPick,
+	resolveBelladonnaCopyPick,
 	maybeOpenBearBonesOffer,
 	resolveBearBonesBonusStrike,
 	resolveBackgroundCheckGuess,
@@ -154,4 +156,6 @@ export {
 	playerHasClass,
 	requiresStrictAllyTarget,
 	resolveCrewClass,
+	validateMoveTargetScope,
+	type TargetScopeCheck,
 } from "./shared";

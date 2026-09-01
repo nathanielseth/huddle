@@ -9,7 +9,7 @@ import type {
 	CybsecsState,
 	CybsecsPlayerView,
 	CybsecsSecret,
-} from "../../../../shared/games/cybersecs";
+} from "../../../../shared/games/breachpoint/index";
 import type { CybsecsServerState, CybsecsServerAction } from "./types";
 import { C } from "./constants";
 import { pickMode, assignRoles, buildRoleIndex } from "./roles";
@@ -18,6 +18,16 @@ import { CybsecsActionSchema } from "./schemas";
 import { shuffle } from "../lib/random";
 import { makeTimer } from "../lib/timer";
 import { invariant } from "../lib/assert";
+
+// ─── exhaustiveness helper ───────────────────────────────────────────────────
+
+// Throws at runtime if an unhandled case is ever reached, and forces a TS
+// error at compile time if a new phase is added without a matching case.
+function assertNever(x: never): never {
+	throw new Error(`Unhandled case: ${String(x)}`);
+}
+
+// ─── secrets ─────────────────────────────────────────────────────────────────
 
 function playerSecret(
 	state: CybsecsServerState,
@@ -50,6 +60,8 @@ function allSecrets(state: CybsecsServerState): Map<string, CybsecsSecret> {
 	return out;
 }
 
+// ─── public state builder ────────────────────────────────────────────────────
+
 function buildPublicState(state: CybsecsServerState): CybsecsState {
 	const revealVotes = state.phase !== "voting";
 	const nominatedSet = new Set(state.nominatedTeam);
@@ -78,7 +90,7 @@ function buildPublicState(state: CybsecsServerState): CybsecsState {
 		if (p.skipVote === true) skipVotedIds.push(id);
 	}
 
-	// apparent counts exclude obfuscated missions. true counts via getWinCounts
+	// Apparent counts exclude obfuscated missions; true counts via getWinCounts.
 	let apparentSecureds = 0;
 	let apparentHacked = 0;
 	for (const r of state.missionResults) {
@@ -109,6 +121,8 @@ function buildPublicState(state: CybsecsServerState): CybsecsState {
 	};
 }
 
+// ─── result factory ──────────────────────────────────────────────────────────
+
 function makeResult(
 	state: CybsecsServerState,
 	timer: GameTimer | null,
@@ -119,12 +133,12 @@ function makeResult(
 		serverPayload: state,
 		publicPayload: buildPublicState(state),
 		timer,
-		...(privatePayloads !== undefined && {
-			privatePayloads: privatePayloads as Map<string, unknown>,
-		}),
+		...(privatePayloads !== undefined && { privatePayloads }),
 		...(roomPhase !== undefined && { roomPhase }),
 	};
 }
+
+// ─── phase transitions ───────────────────────────────────────────────────────
 
 function enterTalking(state: CybsecsServerState): GameTimer {
 	state.phase = "talking";
@@ -150,7 +164,7 @@ function enterMission(state: CybsecsServerState): GameTimer {
 	return makeTimer(C.MISSION_MS);
 }
 
-// fills team from leader's position clockwise on timer expiry
+// Fills team from leader's position clockwise on timer expiry.
 function autoNominate(state: CybsecsServerState): void {
 	const { playerOrder, leaderIndex, teamSize } = state;
 	const candidates = [
@@ -160,7 +174,9 @@ function autoNominate(state: CybsecsServerState): void {
 	state.nominatedTeam = candidates.slice(0, teamSize);
 }
 
-// returns null to signal caller should fall through to noOp
+// ─── action helpers ──────────────────────────────────────────────────────────
+
+// Returns null to signal caller should fall through to noOp.
 function handleToggleObfuscate(
 	state: CybsecsServerState,
 	playerId: string,
@@ -183,7 +199,7 @@ function handleToggleObfuscate(
 	return makeResult(state, currentTimer, payloads);
 }
 
-// builds private payloads for player IDs returned by commitMissionResult
+// Builds private payloads for player IDs returned by commitMissionResult.
 function collectSecretPayloads(
 	state: CybsecsServerState,
 	updatedIds: Set<string>,
@@ -196,6 +212,8 @@ function collectSecretPayloads(
 	}
 	return payloads.size > 0 ? payloads : undefined;
 }
+
+// ─── mission resolution ──────────────────────────────────────────────────────
 
 function executeMission(state: CybsecsServerState): EngineResult {
 	const resolution = resolveMission(state);
@@ -228,7 +246,6 @@ function resolveVoting(state: CybsecsServerState): EngineResult {
 	return makeResult(state, enterNominating(state));
 }
 
-// win detection reads true counters via getWinCounts, never apparent public values
 function afterMissionResult(state: CybsecsServerState): EngineResult {
 	const { secureds, hacked } = getWinCounts(state);
 
@@ -443,10 +460,8 @@ export const cybsecsEngine: GameEngine & GameEngineWithSecrets = {
 			case "game_over":
 				return noOp();
 
-			default: {
-				const _unreachable: never = state.phase;
-				return noOp();
-			}
+			default:
+				return assertNever(state.phase);
 		}
 	},
 
@@ -502,10 +517,8 @@ export const cybsecsEngine: GameEngine & GameEngineWithSecrets = {
 			case "game_over":
 				return makeResult(state, null);
 
-			default: {
-				const _unreachable: never = state.phase;
-				return makeResult(state, null);
-			}
+			default:
+				return assertNever(state.phase);
 		}
 	},
 

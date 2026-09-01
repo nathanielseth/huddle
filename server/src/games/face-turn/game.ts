@@ -10,6 +10,7 @@ import type {
 	ResolutionResult,
 	WinCondition,
 	MoveChainEntry,
+	MoveChainResolutionStep,
 } from "../../../../shared/games/face-turn/types";
 import {
 	BOSS_MAP,
@@ -45,12 +46,13 @@ import {
 	applyTrickleDownOnCollect,
 	applyCoolGuyDamageOnMovePlayed,
 	executedPlayerIdFrom,
-	unturnCrewAtSlot,
+	hideCrewAtSlot,
 	processWarrantOfArrestTicks,
 } from "./effects";
 import type { StrikeOrExecuteOutcome } from "./effects";
 import { shuffle } from "../lib/random";
 import { makeEmptyDerivedStats } from "./derived";
+import { pushLog } from "./log";
 
 export function markDirty(state: FaceturnServerState): void {
 	state._publicStateCacheValid = false;
@@ -449,6 +451,12 @@ export function startTurn(state: FaceturnServerState, playerId: string): void {
 	state.activePlayerId = playerId;
 	state.pendingAction = null;
 
+	pushLog(state, {
+		kind: "turn_start",
+		playerId,
+		roundNumber: state.roundNumber,
+	});
+
 	const player = state.players.get(playerId)!;
 	player.classActionUsedThisTurn = false;
 	player.ratQueenDrawUsedThisTurn = false;
@@ -518,10 +526,15 @@ export function swapTurn(state: FaceturnServerState): void {
 	startTurn(state, nextPlayerId);
 }
 
-function eliminatePlayer(state: FaceturnServerState, playerId: string): void {
+function eliminatePlayer(
+	state: FaceturnServerState,
+	playerId: string,
+	cause: "boss_hp_zero_execution" | "boss_hp_zero_damage",
+): void {
 	if (state.eliminatedPlayers.has(playerId)) return;
 
 	state.eliminatedPlayers.add(playerId);
+	pushLog(state, { kind: "player_eliminated", playerId, cause });
 
 	const player = state.players.get(playerId);
 	if (player) {
@@ -637,7 +650,10 @@ export function checkWinConditions(
 		return resolveRoundLimitTiebreaker(state, living);
 	}
 
-	const toEliminate: { playerId: string; winCondition: WinCondition }[] = [];
+	const toEliminate: {
+		playerId: string;
+		winCondition: "boss_hp_zero_execution" | "boss_hp_zero_damage";
+	}[] = [];
 	for (const player of living) {
 		if (player.bossHp <= 0) {
 			toEliminate.push({
@@ -650,8 +666,8 @@ export function checkWinConditions(
 		}
 	}
 
-	for (const { playerId } of toEliminate) {
-		eliminatePlayer(state, playerId);
+	for (const { playerId, winCondition } of toEliminate) {
+		eliminatePlayer(state, playerId, winCondition);
 	}
 
 	if (toEliminate.length > 0) {
@@ -683,9 +699,10 @@ export function applyWin(
 	state.winnerId = winnerId;
 	state.winCondition = winCondition;
 	state.phase = "finished";
+	pushLog(state, { kind: "game_won", winnerId, winCondition });
 }
 
-// list actor's own slots first so ui defaults to unturning own crew
+// list actor's own slots first so ui defaults to hiding own crew
 function watcherEligibleTargets(
 	state: FaceturnServerState,
 	actor: FaceturnServerPlayer,
@@ -744,7 +761,12 @@ export function resolveChallenge(
 	const challenger = state.players.get(challengerId)!;
 
 	if (!pending.actorWasBluffing) {
-		const outcome = resolveStrikeOrExecute(state, challenger, null, false);
+		const outcome = resolveStrikeOrExecute(
+			state,
+			challenger,
+			pending.actorId,
+			false,
+		);
 
 		// challenger gets a face‑up penalty; if 2+ face‑down crew exist, resolveStrikeOrExecute opens a choose_crew_to_turn interaction
 		// tag it as pending, and dont run executePendingAction until it closes to avoid overwriting
@@ -765,7 +787,7 @@ export function resolveChallenge(
 				const eligibleTargets = watcherEligibleTargets(state, actor);
 				if (eligibleTargets.length > 0) {
 					state.pendingInteraction = {
-						type: "watcher_unturn_offer",
+						type: "watcher_hide_offer",
 						actorId: pending.actorId,
 						eligibleTargets,
 					};
@@ -773,14 +795,16 @@ export function resolveChallenge(
 			}
 		}
 
-		// extortion: unconditional cash grant, no interaction of its own to
-		// conflict with — deliberately not gated behind
-		// pendingInteraction === null the way Watcher is, since that gate
-		// exists purely so Watcher doesn't stack a second interaction on
-		// top of an already-open choose_crew_to_turn.
 		if (actor.derived.cashOnChallengeWinAmount > 0) {
 			actor.cash += actor.derived.cashOnChallengeWinAmount;
 		}
+
+		pushLog(state, {
+			kind: "challenge_resolved",
+			challengerId,
+			actorId: pending.actorId,
+			success: false,
+		});
 
 		return {
 			actionProceeds: true,
@@ -827,7 +851,7 @@ export function resolveChallenge(
 		const eligibleTargets = watcherEligibleTargets(state, challenger);
 		if (eligibleTargets.length > 0) {
 			state.pendingInteraction = {
-				type: "watcher_unturn_offer",
+				type: "watcher_hide_offer",
 				actorId: challenger.playerId,
 				eligibleTargets,
 			};
@@ -841,6 +865,13 @@ export function resolveChallenge(
 	if (challenger.derived.cashOnChallengeWinAmount > 0) {
 		challenger.cash += challenger.derived.cashOnChallengeWinAmount;
 	}
+
+	pushLog(state, {
+		kind: "challenge_resolved",
+		challengerId,
+		actorId: pending.actorId,
+		success: true,
+	});
 
 	return {
 		actionProceeds: false,
@@ -891,16 +922,15 @@ export function executePendingAction(
 			applyTrickleDownOnCollect(state, actor, C.COLLECT_CASH_GAIN);
 			return null;
 		}
-		case "class_action_unturn": {
-			const unturnTarget = pending.targetPlayerId
+		case "class_action_hide": {
+			const hideTarget = pending.targetPlayerId
 				? (state.players.get(pending.targetPlayerId) ?? actor)
 				: actor;
 			const slot =
-				(pending.targetAllySlot as 0 | 1 | null) ??
-				firstTurnedSlot(unturnTarget);
-			if (slot !== null && unturnTarget.crewIds[slot]) {
-				unturnCrewAtSlot(state, unturnTarget, slot);
-				recomputePassives(unturnTarget, state);
+				(pending.targetAllySlot as 0 | 1 | null) ?? firstTurnedSlot(hideTarget);
+			if (slot !== null && hideTarget.crewIds[slot]) {
+				hideCrewAtSlot(state, hideTarget, slot);
+				recomputePassives(hideTarget, state);
 			}
 			return null;
 		}
@@ -916,6 +946,7 @@ interface MoveTarget {
 	targetAllySlot?: number | undefined;
 	targetPlayerId?: string | undefined;
 	targetActiveMoveSlot?: number | undefined;
+	placeInActiveSlot?: number | undefined;
 }
 
 export function executeMove(
@@ -923,14 +954,29 @@ export function executeMove(
 	actor: FaceturnServerPlayer,
 	moveId: string,
 	targets: MoveTarget = {},
+	damageAccumulator?: { value: number },
 ): void {
 	const move = getMove(moveId);
+
+	pushLog(state, {
+		kind: "move_played",
+		actorId: actor.playerId,
+		moveId,
+		targetPlayerId: targets.targetPlayerId ?? null,
+	});
 
 	actor.costOverrides.delete(moveId);
 
 	let claimedSlot = -1;
 	if (move.moveType === "active") {
-		claimedSlot = actor.activeMoves.findIndex((s) => s === null);
+		const requestedSlot = targets.placeInActiveSlot;
+		claimedSlot =
+			requestedSlot !== undefined &&
+			requestedSlot >= 0 &&
+			requestedSlot < actor.activeMoves.length &&
+			actor.activeMoves[requestedSlot] === null
+				? requestedSlot
+				: actor.activeMoves.findIndex((s) => s === null);
 		if (claimedSlot !== -1) {
 			actor.activeMoves[claimedSlot] = moveId;
 		}
@@ -944,6 +990,7 @@ export function executeMove(
 		targetPlayerId: targets.targetPlayerId,
 		targetActiveMoveSlot: targets.targetActiveMoveSlot,
 		moveId,
+		damageAccumulator,
 	});
 
 	actor.totalMovesPlayed++;
@@ -986,6 +1033,9 @@ export function executeMove(
 	actor.playedMoveThisTurn = true;
 }
 
+// playing a slow move opens the chain and immediately hands priority to
+// the target — it's still the caster's turn, but the target now has the
+// only window to act (respond with their own slow move, or pass).
 export function openMoveChain(
 	state: FaceturnServerState,
 	casterId: string,
@@ -996,11 +1046,13 @@ export function openMoveChain(
 		participants: [casterId, targetId],
 		stack: [entry],
 		responderId: targetId,
-		stackDepthAtLastSlow: 1,
 	};
 	state.phase = "move_chain_window";
 }
 
+// pushing a slow move always hands priority to the other participant —
+// you can't stack a second slow move on your own without them getting a
+// chance to respond first.
 export function pushToMoveChain(
 	state: FaceturnServerState,
 	entry: MoveChainEntry,
@@ -1009,32 +1061,14 @@ export function pushToMoveChain(
 	const chain = state.moveChain;
 	chain.stack.push(entry);
 	const [p1, p2] = chain.participants;
-	chain.responderId = chain.responderId === p1 ? p2 : p1;
-	chain.stackDepthAtLastSlow = chain.stack.length;
-}
-
-export function recordChainPass(
-	state: FaceturnServerState,
-	passerId: string,
-): boolean {
-	if (!state.moveChain) return false;
-	const chain = state.moveChain;
-
-	if (passerId !== chain.responderId) return false;
-
-	if (chain.stack.length === chain.stackDepthAtLastSlow) {
-		return true;
-	}
-
-	const [p1, p2] = chain.participants;
-	chain.responderId = chain.responderId === p1 ? p2 : p1;
-	chain.stackDepthAtLastSlow = chain.stack.length;
-	return false;
+	chain.responderId = entry.actorId === p1 ? p2 : p1;
 }
 
 export function resolveMoveChainFull(state: FaceturnServerState): void {
 	if (!state.moveChain) return;
-	const { stack } = state.moveChain;
+	const { stack, participants } = state.moveChain;
+
+	const steps: MoveChainResolutionStep[] = [];
 
 	while (stack.length > 0) {
 		const entry = stack.pop()!;
@@ -1057,12 +1091,18 @@ export function resolveMoveChainFull(state: FaceturnServerState): void {
 			actor.totalCardsDiscarded++;
 			actor.totalMovesPlayed++;
 
+			let negatedMoveId: string | null = null;
+			let negatedActorId: string | null = null;
+			let reflectedDamage: number | null = null;
+
 			if (stack.length > 0) {
 				const targeted = stack.pop()!;
 				const targetedActor = state.players.get(targeted.actorId);
 				if (targetedActor) {
+					negatedMoveId = targeted.moveId;
+					negatedActorId = targeted.actorId;
 					if (isReflect) {
-						resolveReflectedSlowMoveDamage(
+						reflectedDamage = resolveReflectedSlowMoveDamage(
 							state,
 							targeted.moveId,
 							targeted.actorId,
@@ -1073,13 +1113,55 @@ export function resolveMoveChainFull(state: FaceturnServerState): void {
 					targetedActor.totalMovesPlayed++;
 				}
 			}
+
+			steps.push(
+				isReflect
+					? {
+							kind: "reflected",
+							negatorMoveId: entry.moveId,
+							negatorActorId: entry.actorId,
+							negatedMoveId,
+							negatedActorId,
+							reflectedDamage,
+						}
+					: {
+							kind: "negated",
+							negatorMoveId: entry.moveId,
+							negatorActorId: entry.actorId,
+							negatedMoveId,
+							negatedActorId,
+						},
+			);
 			continue;
 		}
 
-		executeMove(state, actor, entry.moveId, {
-			targetCrewSlot: entry.targetCrewSlot ?? undefined,
-			targetAllySlot: entry.targetAllySlot ?? undefined,
-			targetPlayerId: entry.targetPlayerId ?? undefined,
+		const damageAccumulator = { value: 0 };
+		executeMove(
+			state,
+			actor,
+			entry.moveId,
+			{
+				targetCrewSlot: entry.targetCrewSlot ?? undefined,
+				targetAllySlot: entry.targetAllySlot ?? undefined,
+				targetPlayerId: entry.targetPlayerId ?? undefined,
+			},
+			damageAccumulator,
+		);
+		steps.push({
+			kind: "executed",
+			moveId: entry.moveId,
+			actorId: entry.actorId,
+			damageDealt: damageAccumulator.value > 0 ? damageAccumulator.value : null,
+		});
+	}
+
+	state.lastChainResolution = { steps };
+
+	if (steps.length > 0) {
+		pushLog(state, {
+			kind: "move_chain_resolved",
+			participants,
+			steps,
 		});
 	}
 }
@@ -1122,7 +1204,7 @@ export function effectiveCost(
 
 export function getClassActionCost(
 	player: FaceturnServerPlayer,
-	action: "strike" | "defend" | "collect" | "unturn",
+	action: "strike" | "defend" | "collect" | "hide",
 ): number {
 	const base = (() => {
 		switch (action) {
@@ -1132,8 +1214,8 @@ export function getClassActionCost(
 				return C.DEFEND_CASH_COST;
 			case "collect":
 				return C.COLLECT_CASH_COST;
-			case "unturn":
-				return C.UNTURN_CASH_COST;
+			case "hide":
+				return C.HIDE_CASH_COST;
 		}
 	})();
 	return Math.max(0, base - player.derived.classActionCostReduction);
@@ -1141,12 +1223,12 @@ export function getClassActionCost(
 
 export function computeActorWasBluffing(
 	actor: FaceturnServerPlayer,
-	action: "strike" | "collect" | "unturn" | "defend",
+	action: "strike" | "collect" | "hide" | "defend",
 ): boolean {
 	const requiredClass = {
 		strike: "striker",
 		collect: "collector",
-		unturn: "unturner",
+		hide: "hider",
 		defend: "defender",
 	} as const;
 	return !playerHasClass(actor, requiredClass[action]);

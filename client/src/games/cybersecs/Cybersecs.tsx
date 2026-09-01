@@ -9,7 +9,7 @@ import { Mission } from "./phases/Mission";
 import { MissionResult } from "./phases/MissionResult";
 import { Doxxing } from "./phases/Doxxing";
 import { GameOver } from "./phases/GameOver";
-import type { CybsecsPhase } from "@shared/games/cybersecs";
+import type { CybsecsPhase } from "@shared/games/breachpoint/index";
 import type { FC } from "react";
 
 const PHASES: Record<CybsecsPhase, FC> = {

@@ -4,7 +4,7 @@ import {
 	rank,
 	rankDescription,
 } from "@pokertools/evaluator";
-import type { HandResult } from "../../../../shared/games/poker";
+import type { HandResult } from "../../../../shared/games/poker/index";
 import type {
 	PokerServerState,
 	PokerServerPlayer,

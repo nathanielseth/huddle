@@ -1,37 +1,42 @@
-import { motion } from "motion/react";
+import { m } from "motion/react";
 import { useSussyState } from "../hooks/useSussyState";
-import { cn } from "../../../utils/cn";
+import { cn } from "../../../lib/utils/cn";
 
 export function Finished() {
 	const { sussy, players } = useSussyState();
 	if (!sussy) return null;
 
-	// Sort players by score descending
-	const ranked = [...players].sort((a, b) => {
+	// Fix: js-tosorted-immutable — toSorted() instead of [...players].sort()
+	const ranked = players.toSorted((a, b) => {
 		const sa = sussy.players[a.id]?.score ?? 0;
 		const sb = sussy.players[b.id]?.score ?? 0;
 		return sb - sa;
 	});
 
-	// Best Faker: most totalSurvived
-	const bestFaker = [...players].sort((a, b) => {
-		const sa = sussy.players[a.id]?.survivedCount ?? 0;
-		const sb = sussy.players[b.id]?.survivedCount ?? 0;
-		return sb - sa;
-	})[0];
+	// Fix: js-min-max-loop + js-tosorted-immutable
+	// Instead of sorting the whole list just to read [0], find the max value
+	// in one O(n) pass with Math.max, then find the player who holds it.
+	const maxSurvived = Math.max(
+		0,
+		...players.map((p) => sussy.players[p.id]?.survivedCount ?? 0),
+	);
+	const bestFaker = players.find(
+		(p) => (sussy.players[p.id]?.survivedCount ?? 0) === maxSurvived,
+	);
 
-	// Best Sleuth: most totalSleuthed
-	const bestSleuth = [...players].sort((a, b) => {
-		const sa = sussy.players[a.id]?.sleuthedCount ?? 0;
-		const sb = sussy.players[b.id]?.sleuthedCount ?? 0;
-		return sb - sa;
-	})[0];
+	const maxSleuthed = Math.max(
+		0,
+		...players.map((p) => sussy.players[p.id]?.sleuthedCount ?? 0),
+	);
+	const bestSleuth = players.find(
+		(p) => (sussy.players[p.id]?.sleuthedCount ?? 0) === maxSleuthed,
+	);
 
 	const medals = ["🥇", "🥈", "🥉"];
 
 	return (
 		<div className="flex flex-col min-h-screen px-5 py-10 gap-8">
-			<motion.div
+			<m.div
 				className="flex flex-col gap-1"
 				initial={{ opacity: 0, y: 12 }}
 				animate={{ opacity: 1, y: 0 }}
@@ -43,7 +48,7 @@ export function Finished() {
 				<h1 className="font-display text-5xl font-black uppercase text-white leading-none">
 					Final Scores
 				</h1>
-			</motion.div>
+			</m.div>
 
 			{/* Leaderboard */}
 			<div className="flex flex-col gap-2">
@@ -51,7 +56,7 @@ export function Finished() {
 					const sp = sussy.players[p.id];
 					const isFirst = i === 0;
 					return (
-						<motion.div
+						<m.div
 							key={p.id}
 							className={cn(
 								"flex items-center gap-4 px-4 py-3 rounded-2xl border transition-all",
@@ -84,13 +89,13 @@ export function Finished() {
 							>
 								{sp?.score ?? 0}
 							</span>
-						</motion.div>
+						</m.div>
 					);
 				})}
 			</div>
 
 			{/* Awards */}
-			<motion.div
+			<m.div
 				className="flex flex-col gap-3"
 				initial={{ opacity: 0 }}
 				animate={{ opacity: 1 }}
@@ -115,7 +120,7 @@ export function Finished() {
 						color="violet"
 					/>
 				</div>
-			</motion.div>
+			</m.div>
 		</div>
 	);
 }

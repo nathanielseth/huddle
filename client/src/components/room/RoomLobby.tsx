@@ -1,4 +1,9 @@
-import { Suspense, useState, type ComponentType, type LazyExoticComponent } from "react";
+import {
+	Suspense,
+	useState,
+	type ComponentType,
+	type LazyExoticComponent,
+} from "react";
 import { useNavigate } from "react-router";
 import { m, AnimatePresence } from "motion/react";
 import { LogOut, Copy, Check } from "lucide-react";
@@ -18,6 +23,8 @@ export function RoomLobby() {
 	const leaveRoom = useGameStore((s) => s.leaveRoom);
 	const startGame = useGameStore((s) => s.startGame);
 	const kickPlayer = useGameStore((s) => s.kickPlayer);
+	const addCpuSeat = useGameStore((s) => s.addCpuSeat);
+	const removeCpuSeat = useGameStore((s) => s.removeCpuSeat);
 
 	const [copied, setCopied] = useState(false);
 
@@ -36,7 +43,9 @@ export function RoomLobby() {
 	function handleCopy() {
 		void navigator.clipboard.writeText(roomCode);
 		setCopied(true);
-		setTimeout(() => { setCopied(false); }, 2000);
+		setTimeout(() => {
+			setCopied(false);
+		}, 2000);
 	}
 
 	return (
@@ -77,6 +86,9 @@ export function RoomLobby() {
 						onStart={startGame}
 						onKick={kickPlayer}
 						ConfigPanel={gameEntry?.config ?? null}
+						supportsCpuSeats={game?.supportsCpuSeats ?? false}
+						onAddCpu={addCpuSeat}
+						onRemoveCpu={removeCpuSeat}
 					/>
 				) : (
 					<GuestLobby
@@ -108,6 +120,9 @@ interface HostLobbyProps {
 	onStart: () => void;
 	onKick: (id: string) => void;
 	ConfigPanel: LazyExoticComponent<ComponentType> | null;
+	supportsCpuSeats: boolean;
+	onAddCpu: () => void;
+	onRemoveCpu: (id: string) => void;
 }
 
 function HostLobby({
@@ -120,6 +135,9 @@ function HostLobby({
 	onStart,
 	onKick,
 	ConfigPanel,
+	supportsCpuSeats,
+	onAddCpu,
+	onRemoveCpu,
 }: HostLobbyProps) {
 	return (
 		<>
@@ -189,14 +207,29 @@ function HostLobby({
 				</p>
 			</m.div>
 
-			<PlayerList players={players} playerId={null} onKick={onKick} />
+			<PlayerList
+				players={players}
+				playerId={null}
+				onKick={onKick}
+				onRemoveCpu={onRemoveCpu}
+			/>
+
+			{supportsCpuSeats && (
+				<button
+					type="button"
+					onClick={onAddCpu}
+					className="flex items-center gap-2 px-4 h-9 rounded-lg text-xs font-semibold uppercase tracking-widest text-white/50 bg-white/5 hover:bg-white/10 hover:text-white/80 transition-all cursor-pointer"
+				>
+					+ Add CPU Player
+				</button>
+			)}
 
 			{ConfigPanel && (
 				<Suspense fallback={null}>
 					<ConfigPanel />
 				</Suspense>
 			)}
-			
+
 			<StartButton
 				canStart={canStart}
 				minPlayers={minPlayers}

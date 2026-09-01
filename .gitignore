@@ -27,3 +27,50 @@ prisma/dev.db
 *.py
 
 .env
+# Tests
+**/__tests__/
+*.test.ts
+*.test.tsx
+*.spec.ts
+*.spec.tsx
+
+# Sandboxes
+**/__sandbox__/**
+
+# Simulations / balance results
+server/scripts/faceturn-sim/
+server/src/games/poker/sim/
+server/src/games/sabong/calibrate.ts
+shared/dev/faceturn-sim-protocol.ts
+results/
+server/results/
+
+# Docs
+docs/
+
+# Card art
+client/public/assets/games/**/cards/**
+
+# Tests
+**/__tests__/
+*.test.ts
+*.test.tsx
+*.spec.ts
+*.spec.tsx
+
+# Sandboxes
+**/__sandbox__/**
+
+# Simulations / balance results
+server/scripts/faceturn-sim/
+server/src/games/poker/sim/
+server/src/games/sabong/calibrate.ts
+shared/dev/faceturn-sim-protocol.ts
+results/
+server/results/
+
+# Docs
+docs/
+
+# Card art
+client/public/assets/games/**/cards/**

@@ -410,6 +410,15 @@ export class GameRunner {
 				}
 			}
 		}
+
+		if (validated.actionRejections) {
+			for (const [playerId, reason] of validated.actionRejections) {
+				const player = room.players.get(playerId);
+				if (player?.socketId) {
+					io.to(player.socketId).emit("action_rejected", reason);
+				}
+			}
+		}
 	}
 
 	private scheduleTimer(

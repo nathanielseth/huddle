@@ -2,7 +2,7 @@ import type {
 	GameMode,
 	MissionResult,
 	EhIntel,
-} from "../../../../shared/games/cybersecs";
+} from "../../../../shared/games/breachpoint/index";
 import type {
 	CybsecsServerState,
 	CybsecsServerPlayer,

@@ -201,9 +201,9 @@ const CPU_NAMES = [
 
 function getRandomCpuName(room: Room): string {
 	const usedNames = new Set(
-		[...room.players.values()]
-			.filter((player) => player.isCpu)
-			.map((player) => player.name),
+		[...room.players.values()].flatMap((player) =>
+			player.isCpu ? [player.name] : [],
+		),
 	);
 
 	const availableNames = CPU_NAMES.filter((name) => !usedNames.has(name));
@@ -212,10 +212,6 @@ function getRandomCpuName(room: Room): string {
 	const index = Math.floor(Math.random() * names.length);
 
 	return names[index]!;
-}
-
-export function isCpuPlayerId(playerId: string): boolean {
-	return playerId.startsWith(CPU_ID_PREFIX);
 }
 
 export function addCpuSeat(room: Room, name?: string): string {

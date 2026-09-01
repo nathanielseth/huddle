@@ -1,4 +1,4 @@
-import { motion, AnimatePresence } from "motion/react";
+import { m, AnimatePresence } from "motion/react";
 import { useState } from "react";
 import { useSabongState } from "../hooks/useSabongState";
 import { ManokCard } from "../components/ManokCard";
@@ -74,7 +74,7 @@ export function BettingPlayer() {
 					<p className="text-[10px] font-bold tracking-widest uppercase text-white/30">
 						Pick a side
 					</p>
-					<motion.div
+					<m.div
 						layoutId="active-match-slot"
 						layout
 						className="grid grid-cols-2 gap-8 flex-1 items-start"
@@ -83,16 +83,20 @@ export function BettingPlayer() {
 						<ManokCard
 							manok={fighter1}
 							selected={selectedId === fighter1.id}
-							onClick={() => handleSelect(fighter1.id)}
+							onClick={() => {
+								handleSelect(fighter1.id);
+							}}
 							disabled={isLocked}
 						/>
 						<ManokCard
 							manok={fighter2}
 							selected={selectedId === fighter2.id}
-							onClick={() => handleSelect(fighter2.id)}
+							onClick={() => {
+								handleSelect(fighter2.id);
+							}}
 							disabled={isLocked}
 						/>
-					</motion.div>
+					</m.div>
 				</div>
 
 				{/* who's betting on who */}
@@ -105,10 +109,18 @@ export function BettingPlayer() {
 							const roomPlayer = players.find((p) => p.id === sp.playerId);
 							if (!roomPlayer) return null;
 							const isMe = sp.playerId === playerId;
+							// other players' bets are hidden until they lock (blind commit);
+							// my own pending bet comes from local selection state instead
+							const bet =
+								isMe && !isLocked
+									? selectedId
+										? { manokId: selectedId, amount }
+										: null
+									: sp.currentBet;
 							const side =
-								sp.currentBet?.manokId === fighter1.id
+								bet?.manokId === fighter1.id
 									? fighter1.name
-									: sp.currentBet?.manokId === fighter2.id
+									: bet?.manokId === fighter2.id
 										? fighter2.name
 										: null;
 
@@ -134,9 +146,9 @@ export function BettingPlayer() {
 											)}
 										>
 											{side}
-											{sp.currentBet && (
+											{bet && (
 												<span className="ml-1 font-normal text-[10px] opacity-70">
-													₱{sp.currentBet.amount}
+													₱{bet.amount}
 												</span>
 											)}
 										</span>
@@ -155,7 +167,7 @@ export function BettingPlayer() {
 				{/* amount slider */}
 				<AnimatePresence>
 					{selectedId && !isLocked && (
-						<motion.div
+						<m.div
 							className="flex flex-col gap-4 p-4 rounded-2xl border border-border bg-surface-raised"
 							initial={{ opacity: 0, y: 8 }}
 							animate={{ opacity: 1, y: 0 }}
@@ -177,6 +189,7 @@ export function BettingPlayer() {
 								max={balance}
 								value={amount}
 								onChange={handleSlider}
+								aria-label="Bet amount"
 								className="w-full accent-orange-400 cursor-pointer"
 							/>
 
@@ -211,7 +224,7 @@ export function BettingPlayer() {
 									);
 								})}
 							</div>
-						</motion.div>
+						</m.div>
 					)}
 				</AnimatePresence>
 			</div>
@@ -220,16 +233,16 @@ export function BettingPlayer() {
 			<div className="sticky bottom-0 border-t border-border bg-bg/95 backdrop-blur-md px-4 py-4">
 				<AnimatePresence mode="wait">
 					{isLocked ? (
-						<motion.div
+						<m.div
 							key="locked"
 							className="flex items-center justify-center gap-2 h-12 rounded-xl bg-white/5 text-white/40 text-sm font-semibold"
 							initial={{ opacity: 0 }}
 							animate={{ opacity: 1 }}
 						>
 							✓ Bet locked - waiting for others
-						</motion.div>
+						</m.div>
 					) : (
-						<motion.button
+						<m.button
 							key="lock"
 							type="button"
 							onClick={handleLock}
@@ -244,7 +257,7 @@ export function BettingPlayer() {
 							animate={{ opacity: 1 }}
 						>
 							{selectedId ? `Lock Bet — ₱${amount}` : "Pick a Side First"}
-						</motion.button>
+						</m.button>
 					)}
 				</AnimatePresence>
 			</div>

@@ -1,8 +1,8 @@
 import { useState, useEffect } from "react";
-import { motion, AnimatePresence } from "motion/react";
+import { m, AnimatePresence } from "motion/react";
 import { useSussyState } from "../hooks/useSussyState";
 import { getTaskMeta } from "../constants";
-import { cn } from "../../../utils/cn";
+import { cn } from "../../../lib/utils/cn";
 
 type Step = 0 | 1 | 2 | 3;
 const STEP_MS: Record<Step, number> = { 0: 0, 1: 1800, 2: 3500, 3: 5200 };
@@ -13,9 +13,9 @@ export function RoundResult() {
 
 	useEffect(() => {
 		const timers = ([1, 2, 3] as const).map((s) =>
-			setTimeout(() => setStep(s), STEP_MS[s]),
+			setTimeout(() => { setStep(s); }, STEP_MS[s]),
 		);
-		return () => timers.forEach(clearTimeout);
+		return () => { timers.forEach(clearTimeout); };
 	}, []);
 
 	if (!sussy) return null;
@@ -86,7 +86,7 @@ export function RoundResult() {
 					const delta = roundDeltas[p.id];
 
 					return (
-						<motion.div
+						<m.div
 							key={p.id}
 							className={cn(
 								"flex items-center gap-3 px-4 py-3 rounded-xl border transition-colors duration-500",
@@ -123,7 +123,7 @@ export function RoundResult() {
 							)}
 							<AnimatePresence>
 								{step >= 3 && delta !== undefined && delta !== 0 && (
-									<motion.span
+									<m.span
 										className={cn(
 											"text-sm font-black tabular-nums shrink-0",
 											delta > 0 ? "text-green-400" : "text-red-400",
@@ -134,10 +134,10 @@ export function RoundResult() {
 									>
 										{delta > 0 ? "+" : ""}
 										{delta}
-									</motion.span>
+									</m.span>
 								)}
 							</AnimatePresence>
-						</motion.div>
+						</m.div>
 					);
 				})}
 			</div>
@@ -145,7 +145,7 @@ export function RoundResult() {
 			{/* Verdict — step 1 */}
 			<AnimatePresence>
 				{step >= 1 && (
-					<motion.div
+					<m.div
 						className={cn(
 							"px-6 py-5 rounded-2xl border text-center",
 							verdictColor,
@@ -157,14 +157,14 @@ export function RoundResult() {
 						<p className="font-display text-2xl font-black uppercase">
 							{verdictLabel}
 						</p>
-					</motion.div>
+					</m.div>
 				)}
 			</AnimatePresence>
 
 			{/* Impostor reveal + prompt — step 2 */}
 			<AnimatePresence>
 				{step >= 2 && (
-					<motion.div
+					<m.div
 						className="flex flex-col gap-3"
 						initial={{ opacity: 0, y: 10 }}
 						animate={{ opacity: 1, y: 0 }}
@@ -199,7 +199,7 @@ export function RoundResult() {
 								color="violet"
 							/>
 						)}
-					</motion.div>
+					</m.div>
 				)}
 			</AnimatePresence>
 		</div>
@@ -232,10 +232,12 @@ function PromptCard({
 			>
 				{label}
 			</p>
-			{items.map((q, i) => (
-				<p key={i} className="text-sm text-white/70 leading-snug">
+			{items.map((q) => (
+				// Stable key: label scopes the card, q is the prompt text itself.
+				// Using index was unsafe if the list reorders between single/dual prompt rounds.
+				<p key={`${label}:${q}`} className="text-sm text-white/70 leading-snug">
 					{items.length > 1 && (
-						<span className="text-white/30 mr-1">Q{i + 1}.</span>
+						<span className="text-white/30 mr-1">Q{items.indexOf(q) + 1}.</span>
 					)}
 					{q}
 				</p>

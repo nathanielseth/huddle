@@ -2,7 +2,7 @@ import type { PhaseActionHandler } from "./types";
 import { noOpResult } from "./types";
 import { FACETURN_CONSTANTS as C } from "../types";
 import type { ServerPendingAction } from "../types";
-import { getCrew, getMove, getMoveTargetScope, unwrapEffect } from "../cards";
+import { getCrew, getMove, unwrapEffect } from "../cards";
 import {
 	effectiveCost,
 	computeActorWasBluffing,
@@ -27,8 +27,14 @@ import {
 	isStrikeDefendedByTerminal,
 	getLivingPlayers,
 	moveHasLegalTarget,
+	validateMoveTargetScope,
 } from "../effects";
-import { makeResult, afterAction, buildStrikeResolution } from "../action-results";
+import {
+	makeResult,
+	afterAction,
+	buildStrikeResolution,
+} from "../action-results";
+import { pushLog } from "../log";
 
 export const activeTurnAction: PhaseActionHandler = (
 	state,
@@ -38,45 +44,42 @@ export const activeTurnAction: PhaseActionHandler = (
 	ctx,
 ) => {
 	const noOp = () => noOpResult(state, ctx);
+	// rejectPlay surfaces validation reasons to the acting player, unlike bare noOp which hides them
+	const rejectPlay = (reason: string) =>
+		noOpResult(state, ctx, { rejectedFor: playerId, reason });
 
 	if (playerId !== state.activePlayerId) return noOp();
 
 	switch (action.type) {
 		case "play_move": {
 			const { moveId } = action;
-			if (!player.hand.includes(moveId)) return noOp();
+			if (!player.hand.includes(moveId))
+				return rejectPlay("That card isn't in your hand.");
 
 			const move = getMove(moveId);
 			const cost = effectiveCost(state, player, moveId);
-			if (player.cash < cost) return noOp();
+			if (player.cash < cost)
+				return rejectPlay(
+					`Not enough cash — this move costs ₱${cost}, you have ₱${player.cash}.`,
+				);
 
-			if (!moveHasLegalTarget(state, playerId, move)) return noOp();
+			if (!moveHasLegalTarget(state, playerId, move))
+				return rejectPlay("No legal target for this move right now.");
 
 			if (
 				move.moveType === "active" &&
 				player.activeMoves.findIndex((s) => s === null) === -1
 			) {
-				return noOp();
+				return rejectPlay("Your active move slots are full.");
 			}
 
-			if (action.targetPlayerId) {
-				const scope = getMoveTargetScope(move);
-				if (scope === "enemy") {
-					const targetIsEnemy = getEnemies(state, playerId).some(
-						(e) => e.playerId === action.targetPlayerId,
-					);
-					if (!targetIsEnemy) return noOp();
-				} else if (scope === "ally") {
-					const isValidAlly =
-						action.targetPlayerId === playerId ||
-						getTeammates(state, playerId).some(
-							(t) => t.playerId === action.targetPlayerId,
-						);
-					if (!isValidAlly) return noOp();
-				} else {
-					return noOp();
-				}
-			}
+			const scopeCheck = validateMoveTargetScope(
+				state,
+				playerId,
+				move,
+				action.targetPlayerId,
+			);
+			if (!scopeCheck.ok) return rejectPlay(scopeCheck.reason!);
 
 			const isDefendableStrike = move.effects.some((e) => {
 				const eff = unwrapEffect(e);
@@ -84,19 +87,20 @@ export const activeTurnAction: PhaseActionHandler = (
 			});
 
 			if (isDefendableStrike) {
-				if (!action.targetPlayerId) return noOp();
+				if (!action.targetPlayerId)
+					return rejectPlay("This strike needs an enemy target.");
 				const targetIsEnemy = getEnemies(state, playerId).some(
 					(e) => e.playerId === action.targetPlayerId,
 				);
-				if (!targetIsEnemy) return noOp();
+				if (!targetIsEnemy)
+					return rejectPlay("This strike can only target an enemy.");
 
 				if (action.targetCrewSlot !== undefined) {
 					const ambushTarget = state.players.get(action.targetPlayerId)!;
 					const slot = action.targetCrewSlot as 0 | 1;
-					// either a face-down crew (turns it) or a face-up crew
-					// (kills it) is a legal target for a strike
+					// face-down turns, face-up kills
 					if (!ambushTarget.crewIds[slot]) {
-						return noOp();
+						return rejectPlay("That crew slot is empty.");
 					}
 				}
 
@@ -144,7 +148,13 @@ export const activeTurnAction: PhaseActionHandler = (
 					targetCrewSlot: action.targetCrewSlot ?? null,
 					targetAllySlot: action.targetAllySlot ?? null,
 					targetPlayerId: action.targetPlayerId ?? null,
+					cashCost: cost,
 				});
+				// playing a slow move — even the opening one — hands
+				// priority straight to the other participant (see
+				// openMoveChain). They now need to actually respond, so
+				// this opens a real response window, same as any later
+				// push does.
 				return makeResult(state, C.MOVE_CHAIN_WINDOW_MS);
 			}
 
@@ -153,6 +163,7 @@ export const activeTurnAction: PhaseActionHandler = (
 				targetAllySlot: action.targetAllySlot,
 				targetPlayerId: action.targetPlayerId,
 				targetActiveMoveSlot: action.targetActiveMoveSlot,
+				placeInActiveSlot: action.placeInActiveSlot,
 			});
 			return afterAction(state);
 		}
@@ -171,25 +182,25 @@ export const activeTurnAction: PhaseActionHandler = (
 				if (isStrikeDefendedByTerminal(strikeTarget)) return noOp();
 			}
 
-			let unturnTargetPlayer = player;
-			if (action.action === "unturn") {
+			let hideTargetPlayer = player;
+			if (action.action === "hide") {
 				if (action.targetPlayerId && action.targetPlayerId !== playerId) {
 					const isTeammate = getTeammates(state, playerId).some(
 						(t) => t.playerId === action.targetPlayerId,
 					);
 					if (!isTeammate) return noOp();
-					unturnTargetPlayer = state.players.get(action.targetPlayerId)!;
+					hideTargetPlayer = state.players.get(action.targetPlayerId)!;
 				}
 
 				if (action.targetAllySlot !== undefined) {
 					const slot = action.targetAllySlot as 0 | 1;
 					if (
-						!unturnTargetPlayer.crewIds[slot] ||
-						!unturnTargetPlayer.crewTurned[slot]
+						!hideTargetPlayer.crewIds[slot] ||
+						!hideTargetPlayer.crewTurned[slot]
 					)
 						return noOp();
 				} else {
-					if (firstTurnedSlot(unturnTargetPlayer) === null) return noOp();
+					if (firstTurnedSlot(hideTargetPlayer) === null) return noOp();
 				}
 			}
 
@@ -207,12 +218,18 @@ export const activeTurnAction: PhaseActionHandler = (
 			const targetPlayerId =
 				action.action === "strike"
 					? (action.targetPlayerId ?? null)
-					: action.action === "unturn" &&
-						  unturnTargetPlayer.playerId !== playerId
-						? unturnTargetPlayer.playerId
+					: action.action === "hide" && hideTargetPlayer.playerId !== playerId
+						? hideTargetPlayer.playerId
 						: null;
 
 			const actorWasBluffing = wouldBeBluffing;
+
+			pushLog(state, {
+				kind: "class_action_declared",
+				actorId: playerId,
+				action: action.action,
+				targetPlayerId,
+			});
 
 			state.pendingAction = {
 				type: `class_action_${action.action}` as ServerPendingAction["type"],
@@ -266,10 +283,18 @@ export const activeTurnAction: PhaseActionHandler = (
 				const matches =
 					overrides?.has(action.guessClass) || crew.class === action.guessClass;
 				if (matches) {
-					turnCrewAtSlot(state, targetPlayer, slot);
+					turnCrewAtSlot(state, targetPlayer, slot, playerId);
 					recomputePassives(targetPlayer, state);
 					triggerCrewTurnedEffects(state, targetPlayer, slot);
 				}
+
+				pushLog(state, {
+					kind: "boss_command_used",
+					actorId: playerId,
+					bossId: boss.id,
+					targetPlayerId: targetPlayer.playerId,
+					succeeded: matches,
+				});
 
 				return afterAction(state);
 			}
@@ -297,6 +322,15 @@ export const activeTurnAction: PhaseActionHandler = (
 				player.reserveCrewId = null;
 				recomputePassives(player, state);
 
+				pushLog(state, {
+					kind: "boss_command_used",
+					actorId: playerId,
+					bossId: boss.id,
+					targetPlayerId: null,
+					succeeded: null,
+				});
+
+				// reserveCrewId is secret-only; resync needed to prevent stale view
 				return afterAction(state);
 			}
 
@@ -323,6 +357,15 @@ export const activeTurnAction: PhaseActionHandler = (
 				targetPlayerId: action.targetPlayerId,
 			});
 
+			pushLog(state, {
+				kind: "boss_command_used",
+				actorId: playerId,
+				bossId: boss.id,
+				targetPlayerId: action.targetPlayerId ?? null,
+				succeeded: null,
+			});
+
+			// boss commandEffects may mutate secret fields; always resync to avoid stale view
 			return afterAction(state);
 		}
 
@@ -355,6 +398,7 @@ export const activeTurnAction: PhaseActionHandler = (
 
 			if (outcome.outcome !== "pending") {
 				state.lastResolution = buildStrikeResolution(
+					state,
 					outcome,
 					playerId,
 					targetId,
@@ -367,7 +411,7 @@ export const activeTurnAction: PhaseActionHandler = (
 
 		case "end_turn": {
 			swapTurn(state);
-			return afterAction(state, { includePrivatePayloads: true });
+			return afterAction(state);
 		}
 
 		case "discard_active_move": {

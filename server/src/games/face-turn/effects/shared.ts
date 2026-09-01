@@ -10,6 +10,9 @@ import {
 	VOID_PIECE_IDS,
 	getMoveTargetScope,
 	unwrapEffect,
+	EFFECT_TARGETING,
+	EFFECT_REQUIRES_CREW,
+	CARD_IDS,
 } from "../cards";
 
 export interface EffectContext {
@@ -21,9 +24,11 @@ export interface EffectContext {
 	targetActiveMoveSlot?: number | undefined;
 	moveId?: string | undefined;
 	selfTurnedByEnemy?: boolean | undefined;
+	// damage handlers accumulate post-mitigation damage here for chain resolution
+	damageAccumulator?: { value: number } | undefined;
 }
 
-// handlers may return false to skip the next unconditional primitive (used when discard must fully succeed)
+// false skips the next unconditional primitive, used when discard must fully succeed
 export type Handler = (
 	effect: EffectPrimitive,
 	ctx: EffectContext,
@@ -77,68 +82,43 @@ export function getEnemies(
 	return getLivingPlayers(state).filter((p) => p.teamIndex !== teamIdx);
 }
 
-const STRICT_ALLY_TARGET_TYPES = new Set<EffectPrimitive["type"]>([
-	"swap_crew_with_teammate",
-	"gain_cash_and_draw_ally",
-]);
-
-const REQUIRES_OWN_FACE_DOWN_CREW_TYPES = new Set<EffectPrimitive["type"]>([
-	"turn_ally_crew",
-	"choose_red_herring_crew",
-]);
-
-const REQUIRES_OWN_FACE_UP_CREW_TYPES = new Set<EffectPrimitive["type"]>([
-	"unturn_ally_crew",
-	"unturn_then_retrigger_ally",
-	"strike_own_crew",
-]);
-
-const REQUIRES_OWN_MIXED_CREW_TYPES = new Set<EffectPrimitive["type"]>([
-	"unturn_one_turn_different_ally",
-]);
-
-const REQUIRES_ENEMY_FACE_DOWN_CREW_TYPES = new Set<EffectPrimitive["type"]>([
-	"mark_enemy_crew_for_delayed_turn",
-]);
-
-const REQUIRES_ENEMY_ACTIVE_MOVE_TYPES = new Set<EffectPrimitive["type"]>([
-	"discard_targeted_enemy_active_move",
-]);
-
+// derived from cards.ts EFFECT_TARGETING and EFFECT_REQUIRES_CREW
+// single source of truth
 function requiresOwnFaceDownCrew(move: MoveCard): boolean {
-	return move.effects.some((e) =>
-		REQUIRES_OWN_FACE_DOWN_CREW_TYPES.has(unwrapEffect(e).type),
+	return move.effects.some(
+		(e) => EFFECT_REQUIRES_CREW[unwrapEffect(e).type] === "own_face_down",
 	);
 }
 
 function requiresOwnFaceUpCrew(move: MoveCard): boolean {
-	return move.effects.some((e) =>
-		REQUIRES_OWN_FACE_UP_CREW_TYPES.has(unwrapEffect(e).type),
+	return move.effects.some(
+		(e) => EFFECT_REQUIRES_CREW[unwrapEffect(e).type] === "own_face_up",
 	);
 }
 
 function requiresOwnMixedCrew(move: MoveCard): boolean {
-	return move.effects.some((e) =>
-		REQUIRES_OWN_MIXED_CREW_TYPES.has(unwrapEffect(e).type),
+	return move.effects.some(
+		(e) => EFFECT_REQUIRES_CREW[unwrapEffect(e).type] === "own_mixed",
 	);
 }
 
 function requiresEnemyFaceDownCrew(move: MoveCard): boolean {
-	return move.effects.some((e) =>
-		REQUIRES_ENEMY_FACE_DOWN_CREW_TYPES.has(unwrapEffect(e).type),
+	return move.effects.some(
+		(e) => EFFECT_REQUIRES_CREW[unwrapEffect(e).type] === "enemy_face_down",
 	);
 }
 
 function requiresEnemyActiveMove(move: MoveCard): boolean {
-	return move.effects.some((e) =>
-		REQUIRES_ENEMY_ACTIVE_MOVE_TYPES.has(unwrapEffect(e).type),
+	return move.effects.some(
+		(e) => EFFECT_REQUIRES_CREW[unwrapEffect(e).type] === "enemy_active_move",
 	);
 }
 
 export function requiresStrictAllyTarget(move: MoveCard): boolean {
-	return move.effects.some((e) =>
-		STRICT_ALLY_TARGET_TYPES.has(unwrapEffect(e).type),
-	);
+	return move.effects.some((e) => {
+		const targeting = EFFECT_TARGETING[unwrapEffect(e).type];
+		return targeting.scope === "ally" && targeting.strict === true;
+	});
 }
 
 function hasOwnFaceDownCrew(actor: FaceturnServerPlayer): boolean {
@@ -153,7 +133,22 @@ function hasOwnFaceUpCrew(actor: FaceturnServerPlayer): boolean {
 	);
 }
 
-// enemy needs a living foe, ally defaults to self unless STRICT_ALLY types require a teammate; extra REQUIRES_* conditions stack, so guards run sequentially
+// full moon needs face-up andrew specifically, not generic face-up
+function hasOwnFaceUpAndrew(actor: FaceturnServerPlayer): boolean {
+	return ([0, 1] as const).some(
+		(i) =>
+			actor.crewIds[i] === CARD_IDS.CREW.ANDREW &&
+			actor.crewTurned[i] &&
+			!actor.disabledPassiveSlots.has(i),
+	);
+}
+
+function requiresOwnFaceUpAndrew(move: MoveCard): boolean {
+	return move.effects.some(
+		(e) => unwrapEffect(e).type === "transform_andrew_into_wolfman",
+	);
+}
+
 export function moveHasLegalTarget(
 	state: FaceturnServerState,
 	actorId: string,
@@ -170,8 +165,7 @@ export function moveHasLegalTarget(
 		if (requiresTeammate) {
 			if (getTeammates(state, actorId).length === 0) return false;
 
-			// swap_crew_with_teammate's additional, more specific requirement:
-			// both the actor and at least one teammate need a filled crew slot
+			// swap_crew_with_teammate needs both actor and teammate to have filled crew slots
 			if (
 				move.effects.some(
 					(e) => unwrapEffect(e).type === "swap_crew_with_teammate",
@@ -207,6 +201,11 @@ export function moveHasLegalTarget(
 		}
 	}
 
+	if (requiresOwnFaceUpAndrew(move)) {
+		const actor = state.players.get(actorId);
+		if (!actor || !hasOwnFaceUpAndrew(actor)) return false;
+	}
+
 	if (requiresEnemyFaceDownCrew(move)) {
 		const hasEligibleEnemy = getEnemies(state, actorId).some((enemy) =>
 			([0, 1] as const).some(
@@ -226,6 +225,52 @@ export function moveHasLegalTarget(
 	return true;
 }
 
+export interface TargetScopeCheck {
+	readonly ok: boolean;
+	readonly reason?: string;
+}
+
+export function validateMoveTargetScope(
+	state: FaceturnServerState,
+	playerId: string,
+	move: MoveCard,
+	targetPlayerId: string | undefined,
+): TargetScopeCheck {
+	if (!targetPlayerId) return { ok: true };
+
+	const scope = getMoveTargetScope(move);
+
+	if (scope === "enemy") {
+		const targetIsEnemy = getEnemies(state, playerId).some(
+			(e) => e.playerId === targetPlayerId,
+		);
+		return targetIsEnemy
+			? { ok: true }
+			: {
+					ok: false,
+					reason: "This move can only target an enemy, not that player.",
+				};
+	}
+
+	if (scope === "ally") {
+		// self target only allowed for non-strict ally moves
+		const selfAllowed = !requiresStrictAllyTarget(move);
+		const isValidAlly =
+			(selfAllowed && targetPlayerId === playerId) ||
+			getTeammates(state, playerId).some((t) => t.playerId === targetPlayerId);
+		return isValidAlly
+			? { ok: true }
+			: {
+					ok: false,
+					reason: selfAllowed
+						? "This move can only target an ally."
+						: "This move needs a teammate — it can't target yourself.",
+				};
+	}
+
+	return { ok: false, reason: "This move doesn't take a target." };
+}
+
 export function resolveTarget(ctx: EffectContext): FaceturnServerPlayer | null {
 	if (ctx.targetPlayerId) {
 		const p = ctx.state.players.get(ctx.targetPlayerId);
@@ -235,7 +280,7 @@ export function resolveTarget(ctx: EffectContext): FaceturnServerPlayer | null {
 	return enemies[0] ?? null;
 }
 
-// defaults to self when no valid ally target (safe for duel/ffa)
+// defaults to self when no valid ally target, safe for duel/ffa
 export function resolveAllyTarget(ctx: EffectContext): FaceturnServerPlayer {
 	if (!ctx.targetPlayerId) return ctx.actor;
 	if (ctx.targetPlayerId === ctx.actor.playerId) return ctx.actor;
@@ -248,7 +293,7 @@ export function resolveAllyTarget(ctx: EffectContext): FaceturnServerPlayer {
 	return isAlly ? candidate : ctx.actor;
 }
 
-// unlike resolveAllyTarget, never defaults to self, returns null if no living teammate
+// never defaults to self, returns null if no living teammate
 export function resolveStrictAllyTarget(
 	ctx: EffectContext,
 ): FaceturnServerPlayer | null {
@@ -266,7 +311,7 @@ export function isConditionalEffect(e: CardEffect): e is ConditionalEffect {
 	return "condition" in e && "effect" in e;
 }
 
-// reads a passive magnitude from card database to avoid magic numbers
+// reads passive magnitude from card db to avoid magic numbers
 export function findEffectAmount(
 	effects: readonly CardEffect[],
 	type: EffectPrimitive["type"],
@@ -335,8 +380,8 @@ export function evaluateCondition(
 			);
 
 		case "no_face_up_crew":
-			return actor.crewIds.every(
-				(crewId, i) => !crewId || !actor.crewTurned[i as 0 | 1],
+			return [actor, ...getTeammates(ctx.state, actor.playerId)].every((p) =>
+				p.crewIds.every((crewId, i) => !crewId || !p.crewTurned[i as 0 | 1]),
 			);
 
 		case "has_bluffed_successfully":
@@ -352,7 +397,7 @@ export function evaluateCondition(
 export function resolveCrewClass(
 	player: FaceturnServerPlayer,
 	slot: 0 | 1,
-	cls?: "striker" | "defender" | "collector" | "unturner",
+	cls?: "striker" | "defender" | "collector" | "hider",
 ): string | boolean {
 	const crewId = player.crewIds[slot];
 	if (!crewId) return cls ? false : "";
@@ -365,10 +410,10 @@ export function resolveCrewClass(
 	return getCrew(crewId).class;
 }
 
-// for class declarations, only face-down crew (or crew with class override) count; face-up crew are spent
+// face-up crew are spent, only face-down count for class declarations
 export function playerHasClass(
 	player: FaceturnServerPlayer,
-	cls: "striker" | "defender" | "collector" | "unturner",
+	cls: "striker" | "defender" | "collector" | "hider",
 ): boolean {
 	return player.crewIds.some((crewId, i) => {
 		if (!crewId) return false;

@@ -6,7 +6,10 @@ import { MissionTrack } from "../components/MissionTrack";
 import { ObfuscatorToggle } from "../components/ObfuscatorToggle";
 import { socket } from "../../../lib/network/socket";
 import { cn } from "../../../lib/utils/cn";
-import type { CybsecsState, CybsecsSecret } from "@shared/games/cybersecs";
+import type {
+	CybsecsState,
+	CybsecsSecret,
+} from "@shared/games/breachpoint/index";
 import type { GameTimer } from "@shared/core/room";
 
 function passLeadership() {

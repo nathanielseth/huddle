@@ -1,20 +1,20 @@
 import type { InteractionSpec, PendingInteraction } from "./types";
-import { resolveTacticalSupportUnturn } from "../effects";
+import { resolveTacticalSupportHide } from "../effects";
 
 type Interaction = Extract<
 	PendingInteraction,
-	{ type: "tactical_support_unturn_offer" }
+	{ type: "tactical_support_hide_offer" }
 >;
 
-export const tacticalSupportUnturnSpec: InteractionSpec<Interaction> = {
+export const tacticalSupportHideSpec: InteractionSpec<Interaction> = {
 	getResponderId: (interaction) => interaction.actorId,
-	actionType: "resolve_tactical_support_unturn_offer",
+	actionType: "resolve_tactical_support_hide_offer",
 
 	resolve(state, interaction, action) {
-		if (action.type !== "resolve_tactical_support_unturn_offer") return null;
+		if (action.type !== "resolve_tactical_support_hide_offer") return null;
 		const target = state.players.get(interaction.targetPlayerId);
 		if (!target) return null;
-		resolveTacticalSupportUnturn(
+		resolveTacticalSupportHide(
 			state,
 			target,
 			action.slot ?? null,
@@ -29,13 +29,13 @@ export const tacticalSupportUnturnSpec: InteractionSpec<Interaction> = {
 		const target = state.players.get(interaction.targetPlayerId);
 		if (actor && target) {
 			// declines the offer
-			resolveTacticalSupportUnturn(state, target, null, interaction.eligibleSlots);
+			resolveTacticalSupportHide(state, target, null, interaction.eligibleSlots);
 		}
 		return { kind: "after_action" };
 	},
 
 	toView: (interaction) => ({
-		type: "tactical_support_unturn_offer",
+		type: "tactical_support_hide_offer",
 		actorId: interaction.actorId,
 		targetPlayerId: interaction.targetPlayerId,
 		eligibleSlots: interaction.eligibleSlots,

@@ -19,6 +19,10 @@ const EngineResultSchema = z.object({
 		.instanceof(Map)
 		.transform((m) => m as Map<string, unknown>)
 		.optional(),
+	actionRejections: z
+		.instanceof(Map)
+		.transform((m) => m as Map<string, string>)
+		.optional(),
 });
 
 export type ValidatedEngineResult = z.infer<typeof EngineResultSchema>;

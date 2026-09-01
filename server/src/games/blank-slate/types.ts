@@ -1,7 +1,7 @@
 import type {
 	BlankSlatePhase,
 	BlankSlateRoundResult,
-} from "../../../../shared/games/blank-slate";
+} from "../../../../shared/games/blank-slate/index";
 
 export interface BlankSlateResolvedClue {
 	readonly playerId: string;

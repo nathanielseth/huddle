@@ -1,9 +1,16 @@
-import { motion } from "motion/react";
-import { socket } from "../../../lib/socket";
+import { m } from "motion/react";
+import { socket } from "../../../lib/network/socket";
 import { useSussyState } from "../hooks/useSussyState";
 import { TASK_META } from "../constants";
 import { TimerBar } from "../../sabong/components/TimerBar";
 import { SELECTABLE_TASKS, type SelectableTask } from "../constants";
+
+// Fix: prefer-module-scope-pure-function — pick() only closes over the
+// module-level `socket` import and receives `category` as a param.
+// Moving it out of ChooserView means it is allocated once, not every render.
+function pick(category: SelectableTask) {
+	socket.emit("player_action", { type: "select_category", category });
+}
 
 export function CategorySelect() {
 	const { sussy, role, players, timer, amChooser } = useSussyState();
@@ -65,10 +72,6 @@ function ChooserView({
 	timer: ReturnType<typeof useSussyState>["timer"];
 	roundNumber: number;
 }) {
-	function pick(category: SelectableTask) {
-		socket.emit("player_action", { type: "select_category", category });
-	}
-
 	return (
 		<div className="flex flex-col min-h-screen px-5 py-10 gap-8">
 			<div className="flex flex-col gap-2">
@@ -85,10 +88,10 @@ function ChooserView({
 				{SELECTABLE_TASKS.map((task, i) => {
 					const meta = TASK_META[task];
 					return (
-						<motion.button
+						<m.button
 							key={task}
 							type="button"
-							onClick={() => pick(task)}
+							onClick={() => { pick(task); }}
 							className="flex items-center gap-4 px-5 py-4 rounded-2xl border border-border bg-surface hover:bg-white/8 hover:border-violet-500/40 active:scale-[0.98] transition-all cursor-pointer text-left"
 							initial={{ opacity: 0, x: -12 }}
 							animate={{ opacity: 1, x: 0 }}
@@ -101,7 +104,7 @@ function ChooserView({
 								</span>
 								<span className="text-xs text-white/40">{meta.desc}</span>
 							</div>
-						</motion.button>
+						</m.button>
 					);
 				})}
 			</div>

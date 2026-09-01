@@ -21,7 +21,7 @@ import type {
 	MoneyGrabOutcome,
 	HigherLowerOutcome,
 	FinalCutOutcome,
-} from "../../../../shared/games/deathvault";
+} from "../../../../shared/games/deathvault/index";
 import {
 	DILEMMA_STAKE_PER_PLAYER,
 	LAVA_GRID_SIZE,

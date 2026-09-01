@@ -2,7 +2,7 @@ import type {
 	GameMode,
 	CybsecsRole,
 	CybsecsAlignment,
-} from "../../../../shared/games/cybersecs";
+} from "../../../../shared/games/breachpoint/index";
 
 export const C = {
 	ROLE_REVEAL_MS: 15_000,

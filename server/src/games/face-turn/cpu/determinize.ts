@@ -47,7 +47,6 @@ export function cloneServerState(
 					participants: [...state.moveChain.participants] as [string, string],
 					stack: state.moveChain.stack.map((e) => ({ ...e })),
 					responderId: state.moveChain.responderId,
-					stackDepthAtLastSlow: state.moveChain.stackDepthAtLastSlow,
 				}
 			: null,
 		pendingInteraction: state.pendingInteraction

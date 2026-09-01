@@ -7,7 +7,7 @@ import type {
 	CybsecsState,
 	CybsecsSecret,
 	MissionResult,
-} from "@shared/games/cybersecs";
+} from "@shared/games/breachpoint/index";
 import type { GameTimer } from "@shared/core/room";
 
 export function MissionResult() {

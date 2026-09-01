@@ -7,6 +7,7 @@ import type {
 	TurnInfo,
 	DraftPlayerView,
 	RpsState,
+	RpsOrderChoiceState,
 	PendingAction,
 	PendingInteractionView,
 	FaceturnsSecret,
@@ -56,6 +57,33 @@ function computePlayableMoveIds(
 	return playable;
 }
 
+// server is the sole authority on move-chain legality — this is the exact
+// same gating actions/challenge-and-chain.ts enforces for chain_play_burst
+// and chain_play_slow, kept in lockstep so the client can just render
+// whatever's in chainPlayableMoveIds instead of re-deriving priority rules
+// itself: only whoever currently holds priority (chain.responderId) may
+// play anything, burst or slow — the other participant is locked out
+// until priority comes back to them.
+export function computeChainPlayableMoveIds(
+	state: FaceturnServerState,
+	player: FaceturnServerPlayer,
+): readonly string[] {
+	const chain = state.moveChain;
+	if (!chain || !chain.participants.includes(player.playerId)) return [];
+	if (player.playerId !== chain.responderId) return [];
+
+	const playable: string[] = [];
+	for (const moveId of player.hand) {
+		const move = getMove(moveId);
+		if (move.moveType !== "burst" && move.moveType !== "slow") continue;
+		const cost = effectiveCost(state, player, moveId);
+		if (player.cash < cost) continue;
+		if (!moveHasLegalTarget(state, player.playerId, move)) continue;
+		playable.push(moveId);
+	}
+	return playable;
+}
+
 function buildCrewSlots(player: FaceturnServerPlayer): readonly CrewSlotView[] {
 	return [0, 1].map((i): CrewSlotView => {
 		const idx = i as 0 | 1;
@@ -69,6 +97,7 @@ function buildCrewSlots(player: FaceturnServerPlayer): readonly CrewSlotView[] {
 				crewClass: null,
 				isTurned: false,
 				extraClasses: [],
+				isPassiveDisabled: false,
 			};
 		}
 		if (!player.crewTurned[idx]) {
@@ -79,6 +108,7 @@ function buildCrewSlots(player: FaceturnServerPlayer): readonly CrewSlotView[] {
 				crewClass: null,
 				isTurned: false,
 				extraClasses: [],
+				isPassiveDisabled: false,
 			};
 		}
 		const crew = getCrew(crewId);
@@ -90,6 +120,10 @@ function buildCrewSlots(player: FaceturnServerPlayer): readonly CrewSlotView[] {
 			crewClass: crew.class,
 			isTurned: true,
 			extraClasses: overrides ? [...overrides] : [],
+			isPassiveDisabled:
+				player.disabledPassiveSlots.has(idx) ||
+				player.derived.crewSkillsDisabled ||
+				player.derived.crewPassivesSilencedByEnemy,
 		};
 	});
 }
@@ -161,6 +195,7 @@ function buildPlayerView(
 		poisonStacks: totalIncomingPoison,
 		cashGainPerTurn: player.derived.cashGainPerTurn,
 		moveBaseCostReduction: player.derived.moveBaseCostReduction,
+		classActionCostReduction: player.derived.classActionCostReduction,
 		isEliminated: state.eliminatedPlayers.has(player.playerId),
 		teamIndex: player.teamIndex,
 		mulliganDecided: player.mulliganDecided,
@@ -181,6 +216,7 @@ function buildMoveChainView(state: FaceturnServerState): MoveChainView | null {
 			targetCrewSlot: entry.targetCrewSlot,
 			targetAllySlot: entry.targetAllySlot,
 			targetPlayerId: entry.targetPlayerId,
+			cashCost: entry.cashCost,
 		})),
 		responderId,
 	};
@@ -235,16 +271,23 @@ function buildPublicState(state: FaceturnServerState): FaceturnsState {
 				moveId: state.pendingAction.moveId,
 				cashCost: state.pendingAction.cashCost,
 				targetPlayerId: state.pendingAction.targetPlayerId,
+				originalActionType: state.pendingAction.originalActionType,
 			}
 		: null;
 
 	const rps: RpsState | null =
-		state.mode !== "ffa" && state.phase === "rps"
+		state.mode !== "ffa" &&
+		(state.phase === "rps" || state.phase === "rps_reveal")
 			? {
 					player1Choice: state.rpsChoices.get(state.playerOrder[0]) ?? null,
 					player2Choice: state.rpsChoices.get(state.playerOrder[1]) ?? null,
 					result: state.rpsResult,
 				}
+			: null;
+
+	const rpsOrderChoice: RpsOrderChoiceState | null =
+		state.phase === "rps_order_choice" && state.rpsOrderChoiceWinnerId
+			? { winnerId: state.rpsOrderChoiceWinnerId }
 			: null;
 
 	const pendingInteraction: PendingInteractionView | null =
@@ -269,7 +312,10 @@ function buildPublicState(state: FaceturnServerState): FaceturnsState {
 		pendingAction,
 		pendingInteraction,
 		lastResolution: state.lastResolution,
+		lastChainResolution: state.lastChainResolution,
+		log: state.log,
 		rps,
+		rpsOrderChoice,
 		draft,
 		moveChain: buildMoveChainView(state),
 		roundNumber: state.roundNumber,
@@ -323,6 +369,7 @@ export function buildSecretForPlayer(
 			state.phase === "active_turn" && state.activePlayerId === playerId
 				? computePlayableMoveIds(state, player)
 				: [],
+		chainPlayableMoveIds: computeChainPlayableMoveIds(state, player),
 		crewAssignments: Object.fromEntries(
 			player.crewIds
 				.map((id, i): [number, string | null] => [i, id])

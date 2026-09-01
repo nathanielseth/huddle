@@ -1,10 +1,15 @@
 import type { EffectPrimitive } from "../cards";
 import { recomputePassives } from "../derived";
 import type { Handler } from "./shared";
-import { getLivingPlayers, getTeammates, resolveTarget } from "./shared";
+import {
+	getEnemies,
+	getLivingPlayers,
+	getTeammates,
+	resolveTarget,
+} from "./shared";
 import {
 	turnCrewAtSlot,
-	unturnCrewAtSlot,
+	hideCrewAtSlot,
 	firstUnturnedSlot,
 	firstTurnedSlot,
 	triggerCrewTurnedEffects,
@@ -21,7 +26,7 @@ export const crewTurnHandlers = {
 				? (effect.targetSlot as 0 | 1)
 				: firstUnturnedSlot(target);
 		if (slot === null) return;
-		turnCrewAtSlot(ctx.state, target, slot);
+		turnCrewAtSlot(ctx.state, target, slot, ctx.actor.playerId);
 		recomputePassives(target, ctx.state);
 		triggerCrewTurnedEffects(ctx.state, target, slot);
 	},
@@ -53,41 +58,41 @@ export const crewTurnHandlers = {
 		}
 	},
 
-	unturn_ally_crew(effect, ctx) {
-		if (effect.type !== "unturn_ally_crew") return;
+	hide_ally_crew(effect, ctx) {
+		if (effect.type !== "hide_ally_crew") return;
 		const slot =
 			effect.targetSlot !== undefined
 				? (effect.targetSlot as 0 | 1)
 				: firstTurnedSlot(ctx.actor);
 		if (slot === null) return;
-		unturnCrewAtSlot(ctx.state, ctx.actor, slot);
+		hideCrewAtSlot(ctx.state, ctx.actor, slot);
 		recomputePassives(ctx.actor, ctx.state);
 	},
 
-	unturn_other_ally_crew(_effect, ctx) {
+	hide_other_ally_crew(_effect, ctx) {
 		const triggeringSlot = ctx.targetAllySlot;
 		if (triggeringSlot === undefined) return;
 		const otherSlot = (1 - triggeringSlot) as 0 | 1;
 		if (!ctx.actor.crewIds[otherSlot]) return;
 		if (!ctx.actor.crewTurned[otherSlot]) return;
-		unturnCrewAtSlot(ctx.state, ctx.actor, otherSlot);
+		hideCrewAtSlot(ctx.state, ctx.actor, otherSlot);
 		recomputePassives(ctx.actor, ctx.state);
 	},
 
-	unturn_then_retrigger_ally(_effect, ctx) {
+	hide_then_retrigger_ally(_effect, ctx) {
 		const slot =
 			ctx.targetAllySlot !== undefined
 				? (ctx.targetAllySlot as 0 | 1)
 				: firstTurnedSlot(ctx.actor);
 		if (slot === null) return;
-		unturnCrewAtSlot(ctx.state, ctx.actor, slot);
+		hideCrewAtSlot(ctx.state, ctx.actor, slot);
 		recomputePassives(ctx.actor, ctx.state);
 		turnCrewAtSlot(ctx.state, ctx.actor, slot);
 		recomputePassives(ctx.actor, ctx.state);
 		triggerCrewTurnedEffects(ctx.state, ctx.actor, slot);
 	},
 
-	unturn_one_turn_different_ally(_effect, ctx) {
+	hide_one_turn_different_ally(_effect, ctx) {
 		const actor = ctx.actor;
 		const faceUpSlots: number[] = [];
 		const faceDownSlots: number[] = [];
@@ -106,11 +111,11 @@ export const crewTurnHandlers = {
 		} satisfies PendingInteraction;
 	},
 
-	// only runs when the negated 'another_ally_is_turned' condition is true
-	unturn_self(_effect, ctx) {
+	// only fires for the negated 'another_ally_is_turned' condition
+	hide_self(_effect, ctx) {
 		const slot = ctx.targetAllySlot;
 		if (slot === undefined) return;
-		unturnCrewAtSlot(ctx.state, ctx.actor, slot as 0 | 1);
+		hideCrewAtSlot(ctx.state, ctx.actor, slot as 0 | 1);
 		recomputePassives(ctx.actor, ctx.state);
 	},
 
@@ -138,7 +143,6 @@ export const crewTurnHandlers = {
 		} satisfies PendingInteraction;
 	},
 
-	// too big: swap with any other living player's face-up crew (ally or enemy)
 	swap_with_any_face_up_crew(_effect, ctx) {
 		const ownSlot = ctx.targetAllySlot;
 		if (ownSlot === undefined) return;
@@ -157,6 +161,34 @@ export const crewTurnHandlers = {
 			type: "too_big_swap_pick",
 			actorId: actor.playerId,
 			ownSlot: ownSlot as 0 | 1,
+			eligibleTargets,
+		} satisfies PendingInteraction;
+	},
+
+	// fizzles if no enemy has a revealed active move
+	copy_enemy_active_move(_effect, ctx) {
+		const actor = ctx.actor;
+		const eligibleTargets: {
+			playerId: string;
+			slot: 0 | 1 | 2;
+			moveId: string;
+		}[] = [];
+		for (const enemy of getEnemies(ctx.state, actor.playerId)) {
+			for (let i = 0; i < enemy.activeMoves.length; i++) {
+				const moveId = enemy.activeMoves[i];
+				if (moveId) {
+					eligibleTargets.push({
+						playerId: enemy.playerId,
+						slot: i as 0 | 1 | 2,
+						moveId,
+					});
+				}
+			}
+		}
+		if (eligibleTargets.length === 0) return;
+		ctx.state.pendingInteraction = {
+			type: "belladonna_copy_pick",
+			actorId: actor.playerId,
 			eligibleTargets,
 		} satisfies PendingInteraction;
 	},

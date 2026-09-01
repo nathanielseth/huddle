@@ -1,5 +1,5 @@
 import { cn } from "../../../lib/utils/cn";
-import type { MissionResult } from "@shared/games/cybersecs";
+import type { MissionResult } from "@shared/games/breachpoint/index";
 import { MISSION_TEAM_SIZES } from "../constants";
 
 interface MissionTrackProps {

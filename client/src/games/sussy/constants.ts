@@ -1,4 +1,4 @@
-import type { TaskType } from "@shared/sussy";
+import type { TaskType } from "@shared/games/sussy/index";
 
 export interface TaskMeta {
 	label: string;
@@ -10,7 +10,7 @@ export interface TaskMeta {
 export const SELECTABLE_TASKS = [
 	"show_of_hands",
 	"finger_pointing",
-	"finger_blast",
+	"numbers_game",
 	"thumb_shot",
 	"face_turn",
 ] as const;
@@ -32,7 +32,7 @@ export const TASK_META: Record<
 		icon: "👉",
 		desc: "Point at who fits",
 	},
-	finger_blast: {
+	numbers_game: {
 		label: "Finger Blast",
 		icon: "🖐️",
 		desc: "How many fingers?",
@@ -45,7 +45,7 @@ export const TASK_META: Record<
 	face_turn: { label: "Face Turn", icon: "😶", desc: "Show your reaction" },
 };
 
-export const GLITCH_META: TaskMeta = {
+const GLITCH_META: TaskMeta = {
 	label: "Glitch in the Chat",
 	icon: "⌨️",
 	desc: "Answer honestly. Or don't.",

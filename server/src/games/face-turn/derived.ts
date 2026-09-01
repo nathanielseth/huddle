@@ -1,7 +1,4 @@
-import type {
-	FaceturnServerState,
-	FaceturnServerPlayer,
-} from "./types";
+import type { FaceturnServerState, FaceturnServerPlayer } from "./types";
 import type { CardEffect, EffectPrimitive, ConditionalEffect } from "./cards";
 import { getCrew, getMove, getBoss, CARD_IDS } from "./cards";
 import type { CrewClass } from "../../../../shared/games/face-turn/types";
@@ -21,6 +18,7 @@ export interface FaceturnDerivedPlayerStats {
 	healOnMovePlayed: number;
 	damageRandomEnemyOnMovePlayed: number;
 	crewSkillsDisabled: boolean;
+	crewPassivesSilencedByEnemy: boolean;
 	// flat bonus applied once per effect resolution; not scaled by effect amount
 	damageBonusFlat: number;
 	damageReductionPercent: number;
@@ -37,7 +35,7 @@ export interface FaceturnDerivedPlayerStats {
 	moveBaseCostReduction: number;
 	// burst move cost reduction (zednem); separate from moveBaseCostReduction
 	burstMoveCostReduction: number;
-	// belladonna: flat reduction applied to strike/defend/collect/unturn costs
+	// belladonna: flat reduction applied to strike/defend/collect/hide costs
 	classActionCostReduction: number;
 	// added to enemy move costs; read live from this player by opponents, not accumulated
 	enemyMoveCostSurcharge: number;
@@ -84,6 +82,7 @@ export function makeEmptyDerivedStats(): FaceturnDerivedPlayerStats {
 		healOnMovePlayed: 0,
 		damageRandomEnemyOnMovePlayed: 0,
 		crewSkillsDisabled: false,
+		crewPassivesSilencedByEnemy: false,
 		damageBonusFlat: 0,
 		damageReductionPercent: 0,
 		hasWatcherPassive: false,
@@ -115,13 +114,12 @@ export function makeEmptyDerivedStats(): FaceturnDerivedPlayerStats {
 	};
 }
 
-// scans all active moves for a global crew-skills-disable source; used by recomputePassives
 function hasActiveCrewSkillsDisableSource(
 	player: FaceturnServerPlayer,
 	state: FaceturnServerState,
 ): boolean {
-	for (const p of state.players.values()) {
-		for (const moveId of p.activeMoves) {
+	for (const enemy of getEnemies(state, player.playerId)) {
+		for (const moveId of enemy.activeMoves) {
 			if (!moveId) continue;
 			const hasDisable = getMove(moveId).effects.some((e) => {
 				const eff = isConditionalEffect(e) ? e.effect : e;
@@ -151,7 +149,7 @@ function hasActiveEnemySilencer(
 
 const ALSO_CLASS_GRANTS: Partial<Record<EffectPrimitive["type"], CrewClass>> = {
 	become_also_striker: "striker",
-	become_also_unturner: "unturner",
+	become_also_hider: "hider",
 	become_also_defender: "defender",
 };
 
@@ -226,8 +224,8 @@ function evaluateConditionForRecompute(
 		case "self_turned_not_by_enemy":
 			return true;
 		case "no_face_up_crew":
-			return player.crewIds.every(
-				(crewId, i) => !crewId || !player.crewTurned[i as 0 | 1],
+			return [player, ...getTeammates(state, player.playerId)].every((p) =>
+				p.crewIds.every((crewId, i) => !crewId || !p.crewTurned[i as 0 | 1]),
 			);
 		case "has_bluffed_successfully":
 			return player.hasBluffedSuccessfully;
@@ -314,7 +312,7 @@ function recomputePassiveSwitch(
 		case "passive_background_check":
 			stats.hasBackgroundCheck = true;
 			break;
-		case "passive_watcher_unturn_on_challenge_win":
+		case "passive_watcher_hide_on_challenge_win":
 			stats.hasWatcherPassive = true;
 			break;
 		case "passive_cash_on_challenge_win":
@@ -338,7 +336,7 @@ function recomputePassiveSwitch(
 			break;
 		// class overrides handled in recomputePassives above
 		case "become_also_striker":
-		case "become_also_unturner":
+		case "become_also_hider":
 		case "become_also_defender":
 			break;
 		case "passive_disable_all_enemy_crew_passives":
@@ -376,6 +374,7 @@ export function recomputePassives(
 	const crewSkillsDisabledNow = hasActiveCrewSkillsDisableSource(player, state);
 	next.crewSkillsDisabled = crewSkillsDisabledNow;
 	const crewPassivesSilencedByEnemy = hasActiveEnemySilencer(player, state);
+	next.crewPassivesSilencedByEnemy = crewPassivesSilencedByEnemy;
 
 	const passiveSources: readonly (readonly CardEffect[])[] = [
 		...(player.bossId ? [getBoss(player.bossId).passiveEffects] : []),

@@ -1,4 +1,4 @@
-import { SUSSY_SCORING } from "./constants.js";
+import { SUSSY_SCORING } from "./constants";
 
 export interface VoteOutcome {
 	impostorId: string;

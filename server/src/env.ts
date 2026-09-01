@@ -16,9 +16,10 @@ if (!parsed.success) {
 	process.exit(1);
 }
 
-const allowedOrigins = parsed.data.CLIENT_URL.split(",")
-	.map((origin) => origin.trim())
-	.filter(Boolean);
+const allowedOrigins = parsed.data.CLIENT_URL.split(",").flatMap((origin) => {
+	const trimmed = origin.trim();
+	return trimmed ? [trimmed] : [];
+});
 
 export const env = {
 	...parsed.data,

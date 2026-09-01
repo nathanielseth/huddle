@@ -6,7 +6,7 @@ import { RoundEnd } from "./phases/RoundEnd";
 import { FinalAnswering } from "./phases/FinalAnswering";
 import { FinalVoting } from "./phases/FinalVoting";
 import { Finished } from "./phases/Finished";
-import type { WitzonePhase } from "@shared/games/witzone";
+import type { WitzonePhase } from "@shared/games/witzone/index";
 import type { FC } from "react";
 
 const PHASES: Record<WitzonePhase, FC> = {

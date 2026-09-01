@@ -5,7 +5,7 @@ import type {
 	DeathvaultQuestion,
 	DeathvaultPlayerSecret,
 	DeathvaultQuestionResult,
-} from "../../../../shared/games/deathvault";
+} from "../../../../shared/games/deathvault/index";
 import { projectMinigamePublic } from "./minigames";
 
 const QUESTION_VISIBLE_PHASES = new Set<DeathvaultServerState["phase"]>([

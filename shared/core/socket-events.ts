@@ -8,6 +8,11 @@ export interface ServerToClientEvents {
 	kicked: () => void;
 	rejoin_failed: () => void;
 	player_secret: (payload: unknown) => void;
+	// per-player rejection reason for their own last game action (illegal
+	// target, insufficient cash, wrong phase, etc). Distinct from
+	// room_error, which is room/connection-level, not tied to a specific
+	// action attempt. See EngineResult.actionRejections.
+	action_rejected: (message: string) => void;
 	joined_as_spectator: (payload: { reason: "room_full" | "requested" }) => void;
 }
 

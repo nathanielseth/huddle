@@ -20,7 +20,7 @@ interface PendingRequest {
 }
 
 // offloads face-turn's ismcts search to worker threads to avoid blocking socket messages and timers
-export class CpuSearchPool {
+class CpuSearchPool {
 	private readonly workers: Worker[];
 	private nextWorker = 0;
 	private readonly pending = new Map<string, PendingRequest>();
@@ -109,10 +109,6 @@ let instance: CpuSearchPool | null = null;
 export function getCpuSearchPool(): CpuSearchPool {
 	if (!instance) instance = new CpuSearchPool();
 	return instance;
-}
-
-export function setCpuSearchPoolForTesting(pool: CpuSearchPool | null): void {
-	instance = pool;
 }
 
 export async function terminateCpuSearchPoolIfStarted(): Promise<void> {

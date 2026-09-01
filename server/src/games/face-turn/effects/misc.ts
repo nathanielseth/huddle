@@ -1,7 +1,7 @@
 import type { FaceturnServerState, FaceturnServerPlayer } from "../types";
 import { FACETURN_CONSTANTS as C } from "../types";
 import type { EffectPrimitive } from "../cards";
-import { CARD_IDS } from "../cards";
+import { CARD_IDS, getCrew } from "../cards";
 import { shuffle } from "../../lib/random";
 import { recomputePassives } from "../derived";
 import type { Handler } from "./shared";
@@ -21,7 +21,7 @@ import {
 	resolveStrikeOrExecute,
 	triggerCrewTurnedEffects,
 	turnCrewAtSlot,
-	unturnCrewAtSlot,
+	hideCrewAtSlot,
 	type StrikeOrExecuteOutcome,
 } from "./strikes";
 import type { PendingInteraction } from "../interactions/types";
@@ -119,14 +119,21 @@ export const miscHandlers = {
 		if (slot === -1) return;
 		const s = slot as 0 | 1;
 		actor.crewIds[s] = CARD_IDS.CREW.WOLFMAN;
-		actor.crewTurned[s] = false;
 		actor.derived.crewClassOverrides.delete(s);
 		actor.disabledPassiveSlots.delete(s);
 		recomputePassives(actor, ctx.state);
+
+		ctx.state.lastResolution = {
+			type: "crew_class_revealed",
+			actorId: actor.playerId,
+			targetPlayerId: actor.playerId,
+			revealedSlot: s,
+			revealedClass: getCrew(CARD_IDS.CREW.WOLFMAN).class,
+		};
 	},
 
-	give_ally_cash_then_optional_unturn(effect, ctx) {
-		if (effect.type !== "give_ally_cash_then_optional_unturn") return;
+	give_ally_cash_then_optional_hide(effect, ctx) {
+		if (effect.type !== "give_ally_cash_then_optional_hide") return;
 		const target =
 			ctx.targetPlayerId !== undefined
 				? (ctx.state.players.get(ctx.targetPlayerId) ?? ctx.actor)
@@ -142,7 +149,7 @@ export const miscHandlers = {
 			(i) => target.crewIds[i] !== null && target.crewTurned[i],
 		);
 		ctx.state.pendingInteraction = {
-			type: "tactical_support_unturn_offer",
+			type: "tactical_support_hide_offer",
 			actorId: ctx.actor.playerId,
 			targetPlayerId: target.playerId,
 			eligibleSlots,
@@ -187,9 +194,8 @@ export const miscHandlers = {
 		}
 	},
 
-	// no-ops listed for exhaustiveness; some are handled in derived.ts or boss command logic, others accumulate stats there
 	become_also_striker() {},
-	become_also_unturner() {},
+	become_also_hider() {},
 	become_also_defender() {},
 	command_guess_crew_class_turn_if_correct() {},
 	command_replace_crew_from_reserve() {},
@@ -238,7 +244,7 @@ export const miscHandlers = {
 	passive_defend_strikes_above_half_hp() {},
 	passive_armor_on_discard() {},
 	passive_draw_on_hand_empty_once_per_turn() {},
-	passive_watcher_unturn_on_challenge_win() {},
+	passive_watcher_hide_on_challenge_win() {},
 	passive_optional_strike_on_successful_challenge() {},
 	passive_suppress_enemy_turned_effects() {},
 	passive_cash_on_challenge_win() {},
@@ -338,22 +344,22 @@ export function resolveDigDeepPick(
 export function resolveSwitchUpPick(
 	state: FaceturnServerState,
 	actor: FaceturnServerPlayer,
-	unturnSlot: number,
+	hideSlot: number,
 	turnSlot: number,
 	faceUpSlots: readonly number[],
 	faceDownSlots: readonly number[],
 ): void {
-	if (unturnSlot === turnSlot) return;
-	if (!faceUpSlots.includes(unturnSlot)) return;
+	if (hideSlot === turnSlot) return;
+	if (!faceUpSlots.includes(hideSlot)) return;
 	if (!faceDownSlots.includes(turnSlot)) return;
-	unturnCrewAtSlot(state, actor, unturnSlot as 0 | 1);
+	hideCrewAtSlot(state, actor, hideSlot as 0 | 1);
 	recomputePassives(actor, state);
 	turnCrewAtSlot(state, actor, turnSlot as 0 | 1);
 	recomputePassives(actor, state);
 	triggerCrewTurnedEffects(state, actor, turnSlot as 0 | 1);
 }
 
-export function resolveTacticalSupportUnturn(
+export function resolveTacticalSupportHide(
 	state: FaceturnServerState,
 	target: FaceturnServerPlayer,
 	slot: number | null,
@@ -361,11 +367,11 @@ export function resolveTacticalSupportUnturn(
 ): void {
 	if (slot === null) return;
 	if (!eligibleSlots.includes(slot)) return;
-	unturnCrewAtSlot(state, target, slot as 0 | 1);
+	hideCrewAtSlot(state, target, slot as 0 | 1);
 	recomputePassives(target, state);
 }
 
-export function resolveWatcherUnturn(
+export function resolveWatcherHide(
 	state: FaceturnServerState,
 	actor: FaceturnServerPlayer,
 	targetPlayerId: string | null,
@@ -383,7 +389,7 @@ export function resolveWatcherUnturn(
 			? actor
 			: state.players.get(resolvedPlayerId);
 	if (!target) return;
-	unturnCrewAtSlot(state, target, slot as 0 | 1);
+	hideCrewAtSlot(state, target, slot as 0 | 1);
 	recomputePassives(target, state);
 }
 
@@ -465,6 +471,40 @@ export function resolveTooBigSwapPick(
 	recomputePassives(target, state);
 }
 
+// passing or an illegal target is a legal no-op; if actor's active zone is full it fizzles silently
+export function resolveBelladonnaCopyPick(
+	state: FaceturnServerState,
+	actor: FaceturnServerPlayer,
+	confirmed: boolean,
+	targetPlayerId: string | null,
+	targetActiveMoveSlot: number | null,
+	eligibleTargets: readonly {
+		playerId: string;
+		slot: 0 | 1 | 2;
+		moveId: string;
+	}[],
+): void {
+	if (!confirmed) return;
+	if (targetPlayerId === null || targetActiveMoveSlot === null) return;
+
+	const isEligible = eligibleTargets.some(
+		(t) => t.playerId === targetPlayerId && t.slot === targetActiveMoveSlot,
+	);
+	if (!isEligible) return;
+
+	const target = state.players.get(targetPlayerId);
+	if (!target) return;
+	const tSlot = targetActiveMoveSlot as 0 | 1 | 2;
+	const moveId = target.activeMoves[tSlot];
+	if (!moveId) return;
+
+	const ownSlot = actor.activeMoves.findIndex((s) => s === null);
+	if (ownSlot === -1) return;
+
+	actor.activeMoves[ownSlot] = moveId;
+	recomputePassives(actor, state);
+}
+
 export function maybeOpenBearBonesOffer(
 	state: FaceturnServerState,
 	actor: FaceturnServerPlayer,
@@ -513,7 +553,7 @@ export function resolveBackgroundCheckGuess(
 	challenger: FaceturnServerPlayer,
 	target: FaceturnServerPlayer,
 	guessedSlot: number,
-	guessedClass: "striker" | "defender" | "collector" | "unturner",
+	guessedClass: "striker" | "defender" | "collector" | "hider",
 	eligibleSlots: readonly number[],
 ): { correct: boolean } {
 	if (!eligibleSlots.includes(guessedSlot)) return { correct: false };
@@ -555,7 +595,7 @@ export function processWarrantOfArrestTicks(
 		if (target.crewIds[mark.targetSlot] !== mark.targetCrewId) continue;
 		if (target.crewTurned[mark.targetSlot]) continue;
 
-		turnCrewAtSlot(state, target, mark.targetSlot);
+		turnCrewAtSlot(state, target, mark.targetSlot, caster.playerId);
 		recomputePassives(target, state);
 		triggerCrewTurnedEffects(state, target, mark.targetSlot, true);
 	}

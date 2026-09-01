@@ -10,7 +10,7 @@ import type {
 	WinReason,
 	EhIntel,
 	CybsecsAction,
-} from "../../../../shared/games/cybersecs";
+} from "../../../../shared/games/breachpoint/index";
 
 // engine mutates state in place. readonly on identity fields prevents reassignment
 // phase-scoped fields reset to null on each phase entry

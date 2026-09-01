@@ -1,3 +1,5 @@
+import type { LogEntry } from "./log";
+
 export interface FaceturnsConfigPayload {
 	mode: "duel" | "ffa" | "teams";
 	teamChoices: Record<string, "A" | "B">;
@@ -7,6 +9,8 @@ export type FaceturnsPhase =
 	| "drafting"
 	| "mulligan"
 	| "rps"
+	| "rps_reveal"
+	| "rps_order_choice"
 	| "active_turn"
 	| "move_chain_window"
 	| "challenge_window"
@@ -15,9 +19,9 @@ export type FaceturnsPhase =
 	| "defend_challenge_window"
 	| "finished";
 
-export type CrewClass = "striker" | "defender" | "collector" | "unturner";
+export type CrewClass = "striker" | "defender" | "collector" | "hider";
 export type MoveType = "burst" | "slow" | "active";
-export type ClassAction = "strike" | "defend" | "collect" | "unturn";
+export type ClassAction = "strike" | "defend" | "collect" | "hide";
 
 export type GameMode = "duel" | "ffa" | "teams";
 
@@ -42,7 +46,7 @@ export interface MoveCardDef {
 	readonly baseCost: number;
 	readonly flavorText: string;
 
-	// null while the move's type hasn't been assigned yet (draft selection)
+	// null while move type not assigned (draft selection)
 	readonly moveType: MoveType | null;
 	readonly effectSummary: string;
 }
@@ -56,6 +60,7 @@ export interface CrewSlotView {
 	readonly crewClass: CrewClass | null;
 	readonly isTurned: boolean;
 	readonly extraClasses: readonly CrewClass[];
+	readonly isPassiveDisabled: boolean;
 }
 
 export interface BossView {
@@ -64,13 +69,13 @@ export interface BossView {
 	readonly hp: number;
 	readonly maxHp: number;
 
-	// damage absorbed before hp, separate pool
+	// damage absorbed before hp
 	readonly armor: number;
 
 	// frontline immunity countdown, ticks down each round end
 	readonly armorTurnsRemaining: number | null;
 
-	// once per game, prevents boss command reuse
+	// once per game
 	readonly commandUsed: boolean;
 	readonly passiveEffects: string[];
 }
@@ -84,7 +89,7 @@ export interface ActiveMoveSlotView {
 export interface FaceturnsPlayerView {
 	readonly playerId: string;
 
-	// hand size exposed, card contents are private
+	// hand size exposed, card contents private
 	readonly handSize: number;
 	readonly deckSize: number;
 	readonly discardSize: number;
@@ -101,14 +106,14 @@ export interface FaceturnsPlayerView {
 	// total incoming poison damage from all sources, applied at round end
 	readonly poisonStacks: number;
 
-	// cash granted at the start of each turn this player takes
 	readonly cashGainPerTurn: number;
 	readonly moveBaseCostReduction: number;
+	readonly classActionCostReduction: number;
 	readonly isEliminated: boolean;
 	readonly teamIndex: number;
 	readonly mulliganDecided: boolean;
 
-	// the-dealer passive: may discard a Move from hand for cash, any time on this player's own turn
+	// the-dealer passive: discard a move from hand for cash on own turn
 	readonly hasSellCards: boolean;
 	readonly sellCardCashAmount: number;
 }
@@ -116,7 +121,7 @@ export interface FaceturnsPlayerView {
 export type PendingActionType =
 	| "class_action_strike"
 	| "class_action_collect"
-	| "class_action_unturn"
+	| "class_action_hide"
 	| "class_action_defend"
 	| "card_strike"; // burst-move defendable strike
 
@@ -126,12 +131,15 @@ export interface PendingAction {
 	readonly targetCrewSlot: number | null;
 	readonly targetAllySlot: number | null;
 
-	// only set when the pending action is a move (not a class action)
+	// only set for move actions, not class actions
 	readonly moveId: string | null;
 
-	// cost already deducted from actor; refunded if action is cancelled
+	// already deducted from actor, refunded if cancelled
 	readonly cashCost: number;
 	readonly targetPlayerId: string | null;
+
+	// set for defends; card_strike defends can't be challenged
+	readonly originalActionType: PendingActionType | null;
 }
 
 export interface MoveChainEntry {
@@ -140,12 +148,41 @@ export interface MoveChainEntry {
 	readonly targetCrewSlot: number | null;
 	readonly targetAllySlot: number | null;
 	readonly targetPlayerId: string | null;
+	readonly cashCost: number;
 }
 
 export interface MoveChainView {
 	readonly participants: readonly [string, string];
 	readonly chain: readonly MoveChainEntry[];
 	readonly responderId: string;
+}
+
+// one entry per stack pop, lifo order; negated fields null when stack empty
+export type MoveChainResolutionStep =
+	| {
+			readonly kind: "executed";
+			readonly moveId: string;
+			readonly actorId: string;
+			readonly damageDealt: number | null;
+	  }
+	| {
+			readonly kind: "negated";
+			readonly negatorMoveId: string;
+			readonly negatorActorId: string;
+			readonly negatedMoveId: string | null;
+			readonly negatedActorId: string | null;
+	  }
+	| {
+			readonly kind: "reflected";
+			readonly negatorMoveId: string;
+			readonly negatorActorId: string;
+			readonly negatedMoveId: string | null;
+			readonly negatedActorId: string | null;
+			readonly reflectedDamage: number | null;
+	  };
+
+export interface MoveChainResolutionView {
+	readonly steps: readonly MoveChainResolutionStep[];
 }
 
 export interface TurnInfo {
@@ -159,8 +196,12 @@ export type RpsChoice = "rock" | "paper" | "scissors";
 export interface RpsState {
 	readonly player1Choice: RpsChoice | null;
 	readonly player2Choice: RpsChoice | null;
-	// ties are coinflipped immediately, result never "tie"
+	// ties coinflipped immediately, result never tie
 	readonly result: "player1" | "player2" | null;
+}
+
+export interface RpsOrderChoiceState {
+	readonly winnerId: string;
 }
 
 export interface DraftPlayerView {
@@ -199,7 +240,7 @@ export type PendingInteractionView =
 			discardPileSnapshot: readonly string[];
 	  }
 	| {
-			// top-of-deck reveal is private to the actor, not exposed in public view
+			// top of deck reveal private to actor
 			type: "dig_deep_pick";
 			actorId: string;
 			maxPicks?: number;
@@ -211,7 +252,7 @@ export type PendingInteractionView =
 			faceDownSlots: number[];
 	  }
 	| {
-			type: "tactical_support_unturn_offer";
+			type: "tactical_support_hide_offer";
 			actorId: string;
 			targetPlayerId: string;
 			eligibleSlots: number[];
@@ -220,6 +261,12 @@ export type PendingInteractionView =
 			type: "bear_bones_bonus_strike";
 			actorId: string;
 			eligibleTargetIds: string[];
+	  }
+	| {
+			type: "bear_bones_steal_pick";
+			actorId: string;
+			eligibleTargetIds: string[];
+			amount: number;
 	  }
 	| {
 			type: "void_legs_choice";
@@ -233,7 +280,7 @@ export type PendingInteractionView =
 			eligibleSlots: number[];
 	  }
 	| {
-			type: "watcher_unturn_offer";
+			type: "watcher_hide_offer";
 			actorId: string;
 			eligibleTargets: readonly { playerId: string; slot: number }[];
 	  }
@@ -263,7 +310,17 @@ export type PendingInteractionView =
 			eligibleTargets: readonly { playerId: string; slot: number }[];
 	  }
 	| {
-			// the revealed cards are private to the actor, not exposed in public view
+			// belladonna: copy enemy active move, or pass
+			type: "belladonna_copy_pick";
+			actorId: string;
+			eligibleTargets: readonly {
+				playerId: string;
+				slot: number;
+				moveId: string;
+			}[];
+	  }
+	| {
+			// revealed cards private to actor
 			type: "watcher_steal_pick";
 			actorId: string;
 			targetPlayerId: string;
@@ -273,7 +330,7 @@ export interface FaceturnsState {
 	readonly phase: FaceturnsPhase;
 	readonly players: Readonly<Record<string, FaceturnsPlayerView>>;
 
-	// rps representative order, needed for state serialisation and turn order setup
+	// rps representative order, needed for serialisation and turn order
 	readonly playerOrder: readonly [string, string];
 	readonly mode: GameMode;
 
@@ -287,9 +344,16 @@ export interface FaceturnsState {
 	readonly turn: TurnInfo | null;
 	readonly pendingAction: PendingAction | null;
 	readonly lastResolution: ResolutionResult | null;
+	// step by step log of most recently closed chain, overwritten each chain
+	readonly lastChainResolution: MoveChainResolutionView | null;
 
-	// null for ffa mode (no rps)
+	// append-only match log, capped server-side; never overwritten
+	readonly log: readonly LogEntry[];
+
+	// null for ffa mode
 	readonly rps: RpsState | null;
+	// non-null only during rps_order_choice phase
+	readonly rpsOrderChoice: RpsOrderChoiceState | null;
 	readonly draft: Readonly<Record<string, DraftPlayerView>> | null;
 	readonly pendingInteraction: PendingInteractionView | null;
 	readonly moveChain: MoveChainView | null;
@@ -341,10 +405,14 @@ export type ResolutionResult =
 export interface FaceturnsSecret {
 	readonly hand: readonly string[];
 
-	// hand card ids (may include duplicates) that could legally be played rn
+	// hand card ids (may include duplicates) playable right now
 	readonly playableMoveIds: readonly string[];
 
-	// slot index → crew id; hidden from opponents until crew turns face-up
+	// hand card ids playable via chain_play_burst/chain_play_slow right now
+	// empty unless this player is a participant in the active move chain
+	readonly chainPlayableMoveIds: readonly string[];
+
+	// slot index to crew id; hidden until face-up
 	readonly crewAssignments: Readonly<Record<number, string>>;
 
 	readonly reserveCrewId: string | null;
@@ -359,10 +427,10 @@ export interface FaceturnsSecret {
 		readonly moveIds: readonly string[];
 	} | null;
 
-	// the two cards revealed when resolving peek effects
+	// two cards revealed when resolving peek effects
 	readonly peekRevealedCards: readonly [string, string] | null;
 	readonly digDeepRevealedCards: readonly string[] | null;
 
-	// the two cards revealed from the enemy's hand when resolving the watcher's steal
+	// two cards revealed from enemy hand for watcher steal
 	readonly watcherStealRevealedCards: readonly [string, string] | null;
 }

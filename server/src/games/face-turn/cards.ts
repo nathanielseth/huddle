@@ -35,7 +35,6 @@ export type EffectPrimitive =
 			type: "deal_damage_ignore_armor";
 			amount: number;
 	  }
-	// player chooses discard count; damage = count * damagePerCard
 	| {
 			type: "deal_damage_per_discarded_variable";
 			damagePerCard: number;
@@ -59,8 +58,7 @@ export type EffectPrimitive =
 	| {
 			type: "strike_enemy_crew_defendable";
 	  }
-	// to the death: kills the actor's own already face-up crew. never turns a
-	// face-down crew and never falls through to executing the actor's own boss.
+	// kills the actor's own already face-up crew, never turns face-down
 	| {
 			type: "strike_own_crew";
 			targetSlot?: number;
@@ -70,24 +68,27 @@ export type EffectPrimitive =
 	| {
 			type: "turn_all_other_ally_crew";
 	  }
-	| { type: "unturn_ally_crew"; targetSlot?: number }
+	| { type: "hide_ally_crew"; targetSlot?: number }
 	| {
-			type: "unturn_other_ally_crew";
+			type: "hide_other_ally_crew";
 	  }
 	| {
-			type: "unturn_then_retrigger_ally";
+			type: "hide_then_retrigger_ally";
 	  }
 	| {
-			type: "unturn_one_turn_different_ally";
+			type: "hide_one_turn_different_ally";
 	  }
 	| {
-			type: "unturn_self";
+			type: "hide_self";
 	  }
 	| {
 			type: "swap_crew_with_teammate";
 	  }
 	| {
 			type: "swap_with_any_face_up_crew";
+	  }
+	| {
+			type: "copy_enemy_active_move";
 	  }
 	| { type: "draw_cards"; amount: number }
 	| { type: "discard_cards_from_hand"; amount: number }
@@ -97,13 +98,13 @@ export type EffectPrimitive =
 	| {
 			type: "discard_one_draw_three";
 	  }
-	// discard amount varies based on whether actor has called a bluff this game
+	// amount depends on whether actor has called a bluff this game
 	| {
 			type: "discard_variable_by_bluff_flag";
 			baseAmount: number;
 			reducedAmount: number;
 	  }
-	// draws bonusAmount if hand was empty after this card is removed
+	// draws bonusAmount if hand was empty after removal
 	| {
 			type: "draw_cards_or_more_if_hand_was_empty";
 			baseAmount: number;
@@ -128,6 +129,8 @@ export type EffectPrimitive =
 	  }
 	| { type: "gain_cash"; amount: number }
 	| { type: "steal_cash"; amount: number }
+	// lets actor choose target when multiple living enemies exist
+	| { type: "steal_cash_choose_target"; amount: number }
 	| {
 			type: "redistribute_cash_to_poorest";
 			cashAmount: number;
@@ -145,14 +148,12 @@ export type EffectPrimitive =
 			type: "immunity_until_next_turn";
 			turns?: number;
 	  }
-	// hp set before draw
 	| {
 			type: "set_ally_boss_hp_gain_cash_draw";
 			hpAmount: number;
 			cashGain: number;
 			drawAmount: number;
 	  }
-	// uses ctx.state.watcherReveal, not a pending interaction
 	| {
 			type: "peek_enemy_hand_then_gain_cash";
 			cashGain: number;
@@ -176,14 +177,13 @@ export type EffectPrimitive =
 	| {
 			type: "command_replace_crew_from_reserve";
 	  }
-	// damage equals actor's current armor total; actor's armor emptied after, regardless of target/damage
+	// damages enemy boss equal to actor's armor, then empties actor's armor
 	| {
 			type: "command_deal_damage_equal_to_armor";
-		}
+	  }
 	| {
 			type: "negate_enemy_slow_move";
 	  }
-	// the move itself is a slow move and can be nope'd
 	| {
 			type: "reflect_slow_move_base_damage";
 	  }
@@ -191,7 +191,6 @@ export type EffectPrimitive =
 			type: "passive_poison_per_round";
 			damagePerRound: number;
 	  }
-	// per turn, not per round
 	| {
 			type: "passive_cash_per_turn";
 			amount: number;
@@ -214,18 +213,18 @@ export type EffectPrimitive =
 			cashAmount: number;
 	  }
 	| {
-			type: "passive_watcher_unturn_on_challenge_win";
+			type: "passive_watcher_hide_on_challenge_win";
 	  }
 	| {
 			type: "passive_armor_on_ally_crew_turn";
 			amount: number;
 	  }
-	// applies to all damage sources; scoping to moves only is a known approximation
+	// scoping to moves only is a known approximation
 	| {
 			type: "passive_negate_damage_percent";
 			percent: number;
 	  }
-	// added once per effect resolution; skipped when undefendable or cannotBeMultiplied
+	// skipped when undefendable or cannotBeMultiplied
 	| {
 			type: "passive_flat_damage_bonus";
 			amount: number;
@@ -249,15 +248,15 @@ export type EffectPrimitive =
 	| {
 			type: "passive_false_flag";
 	  }
-	// defends strike targeting while hp > 50; strike fizzles, no crew turn; does not affect other damage
+	// defends strike targeting while hp > 50; strike fizzles, no crew turn
 	| {
 			type: "passive_defend_strikes_above_half_hp";
 	  }
-	// suppresses enemy turnedEffects on face-up; resolved structurally, not via effect dispatch; type exists for declaration
+	// resolved structurally in triggerCrewTurnedEffects
 	| {
 			type: "passive_suppress_enemy_turned_effects";
 	  }
-	// resolved structurally in discardFromHand; type exists for declaration
+	// resolved structurally in discardFromHand
 	| {
 			type: "passive_armor_on_discard";
 	  }
@@ -269,19 +268,19 @@ export type EffectPrimitive =
 	| {
 			type: "passive_optional_strike_on_successful_challenge";
 	  }
-	// triggers whenever the holder or any teammate flips their own Crew by their own action
+	// triggers when holder or teammate flips own crew
 	| {
 			type: "passive_strike_on_self_turned_ally";
 	  }
-	// fires whenever the holder kills an enemy crew (strike/execute-adjacent kill of an already face-up slot); turns the holder's own slot face-down
+	// fires when holder kills enemy crew; turns holder's own slot face-down
 	| {
 			type: "passive_turn_self_down_on_enemy_crew_kill";
 	  }
-	// all damage this player deals (any source) is treated as piercing: bypasses armor, still respects immunity/reduction%
+	// all damage this player deals is piercing: bypasses armor
 	| {
 			type: "passive_all_damage_is_piercing";
 	  }
-	// monkey man: steals cash from the enemy boss whenever this player deals damage to it
+	// monkey man: steals cash when dealing damage to enemy boss
 	| {
 			type: "passive_steal_cash_on_damage_dealt";
 			amount: number;
@@ -291,35 +290,35 @@ export type EffectPrimitive =
 			requiredPieceIds: readonly string[];
 	  }
 	| { type: "become_also_striker" }
-	| { type: "become_also_unturner" }
+	| { type: "become_also_hider" }
 	| { type: "become_also_defender" }
 	| { type: "transform_andrew_into_wolfman" }
 	| {
 			type: "passive_reduce_all_move_costs";
 			reduction: number;
 	  }
-	// only reduces burst move costs; summed independently with reduce_all_move_costs
+	// only reduces burst move costs; summed independently
 	| {
 			type: "passive_reduce_burst_move_costs";
 			reduction: number;
 	  }
-	// flat reduction to strike/defend/collect/unturn class action costs
+	// flat reduction to strike/defend/collect/hide class action costs
 	| {
 			type: "passive_reduce_class_action_costs";
 			reduction: number;
 	  }
-	// surcharge read live from this player via getEnemies, not accumulated on target
+	// surcharge read live from holder, not accumulated on target
 	| {
 			type: "passive_increase_enemy_move_costs";
 			amount: number;
 	  }
-	// once per turn; fires only when the holder's boss takes damage
+	// once per turn; fires only when holder's boss takes damage
 	| {
 			type: "passive_cash_on_damage_taken";
 			amount: number;
 	  }
 	| {
-			type: "give_ally_cash_then_optional_unturn";
+			type: "give_ally_cash_then_optional_hide";
 			cashAmount: number;
 	  }
 	| {
@@ -336,15 +335,14 @@ export type EffectPrimitive =
 	| {
 			type: "passive_mirror_enemy_collect_cash";
 	  }
-	// marks a face-down enemy crew (locked in at cast time, by slot + crewId)
+	// marks a face-down enemy crew at cast time
 	| {
 			type: "mark_enemy_crew_for_delayed_turn";
 	  }
-	// lasting counter while active, consumed structurally in triggerCrewTurnedEffects
+	// lasting counter while active, consumed structurally
 	| {
 			type: "passive_cease_and_desist";
 	  }
-	// ctx.targetActiveMoveSlot (0-2), a dedicated targeting field
 	| {
 			type: "discard_targeted_enemy_active_move";
 	  }
@@ -371,7 +369,192 @@ export type EffectPrimitive =
 			drawAmount: number;
 	  };
 
-// wraps a condition and a primitive; negated means fire when condition is false
+// single source of truth for what each effect targets, derived from handler code
+export type EffectTargeting =
+	| {
+			scope: "enemy";
+			slot: "boss" | "crew" | "active" | "player";
+	  }
+	| {
+			scope: "ally";
+			slot: "boss" | "crew" | "player";
+			strict?: boolean;
+	  }
+	| { scope: "self" }
+	| { scope: "none" };
+
+type RequiresCrewKind =
+	| "own_face_down"
+	| "own_face_up"
+	| "own_mixed"
+	| "enemy_face_down"
+	| "enemy_active_move";
+
+const EFFECT_TARGETING_TABLE = {
+	deal_damage: { scope: "enemy", slot: "boss" },
+	deal_damage_all_enemy_bosses: { scope: "none" },
+	deal_damage_per_face_up_ally: { scope: "enemy", slot: "boss" },
+	deal_damage_percent_current_hp: { scope: "enemy", slot: "boss" },
+	deal_damage_ignore_armor: { scope: "enemy", slot: "boss" },
+	deal_damage_per_discarded_variable: { scope: "enemy", slot: "boss" },
+	deal_damage_per_enemy_hand_discarded: { scope: "enemy", slot: "boss" },
+	deal_damage_self_boss: { scope: "self" },
+	// boss command but damage targets enemy
+	command_deal_damage_equal_to_armor: { scope: "enemy", slot: "boss" },
+	// targets a player, not boss
+	passive_poison_per_round: { scope: "enemy", slot: "player" },
+
+	strike_enemy_crew: { scope: "enemy", slot: "crew" },
+	strike_enemy_crew_undefendable_with_cash_cost: {
+		scope: "enemy",
+		slot: "crew",
+	},
+	strike_enemy_crew_defendable: { scope: "enemy", slot: "crew" },
+	// self, not ally (actor's own crew)
+	strike_own_crew: { scope: "self" },
+
+	turn_enemy_crew: { scope: "enemy", slot: "crew" },
+	// self, not ally (actor's own crew)
+	turn_ally_crew: { scope: "self" },
+	turn_all_other_ally_crew: { scope: "self" },
+	hide_ally_crew: { scope: "self" },
+	hide_other_ally_crew: { scope: "self" },
+	hide_then_retrigger_ally: { scope: "self" },
+	hide_one_turn_different_ally: { scope: "self" },
+	hide_self: { scope: "self" },
+	// strict: never self
+	swap_crew_with_teammate: { scope: "ally", slot: "player", strict: true },
+	// modeled none: no single team scope fits
+	swap_with_any_face_up_crew: { scope: "none" },
+	// modeled none: resolved via pendingInteraction
+	copy_enemy_active_move: { scope: "none" },
+
+	draw_cards: { scope: "self" },
+	discard_cards_from_hand: { scope: "self" },
+	discard_all_enemy_hand: { scope: "enemy", slot: "player" },
+	discard_all_actives_all_players: { scope: "none" },
+	discard_enemy_actives: { scope: "enemy", slot: "player" },
+	discard_one_draw_three: { scope: "self" },
+	discard_variable_by_bluff_flag: { scope: "self" },
+	draw_cards_or_more_if_hand_was_empty: { scope: "self" },
+	return_one_from_discard_to_hand: { scope: "self" },
+	return_discards_to_hand_until_full: { scope: "self" },
+	search_deck_for_card_add_to_hand: { scope: "self" },
+	look_at_top_deck_draw_one: { scope: "self" },
+
+	gain_cash: { scope: "self" },
+	steal_cash: { scope: "enemy", slot: "player" },
+	// enemy target; choose_target variant
+	steal_cash_choose_target: { scope: "enemy", slot: "player" },
+	redistribute_cash_to_poorest: { scope: "self" },
+	// enemy-facing half is the target
+	set_both_cash_zero_then_draw: { scope: "enemy", slot: "player" },
+
+	heal_boss: { scope: "ally", slot: "boss" },
+	armor_boss: { scope: "ally", slot: "boss" },
+	armor_all_ally_bosses: { scope: "none" },
+	// current instance uses enemy_boss, but handler supports both
+	remove_all_armor: { scope: "enemy", slot: "boss" },
+	immunity_until_next_turn: { scope: "self" },
+	set_ally_boss_hp_gain_cash_draw: { scope: "ally", slot: "boss" },
+
+	peek_enemy_hand_then_gain_cash: { scope: "enemy", slot: "player" },
+	peek_steal: { scope: "enemy", slot: "player" },
+	steal_random_card: { scope: "enemy", slot: "player" },
+	peek_two_random_enemy_cards_discard_one: { scope: "enemy", slot: "player" },
+	reveal_enemy_crew_class: { scope: "enemy", slot: "player" },
+
+	mark_enemy_crew_for_delayed_turn: { scope: "enemy", slot: "crew" },
+	discard_targeted_enemy_active_move: { scope: "enemy", slot: "active" },
+	shuffle_discard_into_deck_then_draw: { scope: "self" },
+	choose_red_herring_crew: { scope: "self" },
+	// strict: never self
+	gain_cash_and_draw_ally: { scope: "ally", slot: "player", strict: true },
+	win_if_void_pieces_assembled: { scope: "none" },
+	transform_andrew_into_wolfman: { scope: "self" },
+	give_ally_cash_then_optional_hide: { scope: "ally", slot: "player" },
+	discard_then_reactivate_ally_turned_effect: { scope: "self" },
+	// enemy-facing half is the target
+	mutual_discard_hand_then_redraw_same_count: {
+		scope: "enemy",
+		slot: "player",
+	},
+
+	negate_enemy_slow_move: { scope: "none" },
+	reflect_slow_move_base_damage: { scope: "none" },
+
+	passive_cash_per_turn: { scope: "self" },
+	passive_draw_per_turn: { scope: "self" },
+	passive_cash_on_enemy_move_or_strike: { scope: "self" },
+	passive_heal_on_move_played: { scope: "self" },
+	// random target, no client-suppliable target
+	passive_damage_random_enemy_on_move_played: { scope: "none" },
+	passive_armor_per_turn: { scope: "self" },
+	passive_optional_discard_for_damage_per_turn: { scope: "self" },
+	passive_sell_moves_for_cash: { scope: "self" },
+	passive_watcher_hide_on_challenge_win: { scope: "self" },
+	passive_armor_on_ally_crew_turn: { scope: "self" },
+	passive_negate_damage_percent: { scope: "self" },
+	passive_flat_damage_bonus: { scope: "self" },
+	passive_disable_all_crew_skills: { scope: "self" },
+	passive_disable_all_enemy_crew_passives: { scope: "none" },
+	passive_defender_chooses_crew_to_turn: { scope: "self" },
+	passive_background_check: { scope: "self" },
+	// reads ally target
+	passive_life_insurance: { scope: "ally", slot: "player" },
+	passive_false_flag: { scope: "self" },
+	passive_defend_strikes_above_half_hp: { scope: "self" },
+	passive_suppress_enemy_turned_effects: { scope: "none" },
+	passive_armor_on_discard: { scope: "self" },
+	passive_draw_on_hand_empty_once_per_turn: { scope: "self" },
+	passive_optional_strike_on_successful_challenge: { scope: "self" },
+	passive_strike_on_self_turned_ally: { scope: "self" },
+	passive_turn_self_down_on_enemy_crew_kill: { scope: "self" },
+	passive_all_damage_is_piercing: { scope: "self" },
+	passive_steal_cash_on_damage_dealt: { scope: "self" },
+	become_also_striker: { scope: "self" },
+	become_also_hider: { scope: "self" },
+	become_also_defender: { scope: "self" },
+	passive_reduce_all_move_costs: { scope: "self" },
+	passive_reduce_burst_move_costs: { scope: "self" },
+	passive_reduce_class_action_costs: { scope: "self" },
+	passive_increase_enemy_move_costs: { scope: "self" },
+	passive_cash_on_damage_taken: { scope: "self" },
+	passive_team_cash_on_ally_collect: { scope: "self" },
+	// enemy player target
+	passive_mirror_enemy_collect_cash: { scope: "enemy", slot: "player" },
+	passive_cease_and_desist: { scope: "none" },
+	passive_cash_on_challenge_win: { scope: "self" },
+	passive_self_damage_and_cash_per_turn: { scope: "self" },
+
+	command_guess_crew_class_turn_if_correct: { scope: "none" },
+	command_replace_crew_from_reserve: { scope: "none" },
+} satisfies Record<EffectPrimitive["type"], EffectTargeting>;
+
+export const EFFECT_TARGETING: Readonly<
+	Record<EffectPrimitive["type"], EffectTargeting>
+> = EFFECT_TARGETING_TABLE;
+
+export function getEffectTargeting(
+	type: EffectPrimitive["type"],
+): EffectTargeting {
+	return EFFECT_TARGETING[type];
+}
+
+// only entries that add crew-shape preconditions
+export const EFFECT_REQUIRES_CREW: Readonly<
+	Partial<Record<EffectPrimitive["type"], RequiresCrewKind>>
+> = {
+	turn_ally_crew: "own_face_down",
+	choose_red_herring_crew: "own_face_down",
+	hide_ally_crew: "own_face_up",
+	hide_then_retrigger_ally: "own_face_up",
+	strike_own_crew: "own_face_up",
+	hide_one_turn_different_ally: "own_mixed",
+	mark_enemy_crew_for_delayed_turn: "enemy_face_down",
+	discard_targeted_enemy_active_move: "enemy_active_move",
+};
+
 export type EffectCondition =
 	| { when: "always" }
 	| { when: "another_ally_is_turned" }
@@ -422,8 +605,8 @@ const BOSS_MECHANICS: Record<
 	Pick<BossCard, "commandEffects" | "passiveEffects">
 > = {
 	"the-watcher": {
-		commandEffects: [{ type: "peek_steal", cashAmount: 2 }],
-		passiveEffects: [{ type: "passive_watcher_unturn_on_challenge_win" }],
+		commandEffects: [{ type: "peek_steal", cashAmount: 1 }],
+		passiveEffects: [{ type: "passive_watcher_hide_on_challenge_win" }],
 	},
 	"the-dealer": {
 		commandEffects: [{ type: "command_replace_crew_from_reserve" }],
@@ -547,17 +730,23 @@ const CREW_MECHANICS: Record<
 	},
 	mayumi: {
 		turnedEffects: [
-			{ type: "gain_cash", amount: 1 },
+			{ type: "gain_cash", amount: 2 },
 			{ type: "draw_cards", amount: 1 },
 		],
 		passiveEffects: [],
 	},
 	"too-big": {
 		turnedEffects: [{ type: "swap_with_any_face_up_crew" }],
-		passiveEffects: [],
+		passiveEffects: [
+			{
+				type: "passive_self_damage_and_cash_per_turn",
+				damage: 5,
+				cashAmount: 0,
+			},
+		],
 	},
 	"claw-machine": {
-		turnedEffects: [{ type: "draw_cards", amount: 2 }],
+		turnedEffects: [{ type: "draw_cards", amount: 3 }],
 		passiveEffects: [],
 	},
 	bagman: {
@@ -571,7 +760,7 @@ const CREW_MECHANICS: Record<
 		],
 	},
 	belladonna: {
-		turnedEffects: [],
+		turnedEffects: [{ type: "copy_enemy_active_move" }],
 		passiveEffects: [
 			{ type: "passive_reduce_class_action_costs", reduction: 1 },
 		],
@@ -583,14 +772,14 @@ const CREW_MECHANICS: Record<
 		],
 	},
 	"bear-bones": {
-		turnedEffects: [],
+		turnedEffects: [{ type: "steal_cash_choose_target", amount: 1 }],
 		passiveEffects: [
 			{ type: "passive_optional_strike_on_successful_challenge" },
 		],
 	},
 	handles: {
 		turnedEffects: [
-			when({ when: "another_ally_is_turned" }, { type: "unturn_self" }),
+			when({ when: "another_ally_is_turned" }, { type: "hide_self" }),
 			when(
 				{ when: "another_ally_is_turned" },
 				{ type: "deal_damage_self_boss", amount: 5 },
@@ -598,11 +787,11 @@ const CREW_MECHANICS: Record<
 		],
 		passiveEffects: [],
 	},
-	hider: {
+	"miss-direction": {
 		turnedEffects: [
 			when(
 				{ when: "another_ally_is_turned" },
-				{ type: "unturn_other_ally_crew" },
+				{ type: "hide_other_ally_crew" },
 			),
 		],
 		passiveEffects: [{ type: "passive_armor_per_turn", amount: 10 }],
@@ -638,7 +827,7 @@ const CREW_MECHANICS: Record<
 		passiveEffects: [{ type: "passive_increase_enemy_move_costs", amount: 1 }],
 	},
 	wolfman: {
-		turnedEffects: [{ type: "deal_damage", target: "enemy_boss", amount: 50 }],
+		turnedEffects: [{ type: "deal_damage", target: "enemy_boss", amount: 40 }],
 		passiveEffects: [],
 	},
 };
@@ -677,7 +866,10 @@ const MOVE_MECHANICS: Record<string, Pick<MoveCard, "effects">> = {
 	},
 	"prank-call": {
 		effects: [
-			when({ when: "has_bluffed_successfully" }, { type: "steal_cash", amount: 4 }),
+			when(
+				{ when: "has_bluffed_successfully" },
+				{ type: "steal_cash", amount: 4 },
+			),
 		],
 	},
 	"void-arms": {
@@ -828,7 +1020,7 @@ const MOVE_MECHANICS: Record<string, Pick<MoveCard, "effects">> = {
 		],
 	},
 	"tactical-support": {
-		effects: [{ type: "give_ally_cash_then_optional_unturn", cashAmount: 2 }],
+		effects: [{ type: "give_ally_cash_then_optional_hide", cashAmount: 2 }],
 	},
 	"full-moon": {
 		effects: [{ type: "transform_andrew_into_wolfman" }],
@@ -840,7 +1032,7 @@ const MOVE_MECHANICS: Record<string, Pick<MoveCard, "effects">> = {
 		effects: [{ type: "discard_one_draw_three" }],
 	},
 	"heel-turn": {
-		effects: [{ type: "unturn_ally_crew" }],
+		effects: [{ type: "hide_ally_crew" }],
 	},
 	"first-aid": {
 		effects: [{ type: "heal_boss", amount: 20 }],
@@ -857,7 +1049,7 @@ const MOVE_MECHANICS: Record<string, Pick<MoveCard, "effects">> = {
 		],
 	},
 	"pull-counter": {
-		effects: [{ type: "unturn_then_retrigger_ally" }],
+		effects: [{ type: "hide_then_retrigger_ally" }],
 	},
 	"cash-out": {
 		effects: [
@@ -866,7 +1058,7 @@ const MOVE_MECHANICS: Record<string, Pick<MoveCard, "effects">> = {
 		],
 	},
 	"switch-up": {
-		effects: [{ type: "unturn_one_turn_different_ally" }],
+		effects: [{ type: "hide_one_turn_different_ally" }],
 	},
 	"tag-out": {
 		effects: [{ type: "swap_crew_with_teammate" }],
@@ -1008,50 +1200,16 @@ export function isDraftable(crew: CrewCard): boolean {
 
 export type MoveTargetScope = "enemy" | "ally" | "none";
 
-// target scope derived from effects so validation is generic
-// when effects are mixed, enemy scope takes priority as the stricter default
+// derived from EFFECT_TARGETING so validation matches handler code
 export function getMoveTargetScope(move: MoveCard): MoveTargetScope {
-	const ENEMY_SCOPED_TYPES = new Set<EffectPrimitive["type"]>([
-		"deal_damage",
-		"deal_damage_per_face_up_ally",
-		"deal_damage_percent_current_hp",
-		"deal_damage_ignore_armor",
-		"deal_damage_per_discarded_variable",
-		"deal_damage_per_enemy_hand_discarded",
-		"strike_enemy_crew",
-		"strike_enemy_crew_undefendable_with_cash_cost",
-		"strike_enemy_crew_defendable",
-		"turn_enemy_crew",
-		"steal_cash",
-		"discard_all_enemy_hand",
-		"peek_enemy_hand_then_gain_cash",
-		"peek_two_random_enemy_cards_discard_one",
-		"reveal_enemy_crew_class",
-		"remove_all_armor",
-		"set_both_cash_zero_then_draw",
-		"mutual_discard_hand_then_redraw_same_count",
-		"passive_mirror_enemy_collect_cash",
-		"mark_enemy_crew_for_delayed_turn",
-		"discard_targeted_enemy_active_move",
-	]);
-
-	const ALLY_SCOPED_TYPES = new Set<EffectPrimitive["type"]>([
-		"heal_boss",
-		"armor_boss",
-		"set_ally_boss_hp_gain_cash_draw",
-		"give_ally_cash_then_optional_unturn",
-		"swap_crew_with_teammate",
-		"passive_life_insurance",
-		"gain_cash_and_draw_ally", // my treat
-	]);
-
 	let sawEnemy = false;
 	let sawAlly = false;
 
 	for (const e of move.effects) {
 		const eff = unwrapEffect(e);
-		if (ENEMY_SCOPED_TYPES.has(eff.type)) sawEnemy = true;
-		if (ALLY_SCOPED_TYPES.has(eff.type)) sawAlly = true;
+		const targeting = EFFECT_TARGETING[eff.type];
+		if (targeting.scope === "enemy") sawEnemy = true;
+		if (targeting.scope === "ally") sawAlly = true;
 	}
 
 	if (sawEnemy) return "enemy";
@@ -1071,7 +1229,6 @@ export const CARD_IDS = {
 		THE_BASTION: "the-bastion",
 	},
 	CREW: {
-		// strikers
 		PEKTUS: "pektus",
 		SHRIKE: "shrike",
 		G_RONE: "g-rone",
@@ -1080,7 +1237,6 @@ export const CARD_IDS = {
 		HOT_GIRL: "hot-girl",
 		BLACK_FIST: "black-fist",
 		WHISPER: "whisper",
-		// defenders
 		RILLA_GORILLA: "rilla-gorilla",
 		FRONTLINE: "frontline",
 		MAMA_MERCY: "mama-mercy",
@@ -1089,7 +1245,6 @@ export const CARD_IDS = {
 		SILENCER: "silencer",
 		DOCTOR_NORMAN: "doctor-norman",
 		LOTUS: "lotus",
-		// collectors
 		MAYUMI: "mayumi",
 		TOO_BIG: "too-big",
 		CLAW_MACHINE: "claw-machine",
@@ -1098,20 +1253,17 @@ export const CARD_IDS = {
 		BELLADONNA: "belladonna",
 		RAT_QUEEN: "rat-queen",
 		BEAR_BONES: "bear-bones",
-		// unturners
 		HANDLES: "handles",
-		HIDER: "hider",
+		MISS_DIRECTION: "miss-direction",
 		TERMINAL: "terminal",
 		SUPLEX: "suplex",
 		RETRO: "retro",
 		ANDREW: "andrew",
 		ZEDNEM: "zednem",
 		KEEPER: "keeper",
-		// undraftable
 		WOLFMAN: "wolfman",
 	},
 	MOVE: {
-		// active
 		POISON_BREATH: "poison-breath",
 		SIDE_HUSTLE: "side-hustle",
 		EQUALIZER: "equalizer",
@@ -1128,7 +1280,8 @@ export const CARD_IDS = {
 		SUPPLY_DROP: "supply-drop",
 		LIFE_INSURANCE: "life-insurance",
 		FALSE_FLAG_OPERATION: "false-flag-operation",
-		// burst
+		BAMBOO_WALL: "bamboo-wall",
+		TRICKLE_DOWN_ECONOMICS: "trickle-down-economics",
 		DELEB_I: "deleb-i",
 		RELOAD: "reload",
 		DRIVE_BY: "drive-by",
@@ -1159,7 +1312,11 @@ export const CARD_IDS = {
 		SWITCH_UP: "switch-up",
 		TAG_OUT: "tag-out",
 		TAKE_IT_BACK: "take-it-back",
-		// slow
+		SPARE_CHANGE: "spare-change",
+		PAYCHECK: "paycheck",
+		SUCKER_PUNCH: "sucker-punch",
+		WOLFBLASTER: "wolfblaster",
+		DEAD_DROP_RETRIEVAL: "dead-drop-retrieval",
 		CHEAP_SHOT: "cheap-shot",
 		UNFINISHED_BUSINESS: "unfinished-business",
 		KAMIKAZE: "kamikaze",

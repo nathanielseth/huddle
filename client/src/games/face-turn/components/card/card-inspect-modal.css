@@ -1,0 +1,9 @@
+.ft-inspect-swipe {
+	touch-action: pan-y;
+	transition: transform 0.2s ease;
+}
+
+/* snap instantly while pointer moving, transition back in on release */
+.ft-inspect-swipe.is-dragging {
+	transition: none;
+}

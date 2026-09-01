@@ -11,7 +11,7 @@ import type {
 	MoneyGrabOutcome,
 	HigherLowerOutcome,
 	FinalCutOutcome,
-} from "../../../../shared/games/deathvault";
+} from "../../../../shared/games/deathvault/index";
 
 export interface DeathvaultServerQuestion {
 	readonly id: string;

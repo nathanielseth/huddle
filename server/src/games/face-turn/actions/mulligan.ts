@@ -1,9 +1,7 @@
 import type { PhaseActionHandler } from "./types";
 import { noOpResult } from "./types";
-import { FACETURN_CONSTANTS as C } from "../types";
 import { mulliganPlayer, startTurn } from "../game";
-import { makeResult } from "../action-results";
-import { buildPrivatePayloads } from "../state-builders";
+import { makeResult, afterAction } from "../action-results";
 
 export const mulliganAction: PhaseActionHandler = (
 	state,
@@ -27,12 +25,14 @@ export const mulliganAction: PhaseActionHandler = (
 	if (allDecided) {
 		state.phase = "active_turn";
 		startTurn(state, state.turnOrder[0]!);
-		return makeResult(state, C.ACTIVE_TURN_DURATION_MS, {
-			privatePayloads: buildPrivatePayloads(state),
-		});
+		// startTurn() can open a pendingInteraction (e.g. void_legs_choice).
+		// Route through afterAction() rather than hardcoding the active-turn
+		// duration so that case gets its own INTERACTION_WINDOW_MS instead of
+		// the generic one; when nothing was opened, afterAction() falls back
+		// to the same C.ACTIVE_TURN_DURATION_MS this used to hardcode.
+		return afterAction(state);
 	}
 
-	return makeResult(state, ctx.room.timer?.duration ?? null, {
-		privatePayloads: buildPrivatePayloads(state),
-	});
+	// makeResult() always attaches a privatePayloads resync by default.
+	return makeResult(state, ctx.room.timer?.duration ?? null);
 };

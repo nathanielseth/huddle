@@ -51,48 +51,48 @@ export const BOSS_DISPLAY: readonly BossCardDisplay[] = [
 			passive:
 				"I start with 15 Armor. Whenever I take damage, you gain 1 Cash.",
 		},
-		flavorText: "",
-		maxHp: 100,
+		flavorText: "Scars can break us, or give us the strength to endure.",
+		maxHp: 110,
 		startingArmor: 15,
 	},
 	{
 		id: "the-dealer",
-		artSrc: "/assets/games/face-turn/cards/boss/the-dealer.avif",
+		artSrc: "/assets/games/face-turn/cards/boss/dealer.jpg",
 		name: "The Dealer",
 		effectText: {
 			command:
 				"Replace one of your face-up Crew with your reserved Crew, face-down.",
 			passive: "On your turn, you may discard a Move to gain 1 Cash.",
 		},
-		flavorText: "",
+		flavorText: "The house always wins. Luckily, I run the house.",
 		maxHp: 100,
 		hasCustomCommandLogic: true,
 	},
 	{
 		id: "the-razor",
-		artSrc: "/assets/games/face-turn/cards/boss/the-razor.avif",
+		artSrc: "/assets/games/face-turn/cards/boss/razor.jpg",
 		name: "The Razor",
 		effectText: {
 			command:
 				"Guess the class of one face-down enemy Crew. If correct, turn it face-up.",
 			passive: "Damage you deal is increased by 7.",
 		},
-		flavorText: "",
-		maxHp: 100,
+		flavorText: "Only a true star player commands a visionary empire.",
+		maxHp: 110,
 		hasCustomCommandLogic: true,
 	},
 	{
 		id: "the-watcher",
-		artSrc: "/assets/games/face-turn/cards/boss/the-watcher.avif",
+		artSrc: "/assets/games/face-turn/cards/boss/watcher.jpg",
 		name: "The Watcher",
 		effectText: {
 			command:
-				"See 2 random cards from an enemy's hand and take 1, then steal 2 Cash.",
+				"See 2 random cards from an enemy's hand and take 1, then steal 1 Cash.",
 			passive:
-				"Whenever you win a challenge, draw 2, and turn one of your face-up Crew face-down.",
+				"Whenever you win a challenge, draw 2, and turn one of your Crew face-down.",
 		},
-		flavorText: "",
-		maxHp: 100,
+		flavorText: "Nothing dangerous stays unwatched.",
+		maxHp: 120,
 	},
 ];
 
@@ -110,7 +110,7 @@ export const CREW_DISPLAY: readonly CrewCardDisplay[] = [
 				"I deal 15 damage to an enemy Boss. If my partner Crew is face-up, deal 30 damage instead.",
 			passive: "Whenever you kill a Crew, turn me face-down.",
 		},
-		flavorText: "",
+		flavorText: "Reeks of cheap scum. Time to take out the trash.",
 	},
 	{
 		id: "black-fist",
@@ -119,9 +119,9 @@ export const CREW_DISPLAY: readonly CrewCardDisplay[] = [
 		class: "striker",
 		effectText: {
 			revealed:
-				"Discard 2 cards. If you do, I deal 35 damage to an enemy Boss.",
+				"Discard 2. If you do, I deal 35 damage to an enemy Boss.",
 		},
-		flavorText: "",
+		flavorText: "Out of the way! I have business to finish.",
 	},
 	{
 		id: "g-rone",
@@ -131,7 +131,7 @@ export const CREW_DISPLAY: readonly CrewCardDisplay[] = [
 		effectText: {
 			passive: "At the end of each round, I deal 10 damage to an enemy Boss.",
 		},
-		flavorText: "",
+		flavorText: "The white gazes into the unseen...",
 	},
 	{
 		id: "hot-girl",
@@ -142,7 +142,7 @@ export const CREW_DISPLAY: readonly CrewCardDisplay[] = [
 			revealed:
 				"An enemy discards their hand. I deal 5 damage to their Boss for each card discarded this way.",
 		},
-		flavorText: "",
+		flavorText: "FEED THE FLAMES!!",
 	},
 	{
 		id: "monkey-man",
@@ -154,7 +154,7 @@ export const CREW_DISPLAY: readonly CrewCardDisplay[] = [
 			passive:
 				"Whenever you deal damage to an enemy Boss, steal 1 Cash from them.",
 		},
-		flavorText: "",
+		flavorText: "Finders keepers, sucker!",
 	},
 	{
 		id: "pektus",
@@ -165,7 +165,7 @@ export const CREW_DISPLAY: readonly CrewCardDisplay[] = [
 			revealed: "I deal 25 piercing damage to an enemy Boss.",
 			passive: "All damage you deal is piercing.",
 		},
-		flavorText: "",
+		flavorText: "Bullseye.",
 	},
 	{
 		id: "shrike",
@@ -175,7 +175,7 @@ export const CREW_DISPLAY: readonly CrewCardDisplay[] = [
 		effectText: {
 			revealed: "I Strike an enemy Crew.",
 		},
-		flavorText: "",
+		flavorText: "Alright. Let's make this quick.",
 	},
 	{
 		id: "whisper",
@@ -184,17 +184,17 @@ export const CREW_DISPLAY: readonly CrewCardDisplay[] = [
 		class: "striker",
 		effectText: {
 			revealed:
-				"Discard 3 cards. If you do, I do an unstoppable Strike on an enemy Crew. If you have successfully called a bluff this game, discard 1 instead.",
+				"Discard 3. If you do, I do an unstoppable Strike on an enemy Crew. If you have successfully called a bluff this game, discard 1 instead.",
 		},
-		flavorText: "",
+		flavorText: "You'll never know what kills you.",
 	},
 	{
 		id: "wolfman",
 		artSrc: "/assets/games/face-turn/cards/crew/wolfman.avif",
 		name: "Wolfman",
 		class: "striker",
-		effectText: { revealed: "I deal 50 damage to an enemy Boss." },
-		flavorText: "",
+		effectText: { revealed: "I deal 40 damage to an enemy Boss." },
+		flavorText: "...IN WOLF'S CLOTHING!!",
 		draftable: false,
 	},
 
@@ -207,9 +207,9 @@ export const CREW_DISPLAY: readonly CrewCardDisplay[] = [
 		class: "defender",
 		effectText: {
 			passive:
-				"Whenever you discard, I give my Boss 10 Armor for each card discarded.",
+				"Whenever you discard, I give my Boss 10 Armor for each.",
 		},
-		flavorText: "",
+		flavorText: "Exquisite! Another breakthrough.",
 	},
 	{
 		id: "frontline",
@@ -219,7 +219,7 @@ export const CREW_DISPLAY: readonly CrewCardDisplay[] = [
 		effectText: {
 			revealed: "My Boss cannot be damaged or struck for 2 turns.",
 		},
-		flavorText: "",
+		flavorText: "You will survive. I'll make sure of it.",
 	},
 	{
 		id: "glob",
@@ -230,7 +230,7 @@ export const CREW_DISPLAY: readonly CrewCardDisplay[] = [
 			revealed:
 				"If my Boss has any Armor, I give it 40 more Armor. If my Boss has no Armor, steal 1 Cash from an enemy instead.",
 		},
-		flavorText: "",
+		flavorText: "glorb. goob. gaaarb.",
 	},
 	{
 		id: "lighthouse",
@@ -241,7 +241,7 @@ export const CREW_DISPLAY: readonly CrewCardDisplay[] = [
 			revealed: "I deal 10 damage to all enemy Bosses.",
 			passive: "All enemy Revealed Effects are disabled.",
 		},
-		flavorText: "",
+		flavorText: "Hope is dead... but the light remains.",
 	},
 	{
 		id: "lotus",
@@ -251,7 +251,7 @@ export const CREW_DISPLAY: readonly CrewCardDisplay[] = [
 		effectText: {
 			passive: "I can Strike.",
 		},
-		flavorText: "",
+		flavorText: "Don't die. I've already wasted enough time on you.",
 	},
 	{
 		id: "mama-mercy",
@@ -262,7 +262,7 @@ export const CREW_DISPLAY: readonly CrewCardDisplay[] = [
 			passive:
 				"Whenever the team turns a Crew face-up or face-down, I give my Boss 20 Armor.",
 		},
-		flavorText: "",
+		flavorText: "Nobody touches my people.",
 	},
 	{
 		id: "rilla-gorilla",
@@ -273,7 +273,7 @@ export const CREW_DISPLAY: readonly CrewCardDisplay[] = [
 			revealed:
 				"I give 30 Armor to my Boss, then deal 10 damage to an enemy Boss.",
 		},
-		flavorText: "",
+		flavorText: "GRRR-AAAAAH!",
 	},
 	{
 		id: "silencer",
@@ -284,7 +284,7 @@ export const CREW_DISPLAY: readonly CrewCardDisplay[] = [
 			revealed: "I give 10 Armor to all allied Bosses.",
 			passive: "All enemy Crew Passives are disabled.",
 		},
-		flavorText: "",
+		flavorText: "...",
 	},
 
 	// collectors
@@ -297,7 +297,7 @@ export const CREW_DISPLAY: readonly CrewCardDisplay[] = [
 		effectText: {
 			passive: "I can Defend.",
 		},
-		flavorText: "",
+		flavorText: "Here comes the money.",
 	},
 	{
 		id: "bear-bones",
@@ -305,10 +305,11 @@ export const CREW_DISPLAY: readonly CrewCardDisplay[] = [
 		name: "Bear Bones",
 		class: "collector",
 		effectText: {
+			revealed: "Steal 1 Cash.",
 			passive:
-				"Whenever you successfully challenge an enemy, Strike one of their face-down Crew.",
+				"Whenever you successfully challenge an enemy, Strike one of their Crew.",
 		},
-		flavorText: "",
+		flavorText: "I would do anything for my Ursula. Especially a felony.",
 	},
 	{
 		id: "belladonna",
@@ -316,17 +317,18 @@ export const CREW_DISPLAY: readonly CrewCardDisplay[] = [
 		name: "Belladonna",
 		class: "collector",
 		effectText: {
+			revealed: "Copy an enemy's ongoing Move into your ongoing zone.",
 			passive: "Class actions cost 1 less Cash.",
 		},
-		flavorText: "",
+		flavorText: "Mmm, I like this. I think I'll make one just for me.",
 	},
 	{
 		id: "claw-machine",
 		artSrc: "/assets/games/face-turn/cards/crew/claw-machine.avif",
 		name: "Claw Machine",
 		class: "collector",
-		effectText: { revealed: "You draw 2." },
-		flavorText: "",
+		effectText: { revealed: "You draw 3." },
+		flavorText: "That's going in my collection.",
 	},
 	{
 		id: "cool-guy",
@@ -337,15 +339,15 @@ export const CREW_DISPLAY: readonly CrewCardDisplay[] = [
 			passive:
 				"Whenever you play a Move, I deal 3 damage to a random enemy Boss.",
 		},
-		flavorText: "",
+		flavorText: "Ice to meet ya!",
 	},
 	{
 		id: "mayumi",
 		artSrc: "/assets/games/face-turn/cards/crew/mayumi.avif",
 		name: "Mayumi",
 		class: "collector",
-		effectText: { revealed: "You gain 1 Cash and draw 1." },
-		flavorText: "",
+		effectText: { revealed: "You gain 2 Cash and draw 1." },
+		flavorText: "Curiosity pays surprisingly well...",
 	},
 	{
 		id: "rat-queen",
@@ -355,7 +357,7 @@ export const CREW_DISPLAY: readonly CrewCardDisplay[] = [
 		effectText: {
 			passive: "The first time your hand becomes empty each turn, you draw 2.",
 		},
-		flavorText: "",
+		flavorText: "We're here! We're there! We're everywhere!",
 	},
 	{
 		id: "too-big",
@@ -364,105 +366,106 @@ export const CREW_DISPLAY: readonly CrewCardDisplay[] = [
 		class: "collector",
 		effectText: {
 			revealed: "Swap this card with any other face-up crew card.",
+			passive: "At the start of your turn, deal 5 damage to my Boss.",
 		},
-		flavorText: "",
+		flavorText: "You ever tried drowning someone?",
 	},
 
-	// unturners
+	// hiders
 
 	{
 		id: "andrew",
 		artSrc: "/assets/games/face-turn/cards/crew/andrew.avif",
 		name: "Andrew",
-		class: "unturner",
+		class: "hider",
 		effectText: {
 			passive: "Draw 1 at the start of your turn.",
 		},
-		flavorText: "",
+		flavorText: "Just a sheep..",
 	},
 	{
 		id: "handles",
 		artSrc: "/assets/games/face-turn/cards/crew/handles.avif",
 		name: "Handles",
-		class: "unturner",
+		class: "hider",
 		effectText: {
 			revealed:
 				"If my partner Crew is face-up, turn me face-down and deal 5 damage to my Boss.",
 		},
-		flavorText: "",
+		flavorText: "First I steal your ankles, bro, then I take your teeth.",
 	},
 	{
-		id: "hider",
+		id: "miss-direction",
 		artSrc: "/assets/games/face-turn/cards/crew/hider.avif",
-		name: "Hider",
-		class: "unturner",
+		name: "Miss Direction",
+		class: "hider",
 		effectText: {
 			revealed: "If my partner crew is face-up, I turn it face-down.",
 			passive: "At the start of your turn, your Boss gains 10 Armor.",
 		},
-		flavorText: "",
+		flavorText: "You'll be safe here.",
 	},
 	{
 		id: "keeper",
 		artSrc: "/assets/games/face-turn/cards/crew/keeper.avif",
 		name: "Keeper",
-		class: "unturner",
+		class: "hider",
 		effectText: {
 			revealed: "Take 1 random card from an enemy's hand.",
 			passive: "Enemy Moves cost 1 more Cash.",
 		},
-		flavorText: "",
+		flavorText: "Moving things that bite. Looking for a buyer.",
 	},
 	{
 		id: "retro",
 		artSrc: "/assets/games/face-turn/cards/crew/retro.avif",
 		name: "Retro",
-		class: "unturner",
+		class: "hider",
 		effectText: {
 			revealed:
 				"Chronotrix costs 3. Search your deck for Chronotrix, then shuffle your deck.",
 		},
-		flavorText: "",
+		flavorText: "How many times do you think I've tried?",
 	},
 	{
 		id: "suplex",
 		artSrc: "/assets/games/face-turn/cards/crew/suplex.avif",
 		name: "Suplex",
-		class: "unturner",
+		class: "hider",
 		effectText: {
 			revealed: "I deal 10 damage to an enemy Boss.",
 			passive:
 				"Whenever the team turns a Crew face-up or face-down, I Strike an enemy Crew.",
 		},
-		flavorText: "",
+		flavorText: "You picked the wrong ring, brother!",
 	},
 	{
 		id: "terminal",
 		artSrc: "/assets/games/face-turn/cards/crew/terminal.avif",
 		name: "Terminal",
-		class: "unturner",
+		class: "hider",
 		effectText: {
 			passive: "My Boss cannot be Struck while its HP is greater than 60.",
 		},
-		flavorText: "",
+		flavorText: "[SYS_FLAG] USER_SURVIVAL :: PRIORITY_MAX",
 	},
 	{
 		id: "zednem",
 		artSrc: "/assets/games/face-turn/cards/crew/zednem.avif",
 		name: "Zednem",
-		class: "unturner",
+		class: "hider",
 		effectText: {
 			revealed: "Draw 2.",
 			passive: "Your Burst Moves cost 1 less Cash.",
 		},
-		flavorText: "",
+		flavorText: "THIS CITY HAS ENOUGH MONSTERS!",
 	},
 ];
 
 // moves
 
 export const MOVE_DISPLAY: readonly MoveCardDisplay[] = [
-	// active moves
+	// ongoing moves
 	{
 		id: "background-check",
 		artSrc: "/assets/games/face-turn/cards/moves/background-check.avif",
@@ -498,7 +501,7 @@ export const MOVE_DISPLAY: readonly MoveCardDisplay[] = [
 		name: "Blackmail",
 		baseCost: 3,
 		moveType: "active",
-		effectText: "All Crew Passives are disabled.",
+		effectText: "All enemy Crew Passives are disabled.",
 		flavorText: "",
 	},
 	{
@@ -643,7 +646,7 @@ export const MOVE_DISPLAY: readonly MoveCardDisplay[] = [
 		baseCost: 1,
 		moveType: "active",
 		effectText:
-			"At the start of your turn, you may discard 1 card. If you do, deal 5 damage to an enemy Boss.",
+			"At the start of your turn, you may discard. If you do, deal 5 damage to an enemy Boss.",
 		flavorText: "",
 	},
 	{
@@ -720,7 +723,7 @@ export const MOVE_DISPLAY: readonly MoveCardDisplay[] = [
 		name: "Cash Out",
 		baseCost: 0,
 		moveType: "burst",
-		effectText: "Discard 2 cards. If you do, gain 3 Cash.",
+		effectText: "Discard 2. If you do, gain 3 Cash.",
 		flavorText: "",
 	},
 	{
@@ -768,8 +771,8 @@ export const MOVE_DISPLAY: readonly MoveCardDisplay[] = [
 		baseCost: 2,
 		moveType: "burst",
 		effectText:
-			"If The Iterated Void's Arms, Legs, and Torso are all in your active zone, you win the game.",
-		flavorText: "",
+			"If The Iterated Void's Arms, Legs, and Torso are all in your ongoing zone, you win the game.",
+		flavorText: "DELETE. ALL. BUT. I.",
 	},
 	{
 		id: "dig-deep",
@@ -788,7 +791,7 @@ export const MOVE_DISPLAY: readonly MoveCardDisplay[] = [
 		baseCost: 2,
 		moveType: "burst",
 		effectText:
-			"You discard any number of cards from your hand. Deal 10 damage to an enemy Boss for each card discarded this way.",
+			"You discard any number of cards from your hand. Deal 10 damage to an enemy Boss for each.",
 		flavorText: "",
 	},
 	{
@@ -816,7 +819,7 @@ export const MOVE_DISPLAY: readonly MoveCardDisplay[] = [
 		name: "Full Moon",
 		baseCost: 1,
 		moveType: "burst",
-		effectText: "Transform Andrew into Wolfman, face-down.",
+		effectText: "Transform Andrew into Wolfman.",
 		flavorText: "",
 	},
 	{
@@ -844,7 +847,7 @@ export const MOVE_DISPLAY: readonly MoveCardDisplay[] = [
 		baseCost: 2,
 		moveType: "burst",
 		effectText:
-			"Discard 2 cards. If you do, trigger one of your face-up Crew's Revealed effect.",
+			"Discard 2. If you do, trigger one of your face-up Crew's Revealed effect.",
 		flavorText: "",
 	},
 	{
@@ -898,7 +901,7 @@ export const MOVE_DISPLAY: readonly MoveCardDisplay[] = [
 		name: "Sabotage",
 		baseCost: 2,
 		moveType: "burst",
-		effectText: "Choose an Active Move in an enemy's active zone. Discard it.",
+		effectText: "Choose an Ongoing Move in an enemy's ongoing zone. Discard it.",
 		flavorText: "",
 	},
 	{
@@ -964,7 +967,7 @@ export const MOVE_DISPLAY: readonly MoveCardDisplay[] = [
 		name: "Triangle of Trust",
 		baseCost: 1,
 		moveType: "burst",
-		effectText: "Discard 1 card. If you do, draw 3.",
+		effectText: "Discard 1. If you do, draw 3.",
 		flavorText: "",
 	},
 
@@ -1082,7 +1085,7 @@ export const MOVE_DISPLAY: readonly MoveCardDisplay[] = [
 	},
 	{
 		id: "reverse-card",
-		artSrc: "/assets/games/face-turn/cards/moves/reverse-card.avif",
+		artSrc: "/assets/games/face-turn/cards/moves/reversal.avif",
 		name: "Reversal",
 		baseCost: 2,
 		moveType: "slow",
@@ -1096,7 +1099,7 @@ export const MOVE_DISPLAY: readonly MoveCardDisplay[] = [
 		name: "Scorched Earth",
 		baseCost: 3,
 		moveType: "slow",
-		effectText: "Discard all Active Moves from an enemy's active zone.",
+		effectText: "Discard all Ongoing Moves from an enemy's ongoing zone.",
 		flavorText: "",
 	},
 	{
@@ -1157,34 +1160,6 @@ export const MOVE_DISPLAY: readonly MoveCardDisplay[] = [
 		flavorText: "",
 	},
 ];
-
-export const SELF_CREW_SLOT_MOVE_IDS = new Set<string>([
-	"kamikaze",
-	"heel-turn",
-	"pull-counter",
-	"red-herring",
-	"to-the-death",
-]);
-
-export function needsSelfCrewSlot(move: MoveCardDisplay): boolean {
-	return SELF_CREW_SLOT_MOVE_IDS.has(move.id);
-}
-
-export const MOVE_TARGET_SCOPE: Readonly<Record<string, "ally" | "ally_self">> =
-	{
-		"tag-out": "ally",
-		"life-insurance": "ally_self",
-		"tactical-support": "ally_self",
-		"trickle-down-economics": "ally_self",
-		"my-treat": "ally_self",
-	};
-
-export function getMoveTargetScope(
-	moveId: string,
-): "enemy" | "ally" | "ally_self" {
-	return MOVE_TARGET_SCOPE[moveId] ?? "enemy";
-}
-
 export type MoveTargetKind =
 	| "enemy_boss"
 	| "enemy_crew"
@@ -1192,6 +1167,9 @@ export type MoveTargetKind =
 	| "enemy_player"
 	| "ally_crew"
 	| "ally_player"
+	// ally-scoped but excludes caster
+	| "ally_teammate"
+	// target is always the caster, no picker
 	| "ally_self"
 	| "no_target";
 
@@ -1207,7 +1185,7 @@ export const MOVE_TARGET_KIND: Readonly<Record<string, MoveTargetKind>> = {
 	equalizer: "no_target",
 	extortion: "no_target",
 	"false-flag-operation": "no_target",
-	"life-insurance": "no_target",
+	"life-insurance": "ally_player",
 	"poison-breath": "no_target",
 	"red-herring": "no_target",
 	"sell-out": "no_target",
@@ -1216,7 +1194,7 @@ export const MOVE_TARGET_KIND: Readonly<Record<string, MoveTargetKind>> = {
 	"void-arms": "no_target",
 	"void-legs": "no_target",
 	"void-torso": "no_target",
-	"trickle-down-economics": "no_target",
+	// primary is no_target; enemy crew slot supplied via armed secondary pick.
 	"warrant-of-arrest": "no_target",
 
 	"all-in": "ally_player",
@@ -1235,8 +1213,8 @@ export const MOVE_TARGET_KIND: Readonly<Record<string, MoveTargetKind>> = {
 	"fresh-start": "no_target",
 	"full-moon": "no_target",
 	"heel-turn": "no_target",
-	"my-treat": "ally_player",
-	"neetos-clock": "ally_self",
+	"my-treat": "ally_teammate",
+	"neetos-clock": "no_target",
 	paycheck: "no_target",
 	"pull-counter": "no_target",
 	reinforcements: "ally_player",
@@ -1245,9 +1223,9 @@ export const MOVE_TARGET_KIND: Readonly<Record<string, MoveTargetKind>> = {
 	sabotage: "enemy_active",
 	"spare-change": "no_target",
 	"sucker-punch": "enemy_boss",
-	"switch-up": "ally_self",
+	"switch-up": "no_target",
 	"tactical-support": "ally_player",
-	"tag-out": "ally_player",
+	"tag-out": "ally_teammate",
 	"take-it-back": "no_target",
 	"triangle-of-trust": "no_target",
 
@@ -1260,6 +1238,7 @@ export const MOVE_TARGET_KIND: Readonly<Record<string, MoveTargetKind>> = {
 	"job-application": "enemy_player",
 	kamikaze: "enemy_boss",
 	nope: "no_target",
+	"trickle-down-economics": "enemy_player",
 	pickpocket: "enemy_player",
 	"prank-call": "enemy_player",
 	ratatatat: "enemy_boss",
@@ -1280,7 +1259,6 @@ export function getMoveTargetKind(moveId: string): MoveTargetKind {
 	return kind;
 }
 
-// secondary target required or optional; null means no pick or handled by pendingInteraction
 export type PostPlacementScope =
 	| "own_crew"
 	| "enemy_crew"
@@ -1290,14 +1268,13 @@ export type PostPlacementScope =
 export type PostPlacementTarget = {
 	readonly required: boolean;
 	readonly scope: PostPlacementScope;
-	// only for own_crew; field splits between targetCrewSlot and targetAllySlot due to schema inconsistency
+	// only for own_crew; field splits due to schema inconsistency
 	readonly field?: "targetCrewSlot" | "targetAllySlot";
 } | null;
 
 export const MOVE_POST_PLACEMENT_TARGET: Readonly<
 	Record<string, PostPlacementTarget>
 > = {
-	// effect.targetSlot never set; uses internal fallback
 	"heel-turn": null,
 	"pull-counter": {
 		required: false,
@@ -1309,22 +1286,16 @@ export const MOVE_POST_PLACEMENT_TARGET: Readonly<
 		scope: "own_crew",
 		field: "targetCrewSlot",
 	},
-	// effect.targetSlot never set; no client-suppliable slot
 	kamikaze: null,
-	// required when two face-up crew; conservative required
 	"to-the-death": {
 		required: true,
 		scope: "own_crew",
 		field: "targetAllySlot",
 	},
 	"warrant-of-arrest": { required: true, scope: "enemy_crew" },
-	// optional; auto-resolves with one enemy, else pendingInteraction
 	"poison-breath": { required: false, scope: "enemy_player" },
-	// handler returns early without target
-	"trickle-down-economics": { required: true, scope: "enemy_player" },
-	// handler returns early without slot; move still plays on whiff
-	sabotage: { required: true, scope: "enemy_active" },
-	// opens pendingInteraction with computed slots; no client slot
+	// primary target already supplies both fields, no secondary pick
+	sabotage: null,
 	"neetos-clock": null,
 };
 

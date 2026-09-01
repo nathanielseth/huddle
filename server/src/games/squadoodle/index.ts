@@ -3,8 +3,8 @@ import type {
 	GameEngineWithSecrets,
 	GameContext,
 	EngineResult,
-} from "../../engine/GameEngine.js";
-import type { GameTimer } from "../../../../shared/core/room.js";
+} from "../../engine/GameEngine";
+import type { GameTimer } from "../../../../shared/core/room";
 import type {
 	SquadoodleState,
 	SquadoodleSecret,
@@ -16,36 +16,44 @@ import type {
 	AccoladeKind,
 	ReactionType,
 	Stroke,
-} from "../../../../shared/games/squadoodle.js";
-import type { SquadoodleServerState } from "./types.js";
-import { C } from "./constants.js";
-import { SquadoodleActionSchema } from "./schemas.js";
-import { chainForPlayer, isDrawingStep } from "./routing.js";
-import { shuffle } from "../lib/random.js";
+} from "../../../../shared/games/squadoodle/index";
+import type { SquadoodleServerState } from "./types";
+import { C } from "./constants";
+import { SquadoodleActionSchema } from "./schemas";
+import { chainForPlayer, isDrawingStep } from "./routing";
+import { shuffle } from "../lib/random";
 import { makeTimer } from "./../lib/timer";
-import { defined } from "../lib/assert.js";
+import { defined } from "../lib/assert";
 
-// AFTER
+// ─── exhaustiveness helper ───────────────────────────────────────────────────
+
+function assertNever(x: never): never {
+	throw new Error(`Unhandled case: ${String(x)}`);
+}
+
+// ─── reaction helpers ────────────────────────────────────────────────────────
+
 function getTally(
 	reactions: Map<number, Map<number, Map<string, ReactionType>>>,
 	c: number,
 	e: number,
 ): ReactionTally {
-	let fire = 0, laugh = 0, heart = 0, trash = 0;
+	let fire = 0,
+		laugh = 0,
+		heart = 0,
+		trash = 0;
 	const byEntry = reactions.get(c)?.get(e);
 	if (byEntry) {
 		for (const r of byEntry.values()) {
 			if (r === "fire") fire++;
 			else if (r === "laugh") laugh++;
 			else if (r === "heart") heart++;
-			else if (r === "trash") trash++;
+			else trash++; // only remaining ReactionType is "trash"
 		}
 	}
 	return { fire, laugh, heart, trash };
 }
 
-// records or overwrites a player's reaction for a chain entry. last-write-wins.
-// initialises intermediate Maps lazily
 function setReaction(
 	reactions: Map<number, Map<number, Map<string, ReactionType>>>,
 	chainIndex: number,
@@ -72,6 +80,8 @@ function buildReactionMatrix(state: SquadoodleServerState): ReactionTally[][] {
 	);
 }
 
+// ─── public state builder ────────────────────────────────────────────────────
+
 function buildPublicState(state: SquadoodleServerState): SquadoodleState {
 	const N = state.playerOrder.length;
 	const isRevealPhase = state.phase === "reveal" || state.phase === "accolades";
@@ -85,12 +95,13 @@ function buildPublicState(state: SquadoodleServerState): SquadoodleState {
 		totalCount: N,
 		revealChainIndex: state.revealChainIndex,
 		revealEntryIndex: state.revealEntryIndex,
-		// chain contents withheld during working phases to prevent spoilers
 		chains: isRevealPhase ? state.chains : [],
 		reactions: buildReactionMatrix(state),
 		accolades: state.accolades,
 	};
 }
+
+// ─── result factory ──────────────────────────────────────────────────────────
 
 function makeResult(
 	state: SquadoodleServerState,
@@ -102,14 +113,13 @@ function makeResult(
 		serverPayload: state,
 		publicPayload: buildPublicState(state),
 		timer,
-		...(privatePayloads && {
-			privatePayloads: privatePayloads as Map<string, unknown>,
-		}),
+		...(privatePayloads && { privatePayloads }),
 		...(roomPhase && { roomPhase }),
 	};
 }
 
-// sends the same task to every player
+// ─── secret helpers ──────────────────────────────────────────────────────────
+
 function broadcastTask(
 	state: SquadoodleServerState,
 	task: PlayerTask,
@@ -120,6 +130,8 @@ function broadcastTask(
 	}
 	return map;
 }
+
+// ─── accolades ───────────────────────────────────────────────────────────────
 
 function computeAccolades(state: SquadoodleServerState): Accolade[] {
 	const accolades: Accolade[] = [];
@@ -137,12 +149,12 @@ function computeAccolades(state: SquadoodleServerState): Accolade[] {
 		for (let c = 0; c < N; c++) {
 			const chain = defined(
 				state.chains[c],
-				`chains[${c}] missing in bestEntry`,
+				`chains[${String(c)}] missing in bestEntry`,
 			);
 			for (let e = 0; e < chain.length; e++) {
 				const entry = defined(
 					chain[e],
-					`chains[${c}][${e}] missing in bestEntry`,
+					`chains[${String(c)}][${String(e)}] missing in bestEntry`,
 				);
 				if (entry.type !== entryType) continue;
 				const count = getTally(state.reactions, c, e)[metric];
@@ -157,11 +169,11 @@ function computeAccolades(state: SquadoodleServerState): Accolade[] {
 		if (max > 0 && bestC >= 0 && bestE >= 0) {
 			const chain = defined(
 				state.chains[bestC],
-				`chains[${bestC}] missing when pushing accolade`,
+				`chains[${String(bestC)}] missing when pushing accolade`,
 			);
 			const entry = defined(
 				chain[bestE],
-				`chains[${bestC}][${bestE}] missing when pushing accolade`,
+				`chains[${String(bestC)}][${String(bestE)}] missing when pushing accolade`,
 			);
 			accolades.push({
 				kind,
@@ -175,14 +187,15 @@ function computeAccolades(state: SquadoodleServerState): Accolade[] {
 	bestEntry("most_hearted_drawing", "drawing", "heart");
 	bestEntry("funniest_guess", "guess", "laugh");
 	bestEntry("most_trashed_drawing", "drawing", "trash");
-	// most chaotic chain: highest total fire count across all entries
+
+	// Most chaotic chain: highest total fire count across all entries.
 	{
 		let max = 0;
 		let bestC = -1;
 		for (let c = 0; c < N; c++) {
 			const chain = defined(
 				state.chains[c],
-				`chains[${c}] missing in chaotic scan`,
+				`chains[${String(c)}] missing in chaotic scan`,
 			);
 			const fire = chain.reduce(
 				(sum, _, e) => sum + getTally(state.reactions, c, e).fire,
@@ -196,11 +209,11 @@ function computeAccolades(state: SquadoodleServerState): Accolade[] {
 		if (max > 0 && bestC >= 0) {
 			const chain = defined(
 				state.chains[bestC],
-				`chains[${bestC}] missing when pushing chaotic accolade`,
+				`chains[${String(bestC)}] missing when pushing chaotic accolade`,
 			);
 			const firstEntry = defined(
 				chain[0],
-				`chains[${bestC}][0] missing — chain unexpectedly empty`,
+				`chains[${String(bestC)}][0] missing — chain unexpectedly empty`,
 			);
 			accolades.push({
 				kind: "most_chaotic_chain",
@@ -214,7 +227,8 @@ function computeAccolades(state: SquadoodleServerState): Accolade[] {
 	return accolades;
 }
 
-// computes per-player tasks for the current step, returns as private payload map
+// ─── work secrets ────────────────────────────────────────────────────────────
+
 function buildWorkSecrets(
 	state: SquadoodleServerState,
 ): Map<string, SquadoodleSecret> {
@@ -225,17 +239,16 @@ function buildWorkSecrets(
 	for (let i = 0; i < N; i++) {
 		const pid = defined(
 			state.playerOrder[i],
-			`playerOrder[${i}] missing in buildWorkSecrets`,
+			`playerOrder[${String(i)}] missing in buildWorkSecrets`,
 		);
 		const chainIndex = chainForPlayer(i, state.step, N);
 		const chain = defined(
 			state.chains[chainIndex],
-			`chains[${chainIndex}] missing in buildWorkSecrets`,
+			`chains[${String(chainIndex)}] missing in buildWorkSecrets`,
 		);
-		// at step > 0, every chain always has at least one entry (the prompt)
 		const lastEntry = defined(
 			chain[chain.length - 1],
-			`chains[${chainIndex}] is empty at step ${state.step}`,
+			`chains[${String(chainIndex)}] is empty at step ${String(state.step)}`,
 		);
 
 		let task: PlayerTask;
@@ -258,7 +271,8 @@ function buildWorkSecrets(
 	return map;
 }
 
-// advance from current step to next, or transition to reveal if all done
+// ─── step & reveal advancement ───────────────────────────────────────────────
+
 function advanceStep(state: SquadoodleServerState): EngineResult {
 	const N = state.playerOrder.length;
 	const lastWorkStep = N - 1;
@@ -283,23 +297,20 @@ function enterReveal(state: SquadoodleServerState): EngineResult {
 	state.revealChainIndex = 0;
 	state.revealEntryIndex = 0;
 
-	// phones switch to reaction-button mode
 	const secrets = broadcastTask(state, { type: "react" });
 	return makeResult(state, makeTimer(C.REVEAL_ENTRY_MS), secrets);
 }
 
-// advance one entry within the reveal. called by timer expiry and host next_reveal
 function advanceReveal(state: SquadoodleServerState): EngineResult {
 	const N = state.playerOrder.length;
 	const currentChain = defined(
 		state.chains[state.revealChainIndex],
-		`chains[${state.revealChainIndex}] missing in advanceReveal`,
+		`chains[${String(state.revealChainIndex)}] missing in advanceReveal`,
 	);
 
 	state.revealEntryIndex++;
 
 	if (state.revealEntryIndex >= currentChain.length) {
-		// current chain fully revealed — move to next
 		state.revealChainIndex++;
 		state.revealEntryIndex = 0;
 
@@ -307,7 +318,6 @@ function advanceReveal(state: SquadoodleServerState): EngineResult {
 			return enterAccolades(state);
 		}
 
-		// longer pause between chains
 		return makeResult(state, makeTimer(C.REVEAL_CHAIN_PAUSE_MS));
 	}
 
@@ -320,8 +330,8 @@ function enterAccolades(state: SquadoodleServerState): EngineResult {
 	return makeResult(state, makeTimer(C.ACCOLADES_MS));
 }
 
-// records a work submission. on final submission for a step, auto-advances.
-// returns null if submission should be silently ignored
+// ─── submission handling ─────────────────────────────────────────────────────
+
 function handleSubmit(
 	state: SquadoodleServerState,
 	playerId: string,
@@ -335,7 +345,7 @@ function handleSubmit(
 	const chainIndex = chainForPlayer(playerIndex, state.step, N);
 	defined(
 		state.chains[chainIndex],
-		`chains[${chainIndex}] missing in handleSubmit`,
+		`chains[${String(chainIndex)}] missing in handleSubmit`,
 	).push(entry);
 	state.submissions.add(playerId);
 
@@ -346,7 +356,6 @@ function handleSubmit(
 	return makeResult(state, currentTimer);
 }
 
-// auto-fill every player who hasn't submitted for the current step. used on timer expiry
 function autoFillMissing(state: SquadoodleServerState): void {
 	const N = state.playerOrder.length;
 
@@ -355,27 +364,30 @@ function autoFillMissing(state: SquadoodleServerState): void {
 	for (let i = 0; i < N; i++) {
 		const pid = defined(
 			state.playerOrder[i],
-			`playerOrder[${i}] missing in autoFillMissing`,
+			`playerOrder[${String(i)}] missing in autoFillMissing`,
 		);
 		if (state.submissions.has(pid)) continue;
 
 		const chainIndex = chainForPlayer(i, state.step, N);
 		const chain = defined(
 			state.chains[chainIndex],
-			`chains[${chainIndex}] missing in autoFillMissing`,
+			`chains[${String(chainIndex)}] missing in autoFillMissing`,
 		);
 
 		if (state.phase === "prompt_writing") {
 			chain.push({ type: "prompt", authorId: pid, text: "…" });
 		} else if (state.phase === "drawing") {
 			chain.push({ type: "drawing", authorId: pid, strokes: [] });
-		} else if (state.phase === "guessing") {
+		} else {
+			// only remaining work phase is "guessing"
 			chain.push({ type: "guess", authorId: pid, text: "…" });
 		}
 
 		state.submissions.add(pid);
 	}
 }
+
+// ─── engine export ───────────────────────────────────────────────────────────
 
 export const squadoodleEngine: GameEngine & GameEngineWithSecrets = {
 	gameId: "squadoodle",
@@ -475,12 +487,11 @@ export const squadoodleEngine: GameEngine & GameEngineWithSecrets = {
 
 					const chain = defined(
 						state.chains[chainIndex],
-						`chains[${chainIndex}] missing during react`,
+						`chains[${String(chainIndex)}] missing during react`,
 					);
 
 					if (entryIndex < 0 || entryIndex >= chain.length) return noOp();
 
-					// players may only react to already-revealed entries
 					if (chainIndex > state.revealChainIndex) return noOp();
 					if (
 						chainIndex === state.revealChainIndex &&
@@ -500,7 +511,6 @@ export const squadoodleEngine: GameEngine & GameEngineWithSecrets = {
 				}
 
 				if (action.type === "next_reveal") {
-					// host manually advances, resets the auto-advance timer
 					return advanceReveal(state);
 				}
 
@@ -514,10 +524,8 @@ export const squadoodleEngine: GameEngine & GameEngineWithSecrets = {
 				return noOp();
 			}
 
-			default: {
-				const _exhaustive: never = state.phase;
-				return noOp();
-			}
+			default:
+				return assertNever(state.phase);
 		}
 	},
 
@@ -539,32 +547,26 @@ export const squadoodleEngine: GameEngine & GameEngineWithSecrets = {
 			case "accolades":
 				return makeResult(state, null, undefined, "ended");
 
-			default: {
-				const _exhaustive: never = state.phase;
-				return makeResult(state, null);
-			}
+			default:
+				return assertNever(state.phase);
 		}
 	},
 
 	getPlayerSecret(ctx: GameContext, playerId: string): SquadoodleSecret | null {
 		const state = ctx.room.gamePayload as SquadoodleServerState;
 
-		// reveal / accolades — everyone just sees reaction buttons
 		if (state.phase === "reveal" || state.phase === "accolades") {
 			return { task: { type: "react" } };
 		}
 
-		// already submitted this step — show waiting screen
 		if (state.submissions.has(playerId)) {
 			return { task: { type: "wait" } };
 		}
 
-		// prompt-writing phase — nothing to reconstruct
 		if (state.phase === "prompt_writing") {
 			return { task: { type: "write_prompt" } };
 		}
 
-		// draw or guess phase — reconstruct task from the player's assigned chain
 		const playerIndex = state.playerOrder.indexOf(playerId);
 		if (playerIndex === -1) return null;
 
@@ -584,12 +586,9 @@ export const squadoodleEngine: GameEngine & GameEngineWithSecrets = {
 			return { task: { type: "draw", basedOn: text } };
 		}
 
-		if (state.phase === "guessing") {
-			const strokes: readonly Stroke[] =
-				lastEntry.type === "drawing" ? lastEntry.strokes : [];
-			return { task: { type: "guess", strokes } };
-		}
-
-		return null;
+		// only remaining work phase is "guessing"
+		const strokes: readonly Stroke[] =
+			lastEntry.type === "drawing" ? lastEntry.strokes : [];
+		return { task: { type: "guess", strokes } };
 	},
 };

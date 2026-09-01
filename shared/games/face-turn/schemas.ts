@@ -72,6 +72,11 @@ const RpsChoiceSchema = z.object({
 	choice: z.enum(["rock", "paper", "scissors"]),
 });
 
+const RpsOrderChoiceSchema = z.object({
+	type: z.literal("rps_order_choice"),
+	goFirst: z.boolean(),
+});
+
 const PlayMoveSchema = z.object({
 	type: z.literal("play_move"),
 	moveId: z.string(),
@@ -80,12 +85,13 @@ const PlayMoveSchema = z.object({
 	targetPlayerId: z.string().optional(),
 	// sabotage: which of the target's active-move slots (0-2) to discard
 	targetActiveMoveSlot: z.number().int().min(0).max(2).optional(),
+	placeInActiveSlot: z.number().int().min(0).max(2).optional(),
 });
 
-// strike targets enemy crew; unturn targets the player's own face-up crew
+// strike targets enemy crew; hide targets the player's own face-up crew
 const DeclareClassActionSchema = z.object({
 	type: z.literal("declare_class_action"),
-	action: z.enum(["strike", "collect", "unturn"]),
+	action: z.enum(["strike", "collect", "hide"]),
 	targetCrewSlot: z.number().int().min(0).max(1).optional(),
 	targetAllySlot: z.number().int().min(0).max(1).optional(),
 	targetPlayerId: z.string().optional(),
@@ -94,9 +100,7 @@ const DeclareClassActionSchema = z.object({
 // shared by the razor and dealer boss commands
 const UseBossCommandSchema = z.object({
 	type: z.literal("use_boss_command"),
-	guessClass: z
-		.enum(["striker", "defender", "collector", "unturner"])
-		.optional(),
+	guessClass: z.enum(["striker", "defender", "collector", "hider"]).optional(),
 	targetCrewSlot: z.number().int().min(0).max(1).optional(),
 	targetAllySlot: z.number().int().min(0).max(1).optional(),
 	targetPlayerId: z.string().optional(),
@@ -198,16 +202,16 @@ const ResolveDigDeepPickSchema = z.object({
 	cardIds: z.array(z.string()).min(1),
 });
 
-// switch up: picks a face-up slot to unturn and a different face-down slot to turn
+// switch up: picks a face-up slot to hide and a different face-down slot to turn
 const ResolveSwitchUpPickSchema = z.object({
 	type: z.literal("resolve_switch_up_pick"),
-	unturnSlot: z.number().int().min(0).max(1),
+	hideSlot: z.number().int().min(0).max(1),
 	turnSlot: z.number().int().min(0).max(1),
 });
 
-// tactical support: optionally unturns an ally's face-up crew; omit slot to decline
-const ResolveTacticalSupportUnturnOfferSchema = z.object({
-	type: z.literal("resolve_tactical_support_unturn_offer"),
+// tactical support: optionally hides an ally's face-up crew; omit slot to decline
+const ResolveTacticalSupportHideOfferSchema = z.object({
+	type: z.literal("resolve_tactical_support_hide_offer"),
 	slot: z.number().int().min(0).max(1).optional(),
 });
 
@@ -217,6 +221,12 @@ const ResolveBearBonesBonusStrikeSchema = z.object({
 	confirmed: z.boolean(),
 	targetPlayerId: z.string().optional(),
 	targetCrewSlot: z.number().int().min(0).max(1).optional(),
+});
+
+// revealed steal-1-cash target choice among living enemies (ffs)
+const ResolveBearBonesStealPickSchema = z.object({
+	type: z.literal("resolve_bear_bones_steal_pick"),
+	targetPlayerId: z.string(),
 });
 
 const SellMoveSchema = z.object({
@@ -234,13 +244,13 @@ const ResolveVoidLegsChoiceSchema = z.object({
 const ResolveBackgroundCheckGuessSchema = z.object({
 	type: z.literal("resolve_background_check_guess"),
 	targetCrewSlot: z.number().int().min(0).max(1),
-	guessClass: z.enum(["striker", "defender", "collector", "unturner"]),
+	guessClass: z.enum(["striker", "defender", "collector", "hider"]),
 });
 
-// watcher passive: optional unturn after challenge win; omit slot to decline.
+// watcher passive: optional hide after challenge win; omit slot to decline.
 // targetPlayerId picks teammate (teams) or self.
-const ResolveWatcherUnturnOfferSchema = z.object({
-	type: z.literal("resolve_watcher_unturn_offer"),
+const ResolveWatcherHideOfferSchema = z.object({
+	type: z.literal("resolve_watcher_hide_offer"),
 	slot: z.number().int().min(0).max(1).optional(),
 	targetPlayerId: z.string().optional(),
 });
@@ -278,6 +288,14 @@ const ResolveTooBigSwapPickSchema = z.object({
 	crewSlot: z.number().int().min(0).max(1),
 });
 
+// belladonna: optionally copy an enemy's active move into an open slot
+const ResolveBelladonnaCopyPickSchema = z.object({
+	type: z.literal("resolve_belladonna_copy_pick"),
+	confirmed: z.boolean(),
+	targetPlayerId: z.string().optional(),
+	targetActiveMoveSlot: z.number().int().min(0).max(2).optional(),
+});
+
 // the watcher: actor is shown 2 random cards from the enemy's hand and picks 1 to steal
 const ResolveWatcherStealPickSchema = z.object({
 	type: z.literal("resolve_watcher_steal_pick"),
@@ -295,6 +313,7 @@ export const FaceturnsActionSchema = z.discriminatedUnion("type", [
 	LoadDraftSchema,
 	MulliganSchema,
 	RpsChoiceSchema,
+	RpsOrderChoiceSchema,
 	PlayMoveSchema,
 	DeclareClassActionSchema,
 	UseBossCommandSchema,
@@ -317,17 +336,19 @@ export const FaceturnsActionSchema = z.discriminatedUnion("type", [
 	ResolveChooseFromDiscardSchema,
 	ResolveDigDeepPickSchema,
 	ResolveSwitchUpPickSchema,
-	ResolveTacticalSupportUnturnOfferSchema,
+	ResolveTacticalSupportHideOfferSchema,
 	ResolveBearBonesBonusStrikeSchema,
+	ResolveBearBonesStealPickSchema,
 	SellMoveSchema,
 	ResolveVoidLegsChoiceSchema,
 	ResolveBackgroundCheckGuessSchema,
-	ResolveWatcherUnturnOfferSchema,
+	ResolveWatcherHideOfferSchema,
 	ResolveTagOutPickSchema,
 	ResolveTruthSerumRevealSchema,
 	ResolveLighthouseDisablePickSchema,
 	ResolveTooBigSwapPickSchema,
 	ResolveWatcherStealPickSchema,
+	ResolveBelladonnaCopyPickSchema,
 ]);
 
 export type FaceturnsAction = z.infer<typeof FaceturnsActionSchema>;

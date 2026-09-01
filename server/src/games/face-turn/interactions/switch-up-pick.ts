@@ -12,7 +12,7 @@ export const switchUpPickSpec: InteractionSpec<Interaction> = {
 		resolveSwitchUpPick(
 			state,
 			respondingPlayer,
-			action.unturnSlot,
+			action.hideSlot,
 			action.turnSlot,
 			interaction.faceUpSlots,
 			interaction.faceDownSlots,
@@ -23,13 +23,13 @@ export const switchUpPickSpec: InteractionSpec<Interaction> = {
 
 	applyTimeoutDefault(state, interaction) {
 		const actor = state.players.get(interaction.actorId)!;
-		const unturnSlot = interaction.faceUpSlots[0];
+		const hideSlot = interaction.faceUpSlots[0];
 		const turnSlot = interaction.faceDownSlots[0];
-		if (unturnSlot !== undefined && turnSlot !== undefined) {
+		if (hideSlot !== undefined && turnSlot !== undefined) {
 			resolveSwitchUpPick(
 				state,
 				actor,
-				unturnSlot,
+				hideSlot,
 				turnSlot,
 				interaction.faceUpSlots,
 				interaction.faceDownSlots,

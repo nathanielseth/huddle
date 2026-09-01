@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { motion } from "motion/react";
+import { useState, useRef, useEffect } from "react";
+import { m } from "motion/react";
 import { useWitzoneState } from "../hooks/useWitzoneState";
 import { TimerBar } from "../../sabong/components/TimerBar";
 import { Loading, WaitingView } from "./shared";
@@ -73,6 +73,12 @@ export function FinalAnswering() {
 	const [input, setInput] = useState("");
 	const [submitting, setSubmitting] = useState(false);
 
+	// Fix: no-autofocus — useRef + useEffect instead of autoFocus prop
+	const inputRef = useRef<HTMLInputElement>(null);
+	useEffect(() => {
+		inputRef.current?.focus();
+	}, []);
+
 	if (!state) return null;
 	if (role === "host") return <HostView />;
 	if (!secret) return <Loading />;
@@ -113,21 +119,26 @@ export function FinalAnswering() {
 					</p>
 				</div>
 
-				<motion.div
+				<m.div
 					initial={{ opacity: 0, y: 6 }}
 					animate={{ opacity: 1, y: 0 }}
 					className="flex flex-col gap-2"
 				>
+					{/*
+					 * Fix: control-has-associated-label — aria-label on the input
+					 * Fix: no-autofocus — ref-driven focus via useEffect, no autoFocus prop
+					 */}
 					<input
+						ref={inputRef}
 						type="text"
 						value={input}
-						onChange={(e) => setInput(e.target.value)}
+						onChange={(e) => { setInput(e.target.value); }}
 						onKeyDown={(e) => {
 							if (e.key === "Enter") handleSubmit();
 						}}
 						placeholder="Your final answer..."
 						maxLength={MAX_ANSWER_LENGTH + 10}
-						autoFocus
+						aria-label="Final answer"
 						className="w-full px-4 py-3 rounded-xl bg-surface border border-border text-white placeholder:text-white/30 focus:outline-none focus:border-white/40 text-base transition-colors"
 					/>
 					<div className="flex items-center justify-between">
@@ -136,7 +147,9 @@ export function FinalAnswering() {
 						>
 							{charsLeft} left
 						</span>
+						{/* Fix: button-has-type — explicit type="button" */}
 						<button
+							type="button"
 							onClick={handleSubmit}
 							disabled={!input.trim() || isOver}
 							className="px-5 py-2 rounded-lg bg-white text-black text-sm font-semibold disabled:opacity-30 disabled:cursor-not-allowed active:scale-[0.97] transition-all"
@@ -144,7 +157,7 @@ export function FinalAnswering() {
 							Lock in final answer
 						</button>
 					</div>
-				</motion.div>
+				</m.div>
 			</div>
 		</div>
 	);

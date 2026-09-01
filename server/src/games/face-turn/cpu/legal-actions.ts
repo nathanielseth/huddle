@@ -27,15 +27,16 @@ import {
 	effectiveCost as sharedEffectiveCost,
 	randomizeDraftSelections,
 } from "../game";
+import { computeChainPlayableMoveIds } from "../state-builders";
 
 const CREW_CLASSES: readonly CrewClass[] = [
 	"striker",
 	"defender",
 	"collector",
-	"unturner",
+	"hider",
 ];
 
-// delegates to game.ts effectiveCost for special cases, keeping getMoveCost for base calc but centralizing overrides in one place
+// delegates to shared effectiveCost; getMoveCost is unused here but kept for interface compatibility
 function effectiveCost(
 	state: FaceturnServerState,
 	player: FaceturnServerPlayer,
@@ -58,15 +59,15 @@ export interface EngineHelpers {
 	) => number;
 	readonly getClassActionCost: (
 		player: FaceturnServerPlayer,
-		action: "strike" | "defend" | "collect" | "unturn",
+		action: "strike" | "defend" | "collect" | "hide",
 	) => number;
 	readonly computeActorWasBluffing: (
 		actor: FaceturnServerPlayer,
-		action: "strike" | "collect" | "unturn" | "defend",
+		action: "strike" | "collect" | "hide" | "defend",
 	) => boolean;
 }
 
-// must mirror engine.ts validation so the search tree never proposes an illegal move that would be silently no-oped
+// must mirror engine.ts validation so the search tree never proposes an illegal move that would silently no-op
 export function getLegalActions(
 	state: FaceturnServerState,
 	seat: string,
@@ -86,6 +87,8 @@ export function getLegalActions(
 			return legalDraftingActions(player, rng);
 		case "rps":
 			return legalRpsActions(state, seat, rng);
+		case "rps_order_choice":
+			return legalRpsOrderChoiceActions(state, seat, rng);
 		case "mulligan":
 			return legalMulliganActions(player);
 		case "active_turn":
@@ -93,7 +96,7 @@ export function getLegalActions(
 				? legalActiveTurnActions(state, player, helpers)
 				: [];
 		case "move_chain_window":
-			return legalMoveChainActions(state, seat, player, helpers);
+			return legalMoveChainActions(state, seat, player);
 		case "challenge_window":
 			return legalChallengeWindowActions(state, seat, helpers);
 		case "defend_window":
@@ -124,8 +127,7 @@ function legalDraftingActions(
 	];
 }
 
-// only the two seat representatives (duel/teams captains) ever choose in rps;
-// ffa skips the phase entirely
+// only the two seat representatives (duel/teams captains) ever choose in rps; ffa skips the phase entirely
 function legalRpsActions(
 	state: FaceturnServerState,
 	seat: string,
@@ -141,10 +143,22 @@ function legalRpsActions(
 	return [{ type: "rps_choice", choice }];
 }
 
+// only the rps winner acts here; the timeout defaults to going first, so bias the cpu's pick the same way to avoid determinism
+function legalRpsOrderChoiceActions(
+	state: FaceturnServerState,
+	seat: string,
+	rng: () => number,
+): FaceturnsAction[] {
+	if (seat !== state.rpsOrderChoiceWinnerId) return [];
+	const goFirst = rng() < 0.85;
+	return [{ type: "rps_order_choice", goFirst }];
+}
+
 function legalMulliganActions(player: FaceturnServerPlayer): FaceturnsAction[] {
 	if (player.mulliganDecided) return [];
 	return [{ type: "mulligan", redraw: false }];
 }
+
 function activeMoveSlotsAreFullAndDefendingAnAffordableHandMove(
 	state: FaceturnServerState,
 	player: FaceturnServerPlayer,
@@ -184,8 +198,7 @@ function legalActiveTurnActions(
 	actions.push(...legalFaceTurnActions(state, player));
 	actions.push({ type: "end_turn" });
 
-	// active Moves are lasting engines; only offer discard when all slots are full and hand holds a playable Active Move to swap in
-	// avoids flooding action space with dominated no‑ops
+	// only offer discard when active slots are full and a playable active move is in hand to swap in
 	if (
 		activeMoveSlotsAreFullAndDefendingAnAffordableHandMove(
 			state,
@@ -223,7 +236,7 @@ function legalPlayMoveActions(
 	const hasOpenActiveSlot = player.activeMoves.some((s) => s === null);
 
 	for (const moveId of player.hand) {
-		// duplicate move ids in hand have identical legal targets, so expand only once per distinct id
+		// duplicate move ids in hand have identical legal targets, so expand only once
 		if (seenMoveIds.has(moveId)) continue;
 		seenMoveIds.add(moveId);
 
@@ -236,7 +249,6 @@ function legalPlayMoveActions(
 		}
 
 		// mirror play_move gate: never offer moves without a legal target
-		// prevents CPU from discarding cash/cards on guaranteed no‑ops
 		if (!moveHasLegalTarget(state, player.playerId, move)) continue;
 
 		const isDefendableStrike = move.effects.some((e) => {
@@ -266,8 +278,7 @@ function legalPlayMoveActions(
 						targetCrewSlot: slot,
 					});
 				}
-				// a face-up crew can also be targeted directly to kill it,
-				// regardless of whether a face-down slot is also available
+				// a face-up crew can also be targeted directly to kill it
 				for (const slot of faceUpSlots) {
 					actions.push({
 						type: "play_move",
@@ -280,7 +291,7 @@ function legalPlayMoveActions(
 			continue;
 		}
 
-		// warrant of Arrest: requires explicit enemy face‑down slot; no “pick any” fallback, so always enumerate real candidates
+		// warrant of arrest: requires explicit enemy face-down slot; no fallback, so enumerate real candidates
 		const needsEnemyFaceDownCrewSlot = move.effects.some(
 			(e) => unwrapEffect(e).type === "mark_enemy_crew_for_delayed_turn",
 		);
@@ -298,14 +309,12 @@ function legalPlayMoveActions(
 			continue;
 		}
 
-		// sabotage: discard_targeted_enemy_active_move likewise has no fallback
-		// fizzles when ctx.targetActiveMoveSlot is undefined
-		// moveHasLegalTarget above already guarantees at least one enemy has
-		// a filled active-move slot; enumerate real candidates for each one
+		// sabotage: discard_targeted_enemy_active_move also has no fallback; fizzles without targetActiveMoveSlot
 		const needsEnemyActiveMoveSlot = move.effects.some(
 			(e) => unwrapEffect(e).type === "discard_targeted_enemy_active_move",
 		);
 		if (needsEnemyActiveMoveSlot) {
+			// moveHasLegalTarget above guarantees at least one enemy has a filled active-move slot
 			for (const enemy of getEnemies(state, player.playerId)) {
 				for (const slot of eligibleActiveMoveSlots(enemy)) {
 					actions.push({
@@ -325,8 +334,7 @@ function legalPlayMoveActions(
 			continue;
 		}
 
-		// STRICT_ALLY_TARGET_TYPES exclude self entirely
-		// resolveStrictAllyTarget enforces genuine teammate only, never the caster
+		// strict ally targets exclude self entirely
 		const targets =
 			scope === "enemy"
 				? getEnemies(state, player.playerId)
@@ -357,7 +365,7 @@ function legalClassActionDeclares(
 	const actions: FaceturnsAction[] = [];
 
 	const tryDeclare = (
-		action: "strike" | "collect" | "unturn",
+		action: "strike" | "collect" | "hide",
 		build: () => FaceturnsAction[],
 	) => {
 		const wouldBeBluffing = helpers.computeActorWasBluffing(player, action);
@@ -394,7 +402,7 @@ function legalClassActionDeclares(
 		{ type: "declare_class_action", action: "collect" },
 	]);
 
-	tryDeclare("unturn", () => {
+	tryDeclare("hide", () => {
 		if (firstTurnedSlot(player) === null) return [];
 		const out: FaceturnsAction[] = [];
 		for (let i = 0; i < 2; i++) {
@@ -402,7 +410,7 @@ function legalClassActionDeclares(
 			if (player.crewIds[slot] && player.crewTurned[slot]) {
 				out.push({
 					type: "declare_class_action",
-					action: "unturn",
+					action: "hide",
 					targetAllySlot: slot,
 				});
 			}
@@ -469,8 +477,7 @@ function legalFaceTurnActions(
 		const faceUpSlots = eligibleFaceUpSlots(enemy);
 
 		if (faceDownSlots.length === 0 && faceUpSlots.length === 0) {
-			// no crew left at all on this enemy: untargeted use_face_turn
-			// resolves straight to execute
+			// no crew left on this enemy: untargeted use_face_turn resolves straight to execute
 			actions.push({ type: "use_face_turn", targetPlayerId: enemy.playerId });
 			continue;
 		}
@@ -524,30 +531,38 @@ function legalMoveChainActions(
 	state: FaceturnServerState,
 	seat: string,
 	player: FaceturnServerPlayer,
-	helpers: EngineHelpers,
 ): FaceturnsAction[] {
 	const chain = state.moveChain;
 	if (!chain) return [];
-	if (seat !== chain.responderId) return [];
+	if (seat !== chain.participants[0] && seat !== chain.participants[1]) {
+		return [];
+	}
 
-	const actions: FaceturnsAction[] = [{ type: "chain_pass" }];
+	// only whoever currently holds priority may act — burst or slow, and
+	// pass. computeChainPlayableMoveIds is the same server-authoritative
+	// gating chain_play_burst/chain_play_slow enforce (see
+	// state-builders.ts) — delegate to it instead of re-deriving the rules
+	// here, so this can't drift out of sync again.
+	const isResponder = seat === chain.responderId;
+	const actions: FaceturnsAction[] = isResponder
+		? [{ type: "chain_pass" }]
+		: [];
+
+	const playableMoveIds = new Set(computeChainPlayableMoveIds(state, player));
 	const seenMoveIds = new Set<string>();
 
 	for (const moveId of player.hand) {
 		if (seenMoveIds.has(moveId)) continue;
 		seenMoveIds.add(moveId);
 
+		if (!playableMoveIds.has(moveId)) continue;
 		const move = getMove(moveId);
-		if (move.moveType !== "burst" && move.moveType !== "slow") continue;
-
-		const cost = effectiveCost(state, player, moveId, helpers.getMoveCost);
-		if (player.cash < cost) continue;
-		if (!moveHasLegalTarget(state, seat, move)) continue;
 
 		const needsEnemyActiveMoveSlot = move.effects.some(
 			(e) => unwrapEffect(e).type === "discard_targeted_enemy_active_move",
 		);
 		if (needsEnemyActiveMoveSlot && move.moveType === "burst") {
+			// same sabotage targeting as in active turn
 			for (const enemy of getEnemies(state, seat)) {
 				for (const slot of eligibleActiveMoveSlots(enemy)) {
 					actions.push({
@@ -731,12 +746,11 @@ function legalInteractionActions(
 			}));
 
 		case "dig_deep_pick": {
-			// we're operating on the full server state, so revealedCards is directly accessible without a cast
-			// determinize.ts pins these revealed cards so the action stays consistent across tree descents
+			// revealedCards are pinned by determinize.ts, so we can safely access them
 			if (interaction.revealedCards.length === 0) return [];
 			const maxPicks = interaction.maxPicks ?? 1;
 			const distinctIds = [...new Set(interaction.revealedCards)];
-			// full combinatorial enumeration not worth it for small lookCount; only single picks and the "all" combo are generated
+			// combinatorial enumeration not worth it for small lookCount; only single picks and the "all" combo are generated
 			const actions: FaceturnsAction[] = distinctIds.map((cardId) => ({
 				type: "resolve_dig_deep_pick",
 				cardIds: [cardId],
@@ -752,11 +766,11 @@ function legalInteractionActions(
 
 		case "switch_up_pick": {
 			const actions: FaceturnsAction[] = [];
-			for (const unturnSlot of interaction.faceUpSlots) {
+			for (const hideSlot of interaction.faceUpSlots) {
 				for (const turnSlot of interaction.faceDownSlots) {
 					actions.push({
 						type: "resolve_switch_up_pick",
-						unturnSlot: unturnSlot,
+						hideSlot: hideSlot,
 						turnSlot: turnSlot,
 					});
 				}
@@ -764,18 +778,24 @@ function legalInteractionActions(
 			return actions;
 		}
 
-		case "tactical_support_unturn_offer": {
+		case "tactical_support_hide_offer": {
 			const actions: FaceturnsAction[] = [
-				{ type: "resolve_tactical_support_unturn_offer" },
+				{ type: "resolve_tactical_support_hide_offer" },
 			];
 			for (const slot of interaction.eligibleSlots) {
 				actions.push({
-					type: "resolve_tactical_support_unturn_offer",
+					type: "resolve_tactical_support_hide_offer",
 					slot: slot,
 				});
 			}
 			return actions;
 		}
+
+		case "bear_bones_steal_pick":
+			return interaction.eligibleTargetIds.map((targetPlayerId) => ({
+				type: "resolve_bear_bones_steal_pick" as const,
+				targetPlayerId,
+			}));
 
 		case "bear_bones_bonus_strike": {
 			const actions: FaceturnsAction[] = [
@@ -785,7 +805,8 @@ function legalInteractionActions(
 				const target = state.players.get(targetPlayerId);
 				if (!target) continue;
 				const faceDownSlots = eligibleFaceDownSlots(target);
-				if (faceDownSlots.length === 0) {
+				const faceUpSlots = eligibleFaceUpSlots(target);
+				if (faceDownSlots.length === 0 && faceUpSlots.length === 0) {
 					actions.push({
 						type: "resolve_bear_bones_bonus_strike",
 						confirmed: true,
@@ -794,6 +815,14 @@ function legalInteractionActions(
 					continue;
 				}
 				for (const slot of faceDownSlots) {
+					actions.push({
+						type: "resolve_bear_bones_bonus_strike",
+						confirmed: true,
+						targetPlayerId,
+						targetCrewSlot: slot,
+					});
+				}
+				for (const slot of faceUpSlots) {
 					actions.push({
 						type: "resolve_bear_bones_bonus_strike",
 						confirmed: true,
@@ -828,7 +857,7 @@ function legalInteractionActions(
 		case "lighthouse_disable_pick": {
 			const maxPicks = interaction.maxPicks ?? 1;
 			if (interaction.eligibleTargets.length === 0) return [];
-			// full combinatorial enumeration would bloat the branching factor; enumerate all 1..maxPicks combos instead as targets are small
+			// full enumeration would bloat the branching factor; enumerate up to maxPicks combos instead
 			const combos: { targetPlayerId: string; crewSlot: 0 | 1 }[][] = [];
 			const targets = interaction.eligibleTargets;
 			for (let i = 0; i < targets.length; i++) {
@@ -880,6 +909,21 @@ function legalInteractionActions(
 				targetPlayerId: t.playerId,
 				crewSlot: t.slot,
 			}));
+
+		case "belladonna_copy_pick": {
+			const actions: FaceturnsAction[] = [
+				{ type: "resolve_belladonna_copy_pick", confirmed: false },
+			];
+			for (const t of interaction.eligibleTargets) {
+				actions.push({
+					type: "resolve_belladonna_copy_pick",
+					confirmed: true,
+					targetPlayerId: t.playerId,
+					targetActiveMoveSlot: t.slot,
+				});
+			}
+			return actions;
+		}
 
 		default:
 			return [];

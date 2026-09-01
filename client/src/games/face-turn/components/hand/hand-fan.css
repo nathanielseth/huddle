@@ -1,0 +1,49 @@
+.hand-fan-hover-scope {
+	--hand-rise: 50px;
+	--hover-rise: 18px;
+}
+
+.hand-fan-slot {
+	position: relative;
+	transform-origin: 50% 130%;
+	transform: translateX(var(--shift, 0px)) translateY(var(--lift, 0px))
+		rotate(var(--rot, 0deg));
+	transition: transform 180ms cubic-bezier(0.22, 1, 0.36, 1);
+	z-index: var(--z, 0);
+}
+
+/* only promote during transition to avoid permanent blur */
+.hand-fan-slot.is-transitioning {
+	will-change: transform;
+	backface-visibility: hidden;
+	-webkit-backface-visibility: hidden;
+	perspective: 1000px;
+}
+
+/* hand hover raises and spreads all slots */
+.hand-fan-hover-scope.is-hand-hovering .hand-fan-slot {
+	transform: translateX(var(--shift-hover, 0px))
+		translateY(calc(var(--lift-hover, 0px) - var(--hand-rise)))
+		rotate(var(--rot-hover, 0deg));
+}
+
+/* single-card hover: rise above the hand-hover row and mostly square up —
+   blend toward upright rather than a hard 0deg snap, so an edge card
+   doesn't look undersized next to its still-tilted neighbors */
+.hand-fan-slot.hand-fan-slot.is-card-hovered {
+	transform: translateX(var(--shift-hover, 0px))
+		translateY(calc(-1 * (var(--hand-rise) + var(--hover-rise))))
+		rotate(calc(var(--rot-hover, 0deg) * 0.15));
+}
+
+/* drag source hidden, ghost appears via DragPortal */
+.hand-fan-slot.is-drag-source {
+	opacity: 0;
+	pointer-events: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+	.hand-fan-slot {
+		transition: none;
+	}
+}

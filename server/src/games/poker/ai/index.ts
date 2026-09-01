@@ -1,5 +1,5 @@
 import { getCardCode } from "@pokertools/evaluator";
-import type { BettingPhase } from "../../../../../shared/games/poker";
+import type { BettingPhase } from "../../../../../shared/games/poker/index";
 import type { PokerServerState, PokerServerAction } from "../types";
 import { validateAction, countInHandPlayers } from "../betting";
 import {
@@ -32,7 +32,7 @@ export {
 	generateAIPlayer,
 	PERSONALITIES,
 	NameDispenser,
-} from "./personality.js";
+} from "./personality";
 export type { AIPlayerConfig, PersonalityId } from "./personality";
 import { classifyHand } from "./strategy/handBucket";
 

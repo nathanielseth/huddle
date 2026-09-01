@@ -8,7 +8,7 @@ type Interaction = Extract<
 	{ type: "background_check_guess" }
 >;
 
-const CLASSES = ["striker", "defender", "collector", "unturner"] as const;
+const CLASSES = ["striker", "defender", "collector", "hider"] as const;
 
 export const backgroundCheckGuessSpec: InteractionSpec<Interaction> = {
 	getResponderId: (interaction) => interaction.actorId,
@@ -56,6 +56,7 @@ export const backgroundCheckGuessSpec: InteractionSpec<Interaction> = {
 				? originalPending.actorId
 				: interaction.actorId;
 			state.lastResolution = buildStrikeResolution(
+				state,
 				strikeOutcome,
 				challengeAttackerId,
 				challengeTargetId,
@@ -67,6 +68,7 @@ export const backgroundCheckGuessSpec: InteractionSpec<Interaction> = {
 			const outcome = executePendingAction(state);
 			if (outcome && outcome.outcome !== "pending") {
 				state.lastResolution = buildStrikeResolution(
+					state,
 					outcome,
 					originalPending.actorId,
 					originalPending.targetPlayerId ?? "",
@@ -114,6 +116,7 @@ export const backgroundCheckGuessSpec: InteractionSpec<Interaction> = {
 			strikeOutcome.outcome !== "executed"
 		) {
 			state.lastResolution = buildStrikeResolution(
+				state,
 				strikeOutcome,
 				interaction.actorId,
 				interaction.targetPlayerId,

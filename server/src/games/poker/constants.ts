@@ -13,18 +13,17 @@ export const POKER_CONSTANTS = {
 	RUNOUT_STREET_DURATION_MS: 2_500,
 
 	// between hands, show result, rotate button, prep next deal
-	WAITING_DURATION_MS: 8_000,
+	WAITING_DURATION_MS: 5_000,
 
 	// showdown display, reveal cards, show hand names, animate pot - long enough for client animations
-	SHOWDOWN_DURATION_MS: 6_000,
+	SHOWDOWN_DURATION_MS: 5_000,
 
 	// hand-end splash before waiting phase, brief because showdown already seen
-	HAND_END_DURATION_MS: 4_000,
+	HAND_END_DURATION_MS: 1_000,
 
 	// table constraints
 	MIN_PLAYERS: 2,
-	MAX_PLAYERS: 10,
-	AI_SEAT_COUNT: 7,
+	MAX_PLAYERS: 8,
 } as const;
 
 export type PokerConstantsShape = typeof POKER_CONSTANTS;

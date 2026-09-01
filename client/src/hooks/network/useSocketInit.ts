@@ -3,6 +3,7 @@ import { socket } from "../../lib/network/socket";
 import { useGameStore } from "../../app/store";
 import { toast } from "../../lib/utils/toast";
 import { loadRoomSession } from "../../lib/network/session";
+import { pulseActionRejection } from "./actionRejectionSignal";
 import type { GameState } from "@shared/core/room";
 
 const CONN_TOAST_ID = "conn-status";
@@ -59,14 +60,30 @@ export function useSocketInit(): void {
 				duration: 0,
 				action: {
 					label: "Refresh",
-					onClick: () => { window.location.reload(); },
+					onClick: () => {
+						window.location.reload();
+					},
 				},
 			});
 		};
 
-		const onGameState = (state: GameState) => { getStore()._syncState(state); };
+		const onGameState = (state: GameState) => {
+			getStore()._syncState(state);
+		};
 		const onRoomError = (msg: string) => toast.error(msg);
-		const onRoomClosed = () => { getStore()._closeRoom(); };
+		// per-action rejection from a game engine (e.g. an illegal move
+		// target, insufficient cash) — see EngineResult.actionRejections.
+		// Distinct from room_error, which is room/connection-level. Toasted
+		// the same way, plus pulses any locked action bar that opted into
+		// releaseOnRejection (see useActionLock.ts) so the UI doesn't sit
+		// looking unresponsive until its timeout fires.
+		const onActionRejected = (msg: string) => {
+			toast.error(msg, { duration: 3000 });
+			pulseActionRejection();
+		};
+		const onRoomClosed = () => {
+			getStore()._closeRoom();
+		};
 		const onRoomAbandoned = (msg: string) => {
 			getStore()._abandonRoom(msg);
 			toast.error(msg, { duration: 6000 });
@@ -75,14 +92,19 @@ export function useSocketInit(): void {
 			toast.error("You were removed from the room by the host.");
 			getStore()._closeRoom();
 		};
-		const onRejoinFailed = () => { getStore()._closeRoom(); };
-		const onPlayerSecret = (payload: unknown) => { getStore()._setSecret(payload); };
+		const onRejoinFailed = () => {
+			getStore()._closeRoom();
+		};
+		const onPlayerSecret = (payload: unknown) => {
+			getStore()._setSecret(payload);
+		};
 
 		socket.on("connect", onConnect);
 		socket.on("disconnect", onDisconnect);
 		socket.on("connect_error", onConnectError);
 		socket.on("game_state", onGameState);
 		socket.on("room_error", onRoomError);
+		socket.on("action_rejected", onActionRejected);
 		socket.on("room_closed", onRoomClosed);
 		socket.on("room_abandoned", onRoomAbandoned);
 		socket.on("kicked", onKicked);
@@ -101,6 +123,7 @@ export function useSocketInit(): void {
 			socket.off("connect_error", onConnectError);
 			socket.off("game_state", onGameState);
 			socket.off("room_error", onRoomError);
+			socket.off("action_rejected", onActionRejected);
 			socket.off("room_closed", onRoomClosed);
 			socket.off("room_abandoned", onRoomAbandoned);
 			socket.off("kicked", onKicked);

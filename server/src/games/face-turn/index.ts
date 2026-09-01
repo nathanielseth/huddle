@@ -30,7 +30,7 @@ import {
 import { performStrike } from "./effects";
 import { getInteractionSpec } from "./interactions/registry";
 import { dispatchAction } from "./actions/index";
-import { buildPrivatePayloads, buildSecretForPlayer } from "./state-builders";
+import { buildSecretForPlayer } from "./state-builders";
 import {
 	applyConfigAction,
 	buildGameConfig,
@@ -43,7 +43,9 @@ import {
 	buildStrikeResolution,
 	makeResult,
 	afterAction,
-	applyRpsWinner,
+	beginRpsReveal,
+	beginRpsOrderChoice,
+	resolveRpsOrderChoice,
 } from "./action-results";
 
 export const faceturnsEngine: GameEngine &
@@ -79,9 +81,13 @@ export const faceturnsEngine: GameEngine &
 			pendingInteraction: null,
 			pendingDefendableStrikes: [],
 			lastResolution: null,
+			lastChainResolution: null,
+			log: [],
+			_nextLogSeq: 1,
 			watcherReveal: null,
 			rpsChoices: new Map(),
 			rpsResult: null,
+			rpsOrderChoiceWinnerId: null,
 			winnerId: null,
 			winCondition: null,
 			executionAttempts: 0,
@@ -121,9 +127,7 @@ export const faceturnsEngine: GameEngine &
 		}
 
 		state.phase = "drafting";
-		return makeResult(state, C.DRAFTING_DURATION_MS, {
-			privatePayloads: buildPrivatePayloads(state),
-		});
+		return makeResult(state, C.DRAFTING_DURATION_MS);
 	},
 
 	onAction(ctx: GameContext, playerId: string, raw: unknown): EngineResult {
@@ -154,16 +158,12 @@ export const faceturnsEngine: GameEngine &
 				if (state.mode === "ffa") {
 					for (const p of state.players.values()) dealOpeningHand(p);
 					state.phase = "mulligan";
-					return makeResult(state, C.MULLIGAN_DURATION_MS, {
-						privatePayloads: buildPrivatePayloads(state),
-					});
+					return makeResult(state, C.MULLIGAN_DURATION_MS);
 				} else {
 					state.phase = "rps";
 					state.rpsChoices = new Map();
 					state.rpsResult = null;
-					return makeResult(state, C.RPS_DURATION_MS, {
-						privatePayloads: buildPrivatePayloads(state),
-					});
+					return makeResult(state, C.RPS_DURATION_MS);
 				}
 			}
 
@@ -171,9 +171,7 @@ export const faceturnsEngine: GameEngine &
 				if (state.mode === "ffa") {
 					for (const p of state.players.values()) dealOpeningHand(p);
 					state.phase = "mulligan";
-					return makeResult(state, C.MULLIGAN_DURATION_MS, {
-						privatePayloads: buildPrivatePayloads(state),
-					});
+					return makeResult(state, C.MULLIGAN_DURATION_MS);
 				}
 
 				const choices = ["rock", "paper", "scissors"] as const;
@@ -184,7 +182,17 @@ export const faceturnsEngine: GameEngine &
 				}
 				const [p1Id, p2Id] = state.playerOrder;
 				state.rpsResult = resolveRps(p1Id, p2Id, state.rpsChoices, state.rng);
-				return applyRpsWinner(state);
+				return beginRpsReveal(state);
+			}
+
+			case "rps_reveal": {
+				return beginRpsOrderChoice(state);
+			}
+
+			case "rps_order_choice": {
+				// winner didn't choose in time — default to standard rules,
+				// winner goes first
+				return resolveRpsOrderChoice(state, true);
 			}
 
 			case "mulligan": {
@@ -214,6 +222,7 @@ export const faceturnsEngine: GameEngine &
 				const outcome = executePendingAction(state);
 				if (outcome && outcome.outcome !== "pending") {
 					state.lastResolution = buildStrikeResolution(
+						state,
 						outcome,
 						timedOutPending.actorId,
 						timedOutPending.targetPlayerId ?? "",
@@ -245,6 +254,7 @@ export const faceturnsEngine: GameEngine &
 					});
 					if (outcome && outcome.outcome !== "pending") {
 						state.lastResolution = buildStrikeResolution(
+							state,
 							outcome,
 							pending.actorId,
 							pending.targetPlayerId ?? "",

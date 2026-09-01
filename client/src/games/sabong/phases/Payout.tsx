@@ -1,4 +1,4 @@
-import { motion } from "motion/react";
+import { m } from "motion/react";
 import { useSabongState } from "../hooks/useSabongState";
 import { TimerBar } from "../components/TimerBar";
 import { BracketViewFull, BracketViewQF } from "../components/BracketView";
@@ -6,7 +6,8 @@ import { ManokCard } from "../components/ManokCard";
 import { cn } from "../../../lib/utils/cn";
 
 export function PayoutPlayer() {
-	const { sabong, myPlayer, fighter1, fighter2, timer } = useSabongState();
+	const { sabong, myPlayer, myBet, fighter1, fighter2, timer } =
+		useSabongState();
 
 	if (!sabong || !myPlayer || !fighter1 || !fighter2) return null;
 
@@ -14,7 +15,6 @@ export function PayoutPlayer() {
 	if (!slot) return null;
 
 	const winnerId = slot.winnerId;
-	const myBet = myPlayer.currentBet;
 	const won = myBet ? myBet.manokId === winnerId : null;
 
 	const winnerManok = winnerId === fighter1.id ? fighter1 : fighter2;
@@ -36,7 +36,7 @@ export function PayoutPlayer() {
 
 			<div className="flex flex-col flex-1 overflow-y-auto px-4 py-5 gap-6">
 				{/* winner / loser cards */}
-				<motion.div
+				<m.div
 					className="grid grid-cols-2 gap-8"
 					initial={{ opacity: 0, scale: 0.9 }}
 					animate={{ opacity: 1, scale: 1 }}
@@ -54,11 +54,11 @@ export function PayoutPlayer() {
 						loser
 						disabled
 					/>
-				</motion.div>
+				</m.div>
 
 				{/* personal result */}
 				{myBet && won !== null && (
-					<motion.div
+					<m.div
 						className={cn(
 							"flex flex-col items-center gap-1 px-8 py-5 rounded-2xl border text-center",
 							won
@@ -82,11 +82,11 @@ export function PayoutPlayer() {
 								? `Your ₱${myBet.amount} bet paid off`
 								: `Lost ₱${myBet.amount}`}
 						</span>
-					</motion.div>
+					</m.div>
 				)}
 
 				{/* balance */}
-				<motion.div
+				<m.div
 					className="flex flex-col items-center gap-1"
 					initial={{ opacity: 0 }}
 					animate={{ opacity: 1 }}
@@ -98,11 +98,11 @@ export function PayoutPlayer() {
 					<span className="font-display text-3xl font-black tabular-nums text-white">
 						₱{myPlayer.balance}
 					</span>
-				</motion.div>
+				</m.div>
 
 				{/* bracket - QF only on phones */}
 				{!isFinalMatch && (
-					<motion.div
+					<m.div
 						className="flex flex-col gap-3"
 						initial={{ opacity: 0, y: 12 }}
 						animate={{ opacity: 1, y: 0 }}
@@ -117,7 +117,7 @@ export function PayoutPlayer() {
 							currentMatchIndex={sabong.currentMatchIndex}
 							nextMatchIndex={nextMatchIndex}
 						/>
-					</motion.div>
+					</m.div>
 				)}
 			</div>
 		</div>
@@ -159,7 +159,7 @@ export function PayoutHost() {
 			<TimerBar timer={timer} />
 
 			{/* winner / loser cards */}
-			<motion.div
+			<m.div
 				className="grid grid-cols-2 gap-8"
 				initial={{ opacity: 0, scale: 0.9 }}
 				animate={{ opacity: 1, scale: 1 }}
@@ -177,10 +177,10 @@ export function PayoutHost() {
 					loser
 					disabled
 				/>
-			</motion.div>
+			</m.div>
 
 			{/* bracket - full tree on host */}
-			<motion.div
+			<m.div
 				className="flex flex-col gap-3"
 				initial={{ opacity: 0, y: 12 }}
 				animate={{ opacity: 1, y: 0 }}
@@ -195,7 +195,7 @@ export function PayoutHost() {
 					currentMatchIndex={sabong.currentMatchIndex}
 					nextMatchIndex={nextMatchIndex}
 				/>
-			</motion.div>
+			</m.div>
 
 			{/* player results */}
 			<div className="flex flex-col gap-2">
@@ -206,7 +206,7 @@ export function PayoutHost() {
 					const won = bet ? bet.manokId === winnerId : null;
 
 					return (
-						<motion.div
+						<m.div
 							key={p.id}
 							className={cn(
 								"flex items-center gap-4 px-5 py-3 rounded-xl border",
@@ -236,7 +236,7 @@ export function PayoutHost() {
 							>
 								₱{sp.balance}
 							</span>
-						</motion.div>
+						</m.div>
 					);
 				})}
 			</div>

@@ -1,21 +1,21 @@
 import type { InteractionSpec, PendingInteraction } from "./types";
-import { resolveWatcherUnturn } from "../effects";
+import { resolveWatcherHide } from "../effects";
 
 type Interaction = Extract<
 	PendingInteraction,
-	{ type: "watcher_unturn_offer" }
+	{ type: "watcher_hide_offer" }
 >;
 
-export const watcherUnturnOfferSpec: InteractionSpec<Interaction> = {
+export const watcherHideOfferSpec: InteractionSpec<Interaction> = {
 	getResponderId: (interaction) => interaction.actorId,
-	actionType: "resolve_watcher_unturn_offer",
+	actionType: "resolve_watcher_hide_offer",
 
 	resolve(state, interaction, action) {
-		if (action.type !== "resolve_watcher_unturn_offer") return null;
+		if (action.type !== "resolve_watcher_hide_offer") return null;
 		const actor = state.players.get(interaction.actorId);
 		if (!actor) return null;
 
-		resolveWatcherUnturn(
+		resolveWatcherHide(
 			state,
 			actor,
 			action.targetPlayerId ?? null,
@@ -30,7 +30,7 @@ export const watcherUnturnOfferSpec: InteractionSpec<Interaction> = {
 		// decline by default
 		const actor = state.players.get(interaction.actorId);
 		if (actor) {
-			resolveWatcherUnturn(
+			resolveWatcherHide(
 				state,
 				actor,
 				null,
@@ -42,7 +42,7 @@ export const watcherUnturnOfferSpec: InteractionSpec<Interaction> = {
 	},
 
 	toView: (interaction) => ({
-		type: "watcher_unturn_offer",
+		type: "watcher_hide_offer",
 		actorId: interaction.actorId,
 		eligibleTargets: interaction.eligibleTargets,
 	}),

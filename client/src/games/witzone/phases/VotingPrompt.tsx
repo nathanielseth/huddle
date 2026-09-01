@@ -303,7 +303,7 @@ function VoterView() {
 							type="button"
 							whileTap={{ scale: 0.97 }}
 							onClick={() =>
-								sendAction({ type: "cast_vote", answerId: answer.id })
+								{ sendAction({ type: "cast_vote", answerId: answer.id }); }
 							}
 							className="w-full px-6 py-5 rounded-2xl border border-border bg-surface text-left text-white font-medium text-base hover:border-white/30 hover:bg-white/5 transition-all active:scale-[0.97] cursor-pointer"
 						>

@@ -5,17 +5,17 @@ import {
 	ShowOfHandsTask,
 	FingerPointingTask,
 	FingerBlastTask,
-} from "../tasks/SimpleTasks";
-import { ThumbShotTask } from "../tasks/ThumbShot";
-import { FaceTurnTask } from "../tasks/FaceTurnTask";
-import { GlitchInTheChatTask } from "../tasks/GlitchInTheChatTask";
-import type { TaskType } from "@shared/sussy";
+} from "../components/SimpleTasks";
+import { ThumbShotTask } from "../components/ThumbShot";
+import { FaceTurnTask } from "../components/FaceTurnTask";
+import { GlitchInTheChatTask } from "../components/GlitchInTheChatTask";
+import type { TaskType } from "@shared/games/sussy/index";
 import type { FC } from "react";
 
 const TASK_COMPONENTS: Record<TaskType, FC> = {
 	show_of_hands: ShowOfHandsTask,
 	finger_pointing: FingerPointingTask,
-	finger_blast: FingerBlastTask,
+	numbers_game: FingerBlastTask,
 	thumb_shot: ThumbShotTask,
 	face_turn: FaceTurnTask,
 	glitch_in_the_chat: GlitchInTheChatTask,

@@ -1,4 +1,4 @@
-import { motion } from "motion/react";
+import { m } from "motion/react";
 import { useGameStore } from "../../../app/store";
 import { useSabongState } from "../hooks/useSabongState";
 import { cn } from "../../../lib/utils/cn";
@@ -23,7 +23,8 @@ function Leaderboard({ compact = false }: { compact?: boolean }) {
 		? sabong.manoks[tournamentWinnerId]
 		: null;
 
-	const ranked = [...storePlayers].sort((a, b) => {
+	// Fix: js-tosorted-immutable — toSorted() instead of [...storePlayers].sort()
+	const ranked = storePlayers.toSorted((a, b) => {
 		const balA = sabong.players[a.id]?.balance ?? 0;
 		const balB = sabong.players[b.id]?.balance ?? 0;
 		return balB - balA;
@@ -40,7 +41,7 @@ function Leaderboard({ compact = false }: { compact?: boolean }) {
 					tournamentWinnerId && sabongP?.bracketPickId === tournamentWinnerId;
 
 				return (
-					<motion.div
+					<m.div
 						key={player.id}
 						className={cn(
 							"flex items-center gap-3 px-4 py-3 rounded-2xl border",
@@ -92,7 +93,7 @@ function Leaderboard({ compact = false }: { compact?: boolean }) {
 						>
 							₱{balance}
 						</span>
-					</motion.div>
+					</m.div>
 				);
 			})}
 		</div>
@@ -113,7 +114,7 @@ function WinnerCallout() {
 	if (!winnerManok) return null;
 
 	return (
-		<motion.div
+		<m.div
 			className="flex flex-col items-center gap-1 text-center"
 			initial={{ opacity: 0, scale: 0.9 }}
 			animate={{ opacity: 1, scale: 1 }}
@@ -128,7 +129,7 @@ function WinnerCallout() {
 			<span className="text-xs text-white/30 mt-1">
 				Bracket pickers get +₱150
 			</span>
-		</motion.div>
+		</m.div>
 	);
 }
 
@@ -144,9 +145,10 @@ export function FinishedPlayer() {
 	const pickedWinner =
 		tournamentWinnerId && myPlayer.bracketPickId === tournamentWinnerId;
 
+	// Fix: js-tosorted-immutable — toSorted() instead of [...storePlayers].sort()
 	const myRank =
-		[...storePlayers]
-			.sort((a, b) => {
+		storePlayers
+			.toSorted((a, b) => {
 				const balA = sabong.players[a.id]?.balance ?? 0;
 				const balB = sabong.players[b.id]?.balance ?? 0;
 				return balB - balA;
@@ -157,7 +159,7 @@ export function FinishedPlayer() {
 	return (
 		<div className="flex flex-col min-h-screen bg-bg">
 			<div className="flex flex-col gap-4 px-5 pt-8 pb-5 border-b border-border items-center text-center">
-				<motion.div
+				<m.div
 					className="flex flex-col gap-1"
 					initial={{ opacity: 0, y: 12 }}
 					animate={{ opacity: 1, y: 0 }}
@@ -168,10 +170,10 @@ export function FinishedPlayer() {
 					<h1 className="font-display text-4xl font-black uppercase text-white leading-none">
 						Tournament Over!
 					</h1>
-				</motion.div>
+				</m.div>
 
 				{/* personal result */}
-				<motion.div
+				<m.div
 					className={cn(
 						"flex flex-col items-center gap-0.5 px-8 py-4 rounded-2xl border w-full",
 						myRank === 1
@@ -197,7 +199,7 @@ export function FinishedPlayer() {
 							★ Bracket pick correct! +₱150
 						</span>
 					)}
-				</motion.div>
+				</m.div>
 			</div>
 
 			<div className="flex-1 overflow-y-auto px-4 py-5 flex flex-col gap-6">
@@ -231,7 +233,7 @@ export function FinishedHost() {
 	return (
 		<div className="flex flex-col min-h-screen bg-bg px-8 py-8 gap-8">
 			{/* header */}
-			<motion.div
+			<m.div
 				className="flex items-end justify-between"
 				initial={{ opacity: 0, y: 12 }}
 				animate={{ opacity: 1, y: 0 }}
@@ -254,7 +256,7 @@ export function FinishedHost() {
 						End Session
 					</button>
 				)}
-			</motion.div>
+			</m.div>
 
 			<WinnerCallout />
 

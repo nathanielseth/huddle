@@ -10,7 +10,6 @@ import {
 	dealOpeningHand,
 } from "../game";
 import { makeResult } from "../action-results";
-import { buildPrivatePayloads } from "../state-builders";
 
 export const draftingAction: PhaseActionHandler = (
 	state,
@@ -27,8 +26,17 @@ export const draftingAction: PhaseActionHandler = (
 	switch (action.type) {
 		case "select_boss": {
 			if (!BOSS_MAP.has(action.bossId)) return noOp();
-			// re-clicking the already-selected boss deselects it, same as crew/moves
+			// re-clicking same boss deselects
 			draft.bossId = draft.bossId === action.bossId ? null : action.bossId;
+
+			// switching from dealer reduces crew cap, trim extra from end
+			const newCrewCap =
+				draft.bossId === CARD_IDS.BOSS.THE_DEALER
+					? C.CREW_SLOTS + 1
+					: C.CREW_SLOTS;
+			if (draft.crewIds.length > newCrewCap) {
+				draft.crewIds = draft.crewIds.slice(0, newCrewCap);
+			}
 			break;
 		}
 		case "select_crew": {
@@ -63,12 +71,11 @@ export const draftingAction: PhaseActionHandler = (
 			break;
 		}
 		case "randomize_draft": {
-			// fills whatever's still empty, never touches existing picks
 			randomizeEmptyDraftSlots(player, state.rng);
 			break;
 		}
 		case "load_draft": {
-			// wholesale replace; every id re-validated server-side
+			// wholesale replace, ids re-validated server-side
 			loadDraftSelections(player, {
 				bossId: action.bossId,
 				crewIds: action.crewIds,
@@ -85,16 +92,12 @@ export const draftingAction: PhaseActionHandler = (
 				if (state.mode === "ffa") {
 					for (const p of state.players.values()) dealOpeningHand(p);
 					state.phase = "mulligan";
-					return makeResult(state, C.MULLIGAN_DURATION_MS, {
-						privatePayloads: buildPrivatePayloads(state),
-					});
+					return makeResult(state, C.MULLIGAN_DURATION_MS);
 				} else {
 					state.phase = "rps";
 					state.rpsChoices = new Map();
 					state.rpsResult = null;
-					return makeResult(state, C.RPS_DURATION_MS, {
-						privatePayloads: buildPrivatePayloads(state),
-					});
+					return makeResult(state, C.RPS_DURATION_MS);
 				}
 			}
 			break;
@@ -103,7 +106,6 @@ export const draftingAction: PhaseActionHandler = (
 			return noOp();
 	}
 
-	return makeResult(state, ctx.room.timer?.duration ?? null, {
-		privatePayloads: buildPrivatePayloads(state),
-	});
+	// makeResult resyncs private payloads, draft picks live in secret
+	return makeResult(state, ctx.room.timer?.duration ?? null);
 };

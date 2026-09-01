@@ -1,20 +1,17 @@
 import { z } from "zod";
-import { C, HEX_COLOR_RE } from "./constants.js";
-import { CANVAS_WIDTH, CANVAS_HEIGHT } from "../../../../shared/games/squadoodle.js";
+import { C, HEX_COLOR_RE } from "./constants";
+import {
+	CANVAS_WIDTH,
+	CANVAS_HEIGHT,
+} from "../../../../shared/games/squadoodle/index";
 
-// clamps v into [lo, hi] and rounds to nearest integer.
-// coordinates stored as integers because:
-//   - canvas is 800×600 logical pixels, sub-pixel precision is invisible after
-//     perfect-freehand's smoothing pass
-//   - integer values compress far better under permessage-deflate
-//   - eliminates floating-point noise with no visual loss
+// sub-pixel precision is invisible after smoothing; rounding to int eliminates float noise with no visual loss.
+// wire compression is disabled (per-connection memory trade-off), so integer coordinates don't reduce payload size anyway.
 const clampInt = (lo: number, hi: number) => (v: number) =>
 	Math.max(lo, Math.min(hi, Math.round(v)));
 
 const InputPointSchema = z.object({
-	// accept any finite number, clamp+round into canvas bounds.
-	// coordinates slightly outside canvas (e.g. -0.3 from pointer jitter) are
-	// clamped rather than rejected so valid strokes aren't lost
+	// clamp out-of-bounds points from pointer jitter instead of rejecting them, so valid strokes aren't lost
 	x: z.number().transform(clampInt(0, CANVAS_WIDTH)),
 	y: z.number().transform(clampInt(0, CANVAS_HEIGHT)),
 	pressure: z.number().min(0).max(1),

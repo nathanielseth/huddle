@@ -15,6 +15,13 @@ export interface EngineResult {
 	roomPhase?: RoomPhase;
 	scoreDeltas?: Record<string, number>;
 	privatePayloads?: Map<string, unknown>;
+	// per-player human-readable reasons an action they just sent was
+	// rejected (validation failure, illegal target, etc). Not for secret
+	// game data — see privatePayloads for that. Routed to a dedicated
+	// "action_rejected" socket event so the client can distinguish "the
+	// server silently no-op'd this" from "this actually succeeded",
+	// which previously looked identical from the client's side.
+	actionRejections?: Map<string, string>;
 }
 
 export interface GameEngine {

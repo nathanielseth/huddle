@@ -5,7 +5,10 @@ import {
 	triggerCrewTurnedEffects,
 	applyBloodMoneyOnStrike,
 } from "../effects";
-import { buildStrikeResolution, runDeferredPendingAction } from "../action-results";
+import {
+	buildStrikeResolution,
+	runDeferredPendingAction,
+} from "../action-results";
 
 type Interaction = Extract<PendingInteraction, { type: "choose_crew_to_turn" }>;
 
@@ -22,7 +25,7 @@ export const chooseCrewToTurnSpec: InteractionSpec<Interaction> = {
 		if (!interaction.eligibleSlots.includes(slot)) return null;
 		if (!target.crewIds[slot] || target.crewTurned[slot]) return null;
 
-		turnCrewAtSlot(state, target, slot);
+		turnCrewAtSlot(state, target, slot, interaction.actorId);
 		recomputePassives(target, state);
 		triggerCrewTurnedEffects(state, target, slot, interaction.causedByEnemy);
 
@@ -33,6 +36,7 @@ export const chooseCrewToTurnSpec: InteractionSpec<Interaction> = {
 
 		// always set the resolution for this crew turn
 		state.lastResolution = buildStrikeResolution(
+			state,
 			{ outcome: "crew_turned", slot },
 			interaction.actorId,
 			interaction.targetPlayerId,
@@ -53,7 +57,7 @@ export const chooseCrewToTurnSpec: InteractionSpec<Interaction> = {
 		const target = state.players.get(interaction.targetPlayerId);
 		if (target && interaction.eligibleSlots[0] !== undefined) {
 			const slot = interaction.eligibleSlots[0] as 0 | 1;
-			turnCrewAtSlot(state, target, slot);
+			turnCrewAtSlot(state, target, slot, interaction.actorId);
 			recomputePassives(target, state);
 			triggerCrewTurnedEffects(state, target, slot, interaction.causedByEnemy);
 
@@ -63,6 +67,7 @@ export const chooseCrewToTurnSpec: InteractionSpec<Interaction> = {
 			}
 
 			state.lastResolution = buildStrikeResolution(
+				state,
 				{ outcome: "crew_turned", slot },
 				interaction.actorId,
 				interaction.targetPlayerId,

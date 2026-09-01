@@ -197,6 +197,18 @@ export const useGameStore = create<GameStore>((set, get) => ({
 			});
 		}
 
+		// game_state and player_secret are two separate socket events for
+		// what the server treats as one logical update (see applyResult in
+		// GameRunner.ts, which emits game_state then player_secret,
+		// back-to-back, off the same EngineResult). Each is now applied to
+		// the store independently and immediately as it arrives (see
+		// _setSecret) rather than synchronized into one combined set()
+		// call — game_state always arrives first, so gamePayload is never
+		// left pointing at a newer secret than itself; the reverse (secret
+		// briefly one tick behind a freshly-applied gamePayload) is a real
+		// but sub-render-frame gap that hasn't shown up as a visible bug,
+		// versus the previous stash-and-wait approach which could leave a
+		// secret-only update (e.g. a draft pick) unapplied indefinitely.
 		set({
 			roomCode: state.roomCode,
 			players: state.players,
@@ -263,6 +275,19 @@ export const useGameStore = create<GameStore>((set, get) => ({
 		});
 	},
 
+	// game_state always arrives before its paired player_secret (see
+	// GameRunner.applyResult: game_state is emitted first, player_secret
+	// second, same tick, same EngineResult). By the time player_secret
+	// lands here, gamePayload has therefore already been applied via
+	// _syncState — so the correct action is to apply this secret
+	// immediately, not stash it waiting for a game_state that already
+	// happened. The stash-and-wait version of this function assumed the
+	// opposite arrival order, which meant a secret-only update (e.g. a
+	// draft pick, which doesn't change the public gamePayload at all)
+	// could sit unapplied until some later, unrelated game_state event
+	// happened to flush it — surfacing as picks/selections needing an
+	// extra click, or a click's effect only appearing after a subsequent
+	// action.
 	_setSecret: (payload) => {
 		set({ secret: payload });
 	},

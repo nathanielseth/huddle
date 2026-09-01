@@ -138,7 +138,7 @@ export function computeSidePots(state: PokerServerState): void {
 	for (const p of allPlayers) {
 		if (p.status === "allin") allinLevelsSet.add(p.totalContributed);
 	}
-	const allinLevels = [...allinLevelsSet].sort((a, b) => a - b);
+	const allinLevels = [...allinLevelsSet].toSorted((a, b) => a - b);
 
 	const pots: SidePot[] = [];
 	let prevLevel = 0;

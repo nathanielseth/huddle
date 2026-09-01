@@ -26,11 +26,25 @@ export default defineConfig({
 			"/api": {
 				target: "http://localhost:3001",
 				changeOrigin: true,
+				configure: (proxy) => {
+					proxy.on("error", (err) => {
+						if ((err as NodeJS.ErrnoException).code !== "ECONNRESET") {
+							console.error("[vite] /api proxy error:", err);
+						}
+					});
+				},
 			},
 			"/socket.io": {
 				target: "http://localhost:3001",
 				changeOrigin: true,
 				ws: true,
+				configure: (proxy) => {
+					proxy.on("error", (err) => {
+						if ((err as NodeJS.ErrnoException).code !== "ECONNRESET") {
+							console.error("[vite] /socket.io proxy error:", err);
+						}
+					});
+				},
 			},
 		},
 	},

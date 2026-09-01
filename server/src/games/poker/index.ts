@@ -21,7 +21,7 @@ import type {
 	LastAction,
 	Card,
 	BettingPhase,
-} from "../../../../shared/games/poker";
+} from "../../../../shared/games/poker/index";
 
 import { freshShuffledDeck, dealN } from "./deck";
 import {
@@ -57,46 +57,6 @@ import {
 } from "./ai/index";
 
 const BETTING_PHASES = new Set<string>(["pre_flop", "flop", "turn", "river"]);
-
-const AI_SEAT_ID_PREFIX = "ai::";
-
-function seedAIPlayers(state: PokerServerState, humanCount: number): void {
-	const aiCount = Math.min(C.AI_SEAT_COUNT, C.MAX_PLAYERS - humanCount);
-
-	for (let i = 0; i < aiCount; i++) {
-		const playerId = `${AI_SEAT_ID_PREFIX}${String(i)}`;
-
-		const { displayName, personality } = generateAIPlayer(
-			playerId,
-			state.nameDispenser,
-		);
-
-		state.players.set(playerId, {
-			playerId,
-			seatIndex: humanCount + i,
-			displayName,
-			stack: C.STARTING_STACK,
-			holeCards: null,
-			status: "active",
-			currentBet: 0,
-			totalContributed: 0,
-			hasActedThisRound: false,
-			canRaise: true,
-			isDealer: false,
-			isAI: true,
-			aiPersonality: personality,
-		});
-
-		state.seatOrder.push(playerId);
-	}
-
-	if (aiCount > 0) {
-		state.logger.log("ai_seats_filled", null, {
-			count: aiCount,
-			seats: state.seatOrder.slice(humanCount),
-		});
-	}
-}
 
 function nextBettingPhase(
 	current: BettingPhase,
@@ -448,6 +408,23 @@ export const pokerEngine: GameEngine & GameEngineWithSecrets = {
 
 	actionSchema: PokerActionSchema,
 
+	supportsCpuSeats: true,
+
+	getMaxSeats(): number {
+		return C.MAX_PLAYERS;
+	},
+
+	validateStart(_configPayload: unknown, playerIds: string[]): string | null {
+		const count = playerIds.length;
+		if (count < C.MIN_PLAYERS) {
+			return `Poker needs at least ${String(C.MIN_PLAYERS)} players — add a CPU or invite a friend.`;
+		}
+		if (count > C.MAX_PLAYERS) {
+			return `Poker tables seat at most ${String(C.MAX_PLAYERS)} players.`;
+		}
+		return null;
+	},
+
 	getInitialState(): PokerServerState {
 		return {
 			phase: "waiting",
@@ -483,11 +460,37 @@ export const pokerEngine: GameEngine & GameEngineWithSecrets = {
 		const roomPlayers = [...room.players.values()];
 		state.seatOrder = roomPlayers.map((p) => p.playerId);
 
+		let cpuCount = 0;
 		for (let i = 0; i < roomPlayers.length; i++) {
 			const rp = defined(
 				roomPlayers[i],
 				`roomPlayers[${String(i)}] missing in onStart`,
 			);
+
+			if (rp.isCpu) {
+				cpuCount++;
+				const { displayName, personality } = generateAIPlayer(
+					rp.playerId,
+					state.nameDispenser,
+				);
+				state.players.set(rp.playerId, {
+					playerId: rp.playerId,
+					seatIndex: i,
+					displayName,
+					stack: C.STARTING_STACK,
+					holeCards: null,
+					status: "active",
+					currentBet: 0,
+					totalContributed: 0,
+					hasActedThisRound: false,
+					canRaise: true,
+					isDealer: false,
+					isAI: true,
+					aiPersonality: personality,
+				});
+				continue;
+			}
+
 			state.players.set(rp.playerId, {
 				playerId: rp.playerId,
 				seatIndex: i,
@@ -505,10 +508,9 @@ export const pokerEngine: GameEngine & GameEngineWithSecrets = {
 			});
 		}
 
-		seedAIPlayers(state, roomPlayers.length);
-
 		state.logger.log("game_start", null, {
 			playerCount: roomPlayers.length,
+			cpuCount,
 			startingStack: C.STARTING_STACK,
 			blinds: { sb: C.SMALL_BLIND, bb: C.BIG_BLIND },
 			seats: state.seatOrder,
@@ -536,7 +538,7 @@ export const pokerEngine: GameEngine & GameEngineWithSecrets = {
 
 		if (!BETTING_PHASES.has(state.phase)) return noOp();
 
-		if (playerId.startsWith(AI_SEAT_ID_PREFIX)) return noOp();
+		if (state.players.get(playerId)?.isAI) return noOp();
 
 		const action = raw as PokerServerAction;
 		if (!validateAction(state, playerId, action)) return noOp();

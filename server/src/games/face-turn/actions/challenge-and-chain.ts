@@ -1,12 +1,11 @@
 import type { PhaseActionHandler } from "./types";
 import { noOpResult } from "./types";
 import { FACETURN_CONSTANTS as C } from "../types";
-import { getMove, getMoveTargetScope } from "../cards";
+import { getMove } from "../cards";
 import {
 	effectiveCost,
 	executeMove,
 	pushToMoveChain,
-	recordChainPass,
 	resolveMoveChainFull,
 	resolveChallenge,
 	executePendingAction,
@@ -15,14 +14,19 @@ import {
 	getClassActionCost,
 } from "../game";
 import {
-	getEnemies,
-	getTeammates,
 	isPlayerOrTeammate,
 	firstUnturnedSlot,
 	resolveStrikeOrExecute,
+	performStrike,
+	moveHasLegalTarget,
+	validateMoveTargetScope,
 } from "../effects";
-import { makeResult, afterAction, buildStrikeResolution } from "../action-results";
-import { buildPrivatePayloads } from "../state-builders";
+import {
+	makeResult,
+	makeResultKeepingTimer,
+	afterAction,
+	buildStrikeResolution,
+} from "../action-results";
 
 export const moveChainWindowAction: PhaseActionHandler = (
 	state,
@@ -32,6 +36,11 @@ export const moveChainWindowAction: PhaseActionHandler = (
 	ctx,
 ) => {
 	const noOp = () => noOpResult(state, ctx);
+	// surfaces validation reasons to the acting player, unlike bare noOp
+	const rejectPlay = (reason: string) =>
+		noOpResult(state, ctx, { rejectedFor: playerId, reason });
+	const keepTimer = (extras?: Parameters<typeof makeResultKeepingTimer>[2]) =>
+		makeResultKeepingTimer(state, ctx.room.timer, extras);
 
 	const chain = state.moveChain;
 	if (!chain) return noOp();
@@ -40,33 +49,33 @@ export const moveChainWindowAction: PhaseActionHandler = (
 	if (playerId !== p1 && playerId !== p2) return noOp();
 
 	if (action.type === "chain_play_burst") {
+		// burst requires priority, same as slow moves
+		if (playerId !== chain.responderId) return noOp();
+
 		const { moveId } = action;
-		if (!player.hand.includes(moveId)) return noOp();
+		if (!player.hand.includes(moveId))
+			return rejectPlay("That card isn't in your hand.");
 
 		const move = getMove(moveId);
-		if (move.moveType !== "burst") return noOp();
+		if (move.moveType !== "burst")
+			return rejectPlay("That's not a burst move.");
 
 		const cost = effectiveCost(state, player, moveId);
-		if (player.cash < cost) return noOp();
+		if (player.cash < cost)
+			return rejectPlay(
+				`Not enough cash — this move costs ₱${cost}, you have ₱${player.cash}.`,
+			);
 
-		if (action.targetPlayerId) {
-			const scope = getMoveTargetScope(move);
-			if (scope === "enemy") {
-				const targetIsEnemy = getEnemies(state, playerId).some(
-					(e) => e.playerId === action.targetPlayerId,
-				);
-				if (!targetIsEnemy) return noOp();
-			} else if (scope === "ally") {
-				const isValidAlly =
-					action.targetPlayerId === playerId ||
-					getTeammates(state, playerId).some(
-						(t) => t.playerId === action.targetPlayerId,
-					);
-				if (!isValidAlly) return noOp();
-			} else {
-				return noOp();
-			}
-		}
+		if (!moveHasLegalTarget(state, playerId, move))
+			return rejectPlay("No legal target for this move right now.");
+
+		const burstScopeCheck = validateMoveTargetScope(
+			state,
+			playerId,
+			move,
+			action.targetPlayerId,
+		);
+		if (!burstScopeCheck.ok) return rejectPlay(burstScopeCheck.reason!);
 
 		player.hand.splice(player.hand.indexOf(moveId), 1);
 		player.cash -= cost;
@@ -78,40 +87,36 @@ export const moveChainWindowAction: PhaseActionHandler = (
 			targetActiveMoveSlot: action.targetActiveMoveSlot,
 		});
 
-		return afterAction(state, {
-			duration: C.MOVE_CHAIN_WINDOW_MS,
-			includePrivatePayloads: true,
-		});
+		// burst doesn't change priority, clock continues
+		return keepTimer();
 	}
 
 	if (action.type === "chain_play_slow") {
+		if (playerId !== chain.responderId) return noOp();
+
 		const { moveId } = action;
-		if (!player.hand.includes(moveId)) return noOp();
+		if (!player.hand.includes(moveId))
+			return rejectPlay("That card isn't in your hand.");
 
 		const move = getMove(moveId);
-		if (move.moveType !== "slow") return noOp();
+		if (move.moveType !== "slow") return rejectPlay("That's not a slow move.");
 
 		const cost = effectiveCost(state, player, moveId);
-		if (player.cash < cost) return noOp();
+		if (player.cash < cost)
+			return rejectPlay(
+				`Not enough cash — this move costs ₱${cost}, you have ₱${player.cash}.`,
+			);
 
-		if (action.targetPlayerId) {
-			const scope = getMoveTargetScope(move);
-			if (scope === "enemy") {
-				const targetIsEnemy = getEnemies(state, playerId).some(
-					(e) => e.playerId === action.targetPlayerId,
-				);
-				if (!targetIsEnemy) return noOp();
-			} else if (scope === "ally") {
-				const isValidAlly =
-					action.targetPlayerId === playerId ||
-					getTeammates(state, playerId).some(
-						(t) => t.playerId === action.targetPlayerId,
-					);
-				if (!isValidAlly) return noOp();
-			} else {
-				return noOp();
-			}
-		}
+		if (!moveHasLegalTarget(state, playerId, move))
+			return rejectPlay("No legal target for this move right now.");
+
+		const slowScopeCheck = validateMoveTargetScope(
+			state,
+			playerId,
+			move,
+			action.targetPlayerId,
+		);
+		if (!slowScopeCheck.ok) return rejectPlay(slowScopeCheck.reason!);
 
 		player.hand.splice(player.hand.indexOf(moveId), 1);
 		player.cash -= cost;
@@ -122,24 +127,21 @@ export const moveChainWindowAction: PhaseActionHandler = (
 			targetCrewSlot: action.targetCrewSlot ?? null,
 			targetAllySlot: action.targetAllySlot ?? null,
 			targetPlayerId: action.targetPlayerId ?? null,
+			cashCost: cost,
 		});
 
-		return makeResult(state, C.MOVE_CHAIN_WINDOW_MS, {
-			privatePayloads: buildPrivatePayloads(state),
-		});
+		// pushing a slow move alternates priority and opens response window
+		return makeResult(state, C.MOVE_CHAIN_WINDOW_MS);
 	}
 
 	if (action.type === "chain_pass") {
+		// pass from priority holder resolves chain immediately
 		if (playerId !== chain.responderId) return noOp();
 
-		const shouldResolve = recordChainPass(state, playerId);
-		if (shouldResolve) {
-			resolveMoveChainFull(state);
-			state.moveChain = null;
-			state.phase = "active_turn";
-			return afterAction(state);
-		}
-		return makeResult(state, C.MOVE_CHAIN_WINDOW_MS);
+		resolveMoveChainFull(state);
+		state.moveChain = null;
+		state.phase = "active_turn";
+		return afterAction(state);
 	}
 
 	return noOp();
@@ -173,9 +175,7 @@ export const challengeWindowAction: PhaseActionHandler = (
 					targetPlayerId: pending.actorId,
 					eligibleSlots,
 				};
-				return makeResult(state, ctx.room.timer?.duration ?? null, {
-					privatePayloads: buildPrivatePayloads(state),
-				});
+				return makeResult(state, ctx.room.timer?.duration ?? null);
 			}
 		}
 
@@ -194,6 +194,7 @@ export const challengeWindowAction: PhaseActionHandler = (
 			const challengeTargetId = actionProceeds ? playerId : pending.actorId;
 			const challengeAttackerId = actionProceeds ? pending.actorId : playerId;
 			state.lastResolution = buildStrikeResolution(
+				state,
 				strikeOutcome,
 				challengeAttackerId,
 				challengeTargetId,
@@ -205,6 +206,7 @@ export const challengeWindowAction: PhaseActionHandler = (
 			const outcome = executePendingAction(state);
 			if (outcome && outcome.outcome !== "pending") {
 				state.lastResolution = buildStrikeResolution(
+					state,
 					outcome,
 					pending.actorId,
 					pending.targetPlayerId ?? "",
@@ -217,9 +219,11 @@ export const challengeWindowAction: PhaseActionHandler = (
 		}
 
 		if (actionProceeds && state.pendingInteraction !== null) {
+			// actor wasn't bluffing, interaction runs deferred pending action itself
 			return afterAction(state);
 		}
 
+		// challenge succeeded, reset now
 		state.pendingAction = null;
 		state.phase = "active_turn";
 		return afterAction(state);
@@ -264,6 +268,7 @@ export const challengeWindowAction: PhaseActionHandler = (
 			const outcome = executePendingAction(state);
 			if (outcome && outcome.outcome !== "pending") {
 				state.lastResolution = buildStrikeResolution(
+					state,
 					outcome,
 					pending.actorId,
 					pending.targetPlayerId ?? "",
@@ -327,6 +332,29 @@ export const defendWindowAction: PhaseActionHandler = (
 		return makeResult(state, C.DEFEND_DECLARED_MS);
 	}
 
+	if (action.type === "pass_challenge") {
+		if (pending.type === "card_strike") {
+			const outcome = performStrike({
+				state,
+				actor: state.players.get(pending.actorId)!,
+				targetPlayerId: pending.targetPlayerId ?? undefined,
+				targetCrewSlot: pending.targetCrewSlot ?? undefined,
+			});
+			if (outcome && outcome.outcome !== "pending") {
+				state.lastResolution = buildStrikeResolution(
+					state,
+					outcome,
+					pending.actorId,
+					pending.targetPlayerId ?? "",
+					"strike",
+				);
+			}
+		}
+		state.pendingAction = null;
+		state.phase = "active_turn";
+		return afterAction(state);
+	}
+
 	return noOp();
 };
 
@@ -379,6 +407,7 @@ export const defendDeclaredAction: PhaseActionHandler = (
 					);
 					if (outcome.outcome !== "pending") {
 						state.lastResolution = buildStrikeResolution(
+							state,
 							outcome,
 							strikeerId,
 							defender.playerId,

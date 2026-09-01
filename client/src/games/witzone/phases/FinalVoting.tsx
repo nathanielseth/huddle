@@ -160,7 +160,7 @@ export function FinalVoting() {
 									<div className="flex items-center gap-2 shrink-0">
 										<button
 											type="button"
-											onClick={() => remove(answer.id)}
+											onClick={() => { remove(answer.id); }}
 											disabled={tokens === 0}
 											className="w-8 h-8 rounded-lg border border-border bg-bg text-white/60 text-lg font-bold disabled:opacity-20 disabled:cursor-not-allowed hover:border-white/30 transition-all active:scale-[0.93]"
 										>
@@ -171,7 +171,7 @@ export function FinalVoting() {
 										</span>
 										<button
 											type="button"
-											onClick={() => add(answer.id)}
+											onClick={() => { add(answer.id); }}
 											disabled={remaining <= 0}
 											className="w-8 h-8 rounded-lg border border-border bg-bg text-white/60 text-lg font-bold disabled:opacity-20 disabled:cursor-not-allowed hover:border-white/30 transition-all active:scale-[0.93]"
 										>

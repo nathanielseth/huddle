@@ -12,8 +12,9 @@ import {
 } from "./shared";
 import { resolveEffects } from "./index";
 import { consumeLifeInsuranceProtecting } from "./damage";
+import { pushLog } from "../log";
 
-// fires when a slot ceases to be "that face-down crew": clears marks, using previousCrewId to treat refill as invalidation not match
+// refill treated as invalidation, not match
 function invalidateStaleCrewMarks(
 	state: FaceturnServerState,
 	owner: FaceturnServerPlayer,
@@ -50,28 +51,43 @@ export function turnCrewAtSlot(
 	state: FaceturnServerState,
 	player: FaceturnServerPlayer,
 	slot: 0 | 1,
+	causedByActorId: string | null = null,
 ): void {
 	const crewId = player.crewIds[slot];
 	if (!crewId) return;
 	player.crewTurned[slot] = true;
 	player.hasTurnedAllyCrewThisGame = true;
 	invalidateStaleCrewMarks(state, player, slot, crewId);
+	pushLog(state, {
+		kind: "crew_turned",
+		playerId: player.playerId,
+		slot,
+		crewId,
+		causedByActorId,
+	});
 }
 
-export function unturnCrewAtSlot(
+export function hideCrewAtSlot(
 	state: FaceturnServerState,
 	player: FaceturnServerPlayer,
 	slot: 0 | 1,
 	causedByEnemy = false,
 ): void {
-	if (!player.crewIds[slot]) return;
+	const crewId = player.crewIds[slot];
+	if (!crewId) return;
 	player.crewTurned[slot] = false;
 	player.disabledPassiveSlots.delete(slot);
+	pushLog(state, {
+		kind: "crew_hidden",
+		playerId: player.playerId,
+		slot,
+		crewId,
+		causedByEnemy,
+	});
 	triggerAllyTurnReactions(state, player, causedByEnemy);
 }
 
-// kills a face-up crew slot: clears it (refilling from reserve if available)
-// invalidates any stale marks pointing at it, and recomputes passives
+// refills from reserve if available
 function killCrewAtSlot(
 	state: FaceturnServerState,
 	owner: FaceturnServerPlayer,
@@ -117,14 +133,14 @@ export type StrikeOrExecuteOutcome =
 	| { outcome: "executed"; survivedViaLifeInsurance: boolean }
 	| { outcome: "negated"; negatedBy: "terminal" | "immunity" };
 
-// shared check for terminal strike defend to keep resolution and declare-time logic consistent
+// keeps resolution and declare-time logic consistent
 export function isStrikeDefendedByTerminal(
 	target: FaceturnServerPlayer,
 ): boolean {
 	return target.derived.hasTerminalStrikeDefend && target.bossHp > 60;
 }
 
-// turns a face-down crew or executes if none remain; when multiple unturned crew, asks the correct player (void arms lets defender choose)
+// void arms lets defender choose which crew to turn
 export function resolveStrikeOrExecute(
 	state: FaceturnServerState,
 	target: FaceturnServerPlayer,
@@ -162,8 +178,7 @@ export function resolveStrikeOrExecute(
 			? effectiveSlot
 			: null;
 
-	// striking an already face-up crew slot kills it instead of turning it;
-	// only valid when the actor is an enemy of the target (never self-kill)
+	// striking an already face-up crew kills it; only enemies can do this
 	const isFaceUpKillTarget =
 		isStrike &&
 		effectiveSlot !== undefined &&
@@ -182,13 +197,13 @@ export function resolveStrikeOrExecute(
 		result = { outcome: "crew_killed", slot, refilledFromReserve };
 		triggerBertoOnCrewKill(state, actorId);
 	} else if (resolvedPreSelected !== null) {
-		turnCrewAtSlot(state, target, resolvedPreSelected);
+		turnCrewAtSlot(state, target, resolvedPreSelected, actorId);
 		recomputePassives(target, state);
 		triggerCrewTurnedEffects(state, target, resolvedPreSelected, causedByEnemy);
 		result = { outcome: "crew_turned", slot: resolvedPreSelected };
 	} else if (unturnedSlots.length === 1) {
 		const slot = unturnedSlots[0]!;
-		turnCrewAtSlot(state, target, slot);
+		turnCrewAtSlot(state, target, slot, actorId);
 		recomputePassives(target, state);
 		triggerCrewTurnedEffects(state, target, slot, causedByEnemy);
 		result = { outcome: "crew_turned", slot };
@@ -231,7 +246,6 @@ export function resolveStrikeOrExecute(
 	return result;
 }
 
-// move resolves in one pass.
 function performSelfStrike(
 	ctx: EffectContext,
 	preSelectedSlot?: 0 | 1,
@@ -249,8 +263,7 @@ function performSelfStrike(
 				? faceUpSlots[0]!
 				: null;
 
-	// ambiguous (2 face-up crew) and the client didn't pre-select one: fizzle
-	// rather than half-execute the move (kill nothing, still strike the enemy)
+	// fizzle if ambiguous and no preselected slot, to avoid half-executing
 	if (slot === null) return null;
 
 	const { refilledFromReserve } = killCrewAtSlot(ctx.state, actor, slot);
@@ -259,7 +272,6 @@ function performSelfStrike(
 	return { outcome: "crew_killed", slot, refilledFromReserve };
 }
 
-// kills any crew
 function triggerBertoOnCrewKill(
 	state: FaceturnServerState,
 	killerId: string,
@@ -280,7 +292,7 @@ function triggerBertoOnCrewKill(
 	recomputePassives(killer, state);
 }
 
-// blood money: enemies with the passive gain cash when a strike is declared
+// enemies with the passive gain cash on strike declaration
 export function applyBloodMoneyOnStrike(
 	state: FaceturnServerState,
 	striker: FaceturnServerPlayer,
@@ -314,7 +326,7 @@ export function executedPlayerIdFrom(
 	return outcome?.outcome === "executed" ? targetPlayerId : null;
 }
 
-// mama mercy armors ally boss on any ally crew turn; suplex strikes enemy crew only on ally's own turn (not forced)
+// mama mercy armors ally boss; suplex strikes only on ally's own turn (not forced)
 function triggerAllyTurnReactions(
 	state: FaceturnServerState,
 	turner: FaceturnServerPlayer,
@@ -382,7 +394,6 @@ export function triggerCrewTurnedEffects(
 ): void {
 	const crewId = player.crewIds[slotIndex];
 	if (!crewId) return;
-	if (player.derived.crewSkillsDisabled) return;
 
 	const crew = getCrew(crewId);
 	const ctx: EffectContext = {
@@ -392,7 +403,9 @@ export function triggerCrewTurnedEffects(
 		selfTurnedByEnemy: causedByEnemy,
 	};
 
-	resolveEffects(crew.passiveEffects, ctx);
+	if (!player.derived.crewSkillsDisabled) {
+		resolveEffects(crew.passiveEffects, ctx);
+	}
 
 	const suppressedByLighthouse = isTurnedEffectSuppressedByEnemyLighthouse(
 		state,
@@ -413,7 +426,6 @@ export function triggerCrewTurnedEffects(
 	recomputePassives(player, state);
 }
 
-// checks if any enemy has a face-up, unsuppressed lighthouse suppressing turned effects
 function isTurnedEffectSuppressedByEnemyLighthouse(
 	state: FaceturnServerState,
 	player: FaceturnServerPlayer,
@@ -430,7 +442,7 @@ function isTurnedEffectSuppressedByEnemyLighthouse(
 	return false;
 }
 
-// consumes/discards the first enemy Cease & Desist move; unaffected by Blackmail since it's a Move effect, only trigger when a turned effect is resolving
+// move effect, unaffected by blackmail, consumes first enemy cease & desist
 function consumeCeaseDesistIfPresent(
 	state: FaceturnServerState,
 	player: FaceturnServerPlayer,
@@ -467,7 +479,7 @@ export const strikeHandlers = {
 
 	strike_enemy_crew_undefendable_with_cash_cost(effect, ctx) {
 		if (effect.type !== "strike_enemy_crew_undefendable_with_cash_cost") return;
-		if (ctx.actor.cash < effect.cashCost) return; // fizzle: insufficient funds
+		if (ctx.actor.cash < effect.cashCost) return; // insufficient funds
 		ctx.actor.cash -= effect.cashCost;
 		performStrike(ctx);
 	},

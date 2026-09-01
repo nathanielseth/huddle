@@ -58,5 +58,12 @@ export const GAME_REGISTRY: GameEntry[] = [
 			"FaceTurnConfig",
 		),
 	},
+	{
+		id: "blank-slate",
+		inGame: lazyNamed(
+			() => import("@/games/blank-slate/BlankSlate"),
+			"BlankSlate",
+		),
+	},
 	//
 ];

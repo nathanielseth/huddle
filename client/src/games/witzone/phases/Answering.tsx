@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { motion, AnimatePresence } from "motion/react";
+import { useState, useRef, useEffect } from "react";
+import { m, AnimatePresence } from "motion/react";
 import { useWitzoneState } from "../hooks/useWitzoneState";
 import { TimerBar } from "../../sabong/components/TimerBar";
 import { Loading, WaitingView } from "./shared";
@@ -61,6 +61,12 @@ export function Answering() {
 	const [inputs, setInputs] = useState<Record<number, string>>({});
 	const [submitting, setSubmitting] = useState<Record<number, boolean>>({});
 
+	// Fix: no-autofocus — useRef + useEffect instead of autoFocus prop
+	const firstInputRef = useRef<HTMLInputElement>(null);
+	useEffect(() => {
+		firstInputRef.current?.focus();
+	}, []);
+
 	if (!state) return null;
 	if (role === "host") return <HostView />;
 	if (!secret) return <Loading />;
@@ -115,7 +121,7 @@ export function Answering() {
 
 							<AnimatePresence mode="wait">
 								{isDone ? (
-									<motion.div
+									<m.div
 										key="done"
 										initial={{ opacity: 0, y: 4 }}
 										animate={{ opacity: 1, y: 0 }}
@@ -127,29 +133,34 @@ export function Answering() {
 												inputs[prompt.promptIndex] ??
 												"Submitted"}
 										</span>
-									</motion.div>
+									</m.div>
 								) : (
-									<motion.div
+									<m.div
 										key="input"
 										initial={{ opacity: 0 }}
 										animate={{ opacity: 1 }}
 										className="flex flex-col gap-2"
 									>
+										{/*
+										 * Fix: control-has-associated-label — aria-label describes which prompt this answers
+										 * Fix: no-autofocus — ref on first input only, no autoFocus prop anywhere
+										 */}
 										<input
+											ref={idx === 0 ? firstInputRef : undefined}
 											type="text"
 											value={text}
 											onChange={(e) =>
-												setInputs((prev) => ({
+												{ setInputs((prev) => ({
 													...prev,
 													[prompt.promptIndex]: e.target.value,
-												}))
+												})); }
 											}
 											onKeyDown={(e) => {
 												if (e.key === "Enter") handleSubmit(prompt.promptIndex);
 											}}
 											placeholder="Your answer..."
 											maxLength={MAX_ANSWER_LENGTH + 10}
-											autoFocus={idx === 0}
+											aria-label={`Answer for prompt ${idx + 1}: ${prompt.text}`}
 											className="w-full px-4 py-3 rounded-xl bg-bg border border-border text-white placeholder:text-white/30 focus:outline-none focus:border-white/40 text-base transition-colors"
 										/>
 										<div className="flex items-center justify-between">
@@ -158,15 +169,17 @@ export function Answering() {
 											>
 												{charsLeft} left
 											</span>
+											{/* Fix: button-has-type — explicit type="button" */}
 											<button
-												onClick={() => handleSubmit(prompt.promptIndex)}
+												type="button"
+												onClick={() => { handleSubmit(prompt.promptIndex); }}
 												disabled={!text.trim() || isOver}
 												className="px-5 py-2 rounded-lg bg-white text-black text-sm font-semibold disabled:opacity-30 disabled:cursor-not-allowed active:scale-[0.97] transition-all"
 											>
 												Lock in
 											</button>
 										</div>
-									</motion.div>
+									</m.div>
 								)}
 							</AnimatePresence>
 						</div>

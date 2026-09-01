@@ -2,7 +2,7 @@ import type { PhaseActionHandler } from "./types";
 import { noOpResult } from "./types";
 import { FACETURN_CONSTANTS as C } from "../types";
 import { resolveRps } from "../game";
-import { makeResult, applyRpsWinner } from "../action-results";
+import { makeResult, beginRpsReveal } from "../action-results";
 
 export const rpsAction: PhaseActionHandler = (
 	state,
@@ -23,7 +23,7 @@ export const rpsAction: PhaseActionHandler = (
 		if (state.rpsChoices.size === 2) {
 			const [p1Id, p2Id] = state.playerOrder;
 			state.rpsResult = resolveRps(p1Id, p2Id, state.rpsChoices, state.rng);
-			return applyRpsWinner(state);
+			return beginRpsReveal(state);
 		}
 
 		return makeResult(state, C.RPS_DURATION_MS);

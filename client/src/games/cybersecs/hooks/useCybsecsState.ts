@@ -1,5 +1,8 @@
 import { useGameStore } from "../../../app/store";
-import type { CybsecsState, CybsecsSecret } from "@shared/games/cybersecs";
+import type {
+	CybsecsState,
+	CybsecsSecret,
+} from "@shared/games/breachpoint/index";
 import type { Player, GameTimer } from "@shared/core/room";
 
 export interface CybsecsStateResult {

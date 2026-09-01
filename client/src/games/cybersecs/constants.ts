@@ -1,4 +1,8 @@
-import type { CybsecsRole, WinReason, GameMode } from "@shared/games/cybersecs";
+import type {
+	CybsecsRole,
+	WinReason,
+	GameMode,
+} from "@shared/games/breachpoint/index";
 
 export const ROLE_META: Record<
 	CybsecsRole,

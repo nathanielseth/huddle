@@ -6,7 +6,9 @@ import type {
 	ResolutionResult,
 	GameMode,
 	MoveChainEntry,
+	MoveChainResolutionView,
 } from "../../../../shared/games/face-turn/types";
+import type { LogEntry } from "../../../../shared/games/face-turn/log";
 import { FACETURN_CONSTANTS } from "../../../../shared/games/face-turn/constants";
 import type { FaceturnDerivedPlayerStats } from "./derived";
 import type { PendingInteraction } from "./interactions/types";
@@ -89,7 +91,7 @@ export interface FaceturnServerPlayer {
 	trickleDownTargets: Map<0 | 1 | 2, string>;
 	// per-turn flag; reset in startTurn.
 	ratQueenDrawUsedThisTurn: boolean;
-	// crew slots with disabled passives; cleared when crew unturns
+	// crew slots with disabled passives; cleared when crew hides
 	disabledPassiveSlots: Set<0 | 1>;
 
 	playedMoveThisTurn: boolean;
@@ -114,8 +116,6 @@ export interface ServerMoveChain {
 	participants: [string, string];
 	stack: MoveChainEntry[];
 	responderId: string;
-	// stack length when responder last flipped; chain resolves if no new slow played
-	stackDepthAtLastSlow: number;
 }
 
 export interface FaceturnServerState {
@@ -150,6 +150,16 @@ export interface FaceturnServerState {
 	pendingDefendableStrikes: PendingDefendableStrike[];
 
 	lastResolution: ResolutionResult | null;
+	// mirrors lastResolution's lifecycle: just gets overwritten by whoever
+	// resolves a move chain next. written inside resolveMoveChainFull so
+	// none of its callers need to change.
+	lastChainResolution: MoveChainResolutionView | null;
+
+	// append-only match log — see ./log.ts for pushLog and the cap.
+	log: LogEntry[];
+	// next seq to assign; monotonic for the life of the game, never
+	// reused even as old entries get evicted past the cap.
+	_nextLogSeq: number;
 
 	// one-shot private hand reveal; cleared after next state build
 	watcherReveal: { forPlayerId: string; hand: readonly string[] } | null;
@@ -157,6 +167,11 @@ export interface FaceturnServerState {
 	rpsChoices: Map<string, RpsChoice>;
 	// ties resolved by coinflip; a first mover always exists
 	rpsResult: "player1" | "player2" | null;
+	// set once rpsResult resolves, survives into phase "rps_order_choice"
+	// (state.rps itself goes null once the phase leaves "rps"/"rps_reveal",
+	// so this is the only place the winner is still recorded there). cleared
+	// once order is chosen and we move on to "mulligan".
+	rpsOrderChoiceWinnerId: string | null;
 
 	winnerId: string | null;
 	winCondition: WinCondition | null;
@@ -175,7 +190,7 @@ export interface FaceturnServerState {
 export type ServerPendingActionType =
 	| "class_action_strike"
 	| "class_action_collect"
-	| "class_action_unturn"
+	| "class_action_hide"
 	| "class_action_defend"
 	| "card_strike";
 

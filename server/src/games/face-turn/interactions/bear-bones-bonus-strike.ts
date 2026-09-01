@@ -30,6 +30,7 @@ export const bearBonesBonusStrikeSpec: InteractionSpec<Interaction> = {
 			action.targetPlayerId ?? interaction.eligibleTargetIds[0];
 		if (bonusOutcome && bonusTargetId) {
 			state.lastResolution = buildStrikeResolution(
+				state,
 				bonusOutcome,
 				respondingPlayer.playerId,
 				bonusTargetId,

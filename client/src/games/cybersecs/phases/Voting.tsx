@@ -10,7 +10,7 @@ import type {
 	CybsecsState,
 	CybsecsSecret,
 	VoteChoice,
-} from "@shared/games/cybersecs";
+} from "@shared/games/breachpoint/index";
 import type { GameTimer } from "@shared/core/room";
 
 export function Voting() {

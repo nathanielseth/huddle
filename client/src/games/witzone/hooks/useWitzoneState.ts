@@ -1,12 +1,11 @@
-import { useCallback } from "react";
 import { useGameStore } from "../../../app/store";
 import { socket } from "../../../lib/network/socket";
 import type {
 	WitzoneState,
 	WitzoneAction,
 	WitzonePlayerSecret,
-} from "@shared/witzone";
-import type { Player, GameTimer } from "@shared/types";
+} from "@shared/games/witzone/index";
+import type { Player, GameTimer } from "@shared/core/room";
 
 export interface WitzoneStateResult {
 	state: WitzoneState | null;
@@ -19,6 +18,11 @@ export interface WitzoneStateResult {
 	sendAction: (action: WitzoneAction) => void;
 }
 
+// Hoisted: closes over nothing — socket is a module-level singleton.
+function sendAction(action: WitzoneAction): void {
+	socket.emit("player_action", action);
+}
+
 export function useWitzoneState(): WitzoneStateResult {
 	const playerId = useGameStore((s) => s.playerId);
 	const role = useGameStore((s) => s.role);
@@ -27,16 +31,10 @@ export function useWitzoneState(): WitzoneStateResult {
 	const state = useGameStore((s) => s.gamePayload) as WitzoneState | null;
 	const secret = useGameStore((s) => s.secret) as WitzonePlayerSecret | null;
 
-	// rebuilds only when the player roster changes
-	const getName = useCallback(
-		(id: string) => players.find((p) => p.id === id)?.name ?? id,
-		[players],
-	);
-
-	// socket is a module-level singleton
-	const sendAction = useCallback((action: WitzoneAction): void => {
-		socket.emit("player_action", action);
-	}, []);
+	// Cannot hoist — closes over `players` from the store subscription above.
+	function getName(id: string) {
+		return players.find((p) => p.id === id)?.name ?? id;
+	}
 
 	return { state, playerId, role, players, timer, secret, getName, sendAction };
 }

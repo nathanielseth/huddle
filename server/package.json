@@ -6,7 +6,8 @@
 		"dev": "tsx watch --env-file=.env src/index.ts",
 		"build": "tsc",
 		"test": "vitest run",
-		"test:watch": "vitest"
+		"test:watch": "vitest",
+		"sim:live": "tsx watch --env-file=.env scripts/faceturn-sim/live/serve.ts"
 	},
 	"dependencies": {
 		"@pokertools/evaluator": "^1.0.1",

@@ -4,7 +4,7 @@ import { TimerBar } from "../../sabong/components/TimerBar";
 import { MissionTrack } from "../components/MissionTrack";
 import { socket } from "../../../lib/network/socket";
 import { cn } from "../../../lib/utils/cn";
-import type { CybsecsState } from "@shared/games/cybersecs";
+import type { CybsecsState } from "@shared/games/breachpoint/index";
 import type { GameTimer, Player } from "@shared/core/room";
 
 export function Talking() {

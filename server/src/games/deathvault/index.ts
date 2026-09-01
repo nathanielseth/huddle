@@ -4,7 +4,7 @@ import type {
 	EngineResult,
 } from "../../engine/GameEngine";
 import type { DeathvaultServerState, DeathvaultServerPlayer } from "./types";
-import type { DeathvaultPlayerSecret } from "../../../../shared/games/deathvault";
+import type { DeathvaultPlayerSecret } from "../../../../shared/games/deathvault/index";
 import { parseDeathvaultAction } from "./schemas";
 import { buildPublicState, buildPlayerSecret } from "./projection";
 import {
@@ -15,7 +15,7 @@ import {
 	resolveMinigame,
 	advanceLavaWave,
 } from "./minigames";
-import { QUESTION_BANK } from "./questions";
+import { getQuestionsByDifficulty } from "./questions";
 import { shuffle } from "../lib/random";
 import { invariant } from "../lib/assert";
 import {
@@ -31,6 +31,7 @@ import {
 	ROUND_END_MS,
 	LAVA_PICK_MS,
 	SCRAMBLE_MS,
+	TOXIC_ANSWER_MS,
 	MONEY_GRAB_MS,
 	HIGHER_LOWER_GUESS_MS,
 	FINAL_CUT_MS,
@@ -267,7 +268,7 @@ function timerForMinigameActive(state: DeathvaultServerState): number {
 		case "word_scramble":
 			return SCRAMBLE_MS;
 		case "toxic_trivia":
-			return HIGHER_LOWER_GUESS_MS;
+			return TOXIC_ANSWER_MS;
 		case "money_grab":
 			return MONEY_GRAB_MS;
 		case "higher_lower":
@@ -322,9 +323,9 @@ export const deathvaultEngine: GameEngineWithSecrets = {
 		);
 
 		// difficulty ramp: easy early, medium mid, hard late
-		const easy = shuffle(QUESTION_BANK.filter((q) => q.difficulty === 1));
-		const medium = shuffle(QUESTION_BANK.filter((q) => q.difficulty === 2));
-		const hard = shuffle(QUESTION_BANK.filter((q) => q.difficulty === 3));
+		const easy = shuffle(getQuestionsByDifficulty(1));
+		const medium = shuffle(getQuestionsByDifficulty(2));
+		const hard = shuffle(getQuestionsByDifficulty(3));
 
 		const queue = [
 			...easy.slice(0, 2),

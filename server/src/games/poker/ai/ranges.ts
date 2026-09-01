@@ -264,7 +264,7 @@ export function computeBoardTexture(
 
 	const flushness = (maxSuit - 1) / Math.max(1, n - 1);
 
-	const sortedRanks = [...ranks].sort((a, b) => a - b);
+	const sortedRanks = ranks.toSorted((a, b) => a - b);
 	let connected = 0;
 	for (let i = 0; i < n - 1; i++) {
 		if ((sortedRanks[i + 1] ?? 0) - (sortedRanks[i] ?? 0) <= 2) connected++;

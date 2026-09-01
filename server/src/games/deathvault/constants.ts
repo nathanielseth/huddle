@@ -13,7 +13,6 @@ export const QUESTION_MS = 25_000;
 export const QUESTION_RESULT_MS = 8_000;
 export const MINIGAME_INTRO_MS = 5_000;
 export const ROUND_END_MS = 6_000;
-export const PODIUM_MS = 0;
 
 export const LAVA_PICK_MS = 10_000;
 export const SCRAMBLE_MS = 30_000;
@@ -48,9 +47,6 @@ export const HIGHER_LOWER_STREAK_MULTIPLIERS = [1, 1.25, 1.5, 2, 2.5, 3];
 // minigame prize pools
 export const MINIGAME_STAKE_PER_PLAYER = 200;
 export const DILEMMA_STAKE_PER_PLAYER = 300;
-
-// final round
-export const FINAL_WAGER_MAX_MULTIPLIER = 2;
 
 // input limits
 export const MAX_SCRAMBLE_WORD_LENGTH = 32;

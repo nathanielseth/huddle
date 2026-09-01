@@ -3,7 +3,10 @@ import { useCybsecsState } from "../hooks/useCybsecsState";
 import { TimerBar } from "../../sabong/components/TimerBar";
 import { ROLE_META, MODE_LABELS } from "../constants";
 import { cn } from "../../../lib/utils/cn";
-import type { CybsecsState, CybsecsSecret } from "@shared/games/cybersecs";
+import type {
+	CybsecsState,
+	CybsecsSecret,
+} from "@shared/games/breachpoint/index";
 import type { GameTimer, Player } from "@shared/core/room";
 
 export function RoleReveal() {
