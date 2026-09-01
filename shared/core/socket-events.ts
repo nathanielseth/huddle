@@ -39,5 +39,7 @@ export interface ClientToServerEvents {
 	kick_player: (payload: { playerId: string }) => void;
 	add_cpu_seat: () => void;
 	remove_cpu_seat: (payload: { playerId: string }) => void;
+	join_as_player: (payload: { name: string }) => void;
+	leave_player_seat: () => void;
 	send_chat_message: (payload: { text: string }) => void;
 }

@@ -8,7 +8,6 @@ import { isChallengeEligible } from "./lib/challengeEligibility";
 import { LogRow } from "./components/EventDrawer";
 import { RailChat } from "./components/RailChat";
 import { GameScreen } from "./components/shell/GameScreen";
-import { BoardRecede } from "./components/scene/PhaseScene";
 import { PlayerSceneContent } from "./components/scene/PhaseSceneContent";
 import { PhaseTimer } from "./components/PhaseTimer";
 import { MoveAnnouncer } from "./components/MoveAnnouncer";
@@ -192,7 +191,7 @@ function RailLogs() {
 		<div className="flex flex-col gap-1 px-4">
 			<SectionTitle>Logs</SectionTitle>
 			<div
-				className="flex flex-col gap-1 max-h-40 lg:max-h-56 overflow-y-auto pr-1"
+				className="flex flex-col gap-1 max-h-40 lg:max-h-56 overflow-y-auto ft-scroll pr-1"
 				style={{ touchAction: "pan-y" }}
 			>
 				{[...log].reverse().map((entry, i) => (
@@ -215,7 +214,7 @@ function RailContent() {
 			className={cn("ft-panel-ink ft-rail", "flex flex-col overflow-hidden")}
 		>
 			<div
-				className="flex flex-col gap-3 overflow-y-auto min-h-0"
+				className="flex flex-col gap-3 overflow-y-auto ft-scroll min-h-0"
 				style={{ touchAction: "pan-y" }}
 			>
 				<RailTurnStatus />
@@ -263,16 +262,13 @@ export function FaceTurnPlayer() {
 			className="relative w-full ft-app-bg overflow-hidden"
 			style={{ height: "100dvh" }}
 		>
-			<BoardRecede
-				active={sceneKind !== null}
-				intensity={sceneKind?.kind === "challenge" ? "light" : "full"}
-			>
-				<GameScreen
-					board={<BoardContent />}
-					hud={<HudContent />}
-					rail={<RailContent />}
-				/>
-			</BoardRecede>
+			<GameScreen
+				board={<BoardContent />}
+				hud={<HudContent />}
+				rail={<RailContent />}
+				recedeActive={sceneKind !== null}
+				recedeIntensity={sceneKind?.kind === "challenge" ? "light" : "full"}
+			/>
 			{sceneList.map((entry) => (
 				<PlayerSceneContent
 					key={entry.key}

@@ -287,6 +287,10 @@ export function isHostSocket(room: Room, socketId: string): boolean {
 	return room.hostSocketId === socketId;
 }
 
+export function isHostSeated(room: Room): boolean {
+	return room.players.has(room.hostPlayerId);
+}
+
 export function getPublicState(room: Room): GameState {
 	const players: Player[] = Array.from(room.players.values()).map((p) => ({
 		id: p.playerId,

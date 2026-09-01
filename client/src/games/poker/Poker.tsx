@@ -1,11 +1,9 @@
-import { useGameStore } from "../../app/store";
 import { usePokerState } from "./hooks/usePokerState";
 import { PokerTableHost } from "./PokerTableHost";
 import { PokerTablePlayer } from "./PokerTablePlayer";
 
 export function Poker() {
-	const role = useGameStore((s) => s.role);
-	const { poker } = usePokerState();
+	const { poker, myPlayer } = usePokerState();
 
 	if (!poker) {
 		return (
@@ -15,5 +13,5 @@ export function Poker() {
 		);
 	}
 
-	return role === "host" ? <PokerTableHost /> : <PokerTablePlayer />;
+	return myPlayer ? <PokerTablePlayer /> : <PokerTableHost />;
 }

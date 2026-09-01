@@ -1,14 +1,12 @@
 import "./board.css";
 import { LazyMotion, domAnimation } from "motion/react";
-import { useGameStore } from "../../app/store";
 import { useFaceturnState } from "./hooks/useFaceturnState";
 import { FaceTurnHost } from "./FaceTurnHost";
 import { FaceTurnPlayer } from "./FaceTurnPlayer";
 import { AppCardInspect } from "./components/card/CardInspectModal";
 
 export function FaceTurn() {
-	const role = useGameStore((s) => s.role);
-	const { ft } = useFaceturnState();
+	const { ft, myPlayer } = useFaceturnState();
 
 	if (!ft) {
 		return (
@@ -20,7 +18,7 @@ export function FaceTurn() {
 
 	return (
 		<LazyMotion features={domAnimation} strict>
-			{role === "host" ? <FaceTurnHost /> : <FaceTurnPlayer />}
+			{myPlayer ? <FaceTurnPlayer /> : <FaceTurnHost />}
 			<AppCardInspect />
 		</LazyMotion>
 	);

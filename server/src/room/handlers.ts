@@ -10,6 +10,7 @@ import {
 	removePlayerById,
 	markDisconnected,
 	isHostSocket,
+	isHostSeated,
 	getPublicState,
 	touchRoom,
 	pushChatMessage,
@@ -24,6 +25,7 @@ import {
 	RejoinRoomSchema,
 	KickPlayerSchema,
 	RemoveCpuSeatSchema,
+	HostJoinAsPlayerSchema,
 	SendChatMessageSchema,
 } from "./schemas";
 import type { GameRunner } from "../engine/GameRunner";
@@ -141,6 +143,9 @@ function handleDisconnect(
 	store.untrackSocket(socket.id);
 
 	if (isHostSocket(room, socket.id)) {
+		// host's own seat (if any) tracks the same socket, mark it disconnected too
+		if (isHostSeated(room)) markDisconnected(room, socket.id);
+
 		if (room.phase === "in_game" || room.phase === "paused") {
 			logger.info("host disconnected — pausing game", {
 				roomCode: room.code,
@@ -341,7 +346,14 @@ export function registerHandlers(
 
 			store.untrackSocket(room.hostSocketId);
 			room.hostSocketId = socket.id;
-			store.trackSocket(socket.id, code);
+			// host also occupies a player seat, keep that seat's socket in sync too
+			if (isHostSeated(room)) {
+				room.players.get(room.hostPlayerId)!.socketId = socket.id;
+				room.players.get(room.hostPlayerId)!.isConnected = true;
+				store.trackSocket(socket.id, code, room.hostPlayerId);
+			} else {
+				store.trackSocket(socket.id, code);
+			}
 			void socket.join(code);
 			touchRoom(room);
 			logger.info("host rejoined", { roomCode: code });
@@ -394,6 +406,7 @@ export function registerHandlers(
 
 		const target = room.players.get(result.data.playerId);
 		if (!target) return;
+		if (result.data.playerId === room.hostPlayerId) return; // use leave_player_seat instead
 
 		const partyLeaderId = room.players.keys().next().value;
 		if (result.data.playerId === partyLeaderId) return;
@@ -442,6 +455,53 @@ export function registerHandlers(
 		if (!target?.isCpu) return;
 
 		removePlayerById(room, target.playerId);
+		runner.notifyPlayerRemoved(room);
+		broadcast(io, room);
+	});
+
+	socket.on("join_as_player", (payload) => {
+		const result = HostJoinAsPlayerSchema.safeParse(payload);
+		if (!result.success) return;
+
+		const room = store.findBySocket(socket.id);
+		if (!room || !isHostSocket(room, socket.id) || room.phase !== "lobby")
+			return;
+		if (isHostSeated(room)) return;
+
+		const name = result.data.name;
+		const nameLower = name.toLowerCase();
+		const nameTaken = Array.from(room.players.values()).some(
+			(p) => p.isConnected && p.name.toLowerCase() === nameLower,
+		);
+		if (nameTaken) {
+			socket.emit("room_error", "That name is already taken in this room.");
+			return;
+		}
+
+		const engine = runner.getEngine(room.gameId);
+		const maxSeats =
+			engine?.getMaxSeats?.(room.configPayload) ?? DEFAULT_MAX_SEATS;
+		if (room.players.size >= maxSeats) {
+			socket.emit("room_error", "Room is full.");
+			return;
+		}
+
+		// seat is keyed by hostPlayerId, same id the host reconnects with,
+		// so rejoin_room's host branch can keep both roles in sync on one socket
+		addPlayer(room, room.hostPlayerId, socket.id, name);
+		store.trackSocket(socket.id, room.code, room.hostPlayerId);
+		touchRoom(room);
+		broadcast(io, room);
+	});
+
+	socket.on("leave_player_seat", () => {
+		const room = store.findBySocket(socket.id);
+		if (!room || !isHostSocket(room, socket.id) || room.phase !== "lobby")
+			return;
+		if (!isHostSeated(room)) return;
+
+		removePlayerById(room, room.hostPlayerId);
+		store.trackSocket(socket.id, room.code);
 		runner.notifyPlayerRemoved(room);
 		broadcast(io, room);
 	});

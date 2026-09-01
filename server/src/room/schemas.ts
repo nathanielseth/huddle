@@ -27,6 +27,10 @@ export const KickPlayerSchema = z.object({
 	playerId: z.string(),
 });
 
+export const HostJoinAsPlayerSchema = z.object({
+	name: z.string().min(1).max(10).trim(),
+});
+
 export const RemoveCpuSeatSchema = z.object({
 	playerId: z.string(),
 });
@@ -40,5 +44,6 @@ export type JoinRoomPayload = z.infer<typeof JoinRoomSchema>;
 export type SpectateRoomPayload = z.infer<typeof SpectateRoomSchema>;
 export type RejoinRoomPayload = z.infer<typeof RejoinRoomSchema>;
 export type KickPlayerPayload = z.infer<typeof KickPlayerSchema>;
+export type HostJoinAsPlayerPayload = z.infer<typeof HostJoinAsPlayerSchema>;
 export type RemoveCpuSeatPayload = z.infer<typeof RemoveCpuSeatSchema>;
 export type SendChatMessagePayload = z.infer<typeof SendChatMessageSchema>;

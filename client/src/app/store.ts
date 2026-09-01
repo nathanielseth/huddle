@@ -50,6 +50,8 @@ interface GameStore {
 	kickPlayer: (playerId: string) => void;
 	addCpuSeat: () => void;
 	removeCpuSeat: (playerId: string) => void;
+	joinAsPlayer: (name: string) => void;
+	leavePlayerSeat: () => void;
 	sendChatMessage: (text: string) => void;
 	_syncState: (state: GameState) => void;
 	_receiveChatMessage: (message: ChatMessage) => void;
@@ -189,6 +191,19 @@ export const useGameStore = create<GameStore>((set, get) => ({
 	removeCpuSeat: (playerId) => {
 		if (get().status !== "connected") return;
 		socket.emit("remove_cpu_seat", { playerId });
+	},
+
+	joinAsPlayer: (name) => {
+		if (get().status !== "connected") return;
+		const trimmed = name.trim();
+		if (!trimmed) return;
+		set({ playerName: trimmed });
+		socket.emit("join_as_player", { name: trimmed });
+	},
+
+	leavePlayerSeat: () => {
+		if (get().status !== "connected") return;
+		socket.emit("leave_player_seat");
 	},
 
 	// server assigns id/name/role/timestamp, client only sends text

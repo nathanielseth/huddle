@@ -25,8 +25,12 @@ export function RoomLobby() {
 	const kickPlayer = useGameStore((s) => s.kickPlayer);
 	const addCpuSeat = useGameStore((s) => s.addCpuSeat);
 	const removeCpuSeat = useGameStore((s) => s.removeCpuSeat);
+	const joinAsPlayer = useGameStore((s) => s.joinAsPlayer);
+	const leavePlayerSeat = useGameStore((s) => s.leavePlayerSeat);
 
 	const [copied, setCopied] = useState(false);
+
+	const isHostSeated = players.some((p) => p.id === playerId);
 
 	const game = GAMES.find((g) => g.id === gameId) ?? null;
 	const gameEntry = GAME_REGISTRY.find((g) => g.id === gameId) ?? null;
@@ -89,6 +93,10 @@ export function RoomLobby() {
 						supportsCpuSeats={game?.supportsCpuSeats ?? false}
 						onAddCpu={addCpuSeat}
 						onRemoveCpu={removeCpuSeat}
+						hostPlayerId={playerId}
+						isHostSeated={isHostSeated}
+						onJoinAsPlayer={joinAsPlayer}
+						onLeavePlayerSeat={leavePlayerSeat}
 					/>
 				) : (
 					<GuestLobby
@@ -123,6 +131,10 @@ interface HostLobbyProps {
 	supportsCpuSeats: boolean;
 	onAddCpu: () => void;
 	onRemoveCpu: (id: string) => void;
+	hostPlayerId: string;
+	isHostSeated: boolean;
+	onJoinAsPlayer: (name: string) => void;
+	onLeavePlayerSeat: () => void;
 }
 
 function HostLobby({
@@ -138,6 +150,10 @@ function HostLobby({
 	supportsCpuSeats,
 	onAddCpu,
 	onRemoveCpu,
+	hostPlayerId,
+	isHostSeated,
+	onJoinAsPlayer,
+	onLeavePlayerSeat,
 }: HostLobbyProps) {
 	return (
 		<>
@@ -209,9 +225,15 @@ function HostLobby({
 
 			<PlayerList
 				players={players}
-				playerId={null}
+				playerId={hostPlayerId}
 				onKick={onKick}
 				onRemoveCpu={onRemoveCpu}
+			/>
+
+			<HostSeatControl
+				isHostSeated={isHostSeated}
+				onJoin={onJoinAsPlayer}
+				onLeave={onLeavePlayerSeat}
 			/>
 
 			{supportsCpuSeats && (
@@ -236,6 +258,77 @@ function HostLobby({
 				onStart={onStart}
 			/>
 		</>
+	);
+}
+
+// lets the host join the player seats (or step back out) without leaving their host controls
+function HostSeatControl({
+	isHostSeated,
+	onJoin,
+	onLeave,
+}: {
+	isHostSeated: boolean;
+	onJoin: (name: string) => void;
+	onLeave: () => void;
+}) {
+	const [editing, setEditing] = useState(false);
+	const [name, setName] = useState("");
+
+	if (isHostSeated) {
+		return (
+			<button
+				type="button"
+				onClick={onLeave}
+				className="flex items-center gap-2 px-4 h-9 rounded-lg text-xs font-semibold uppercase tracking-widest text-white/50 bg-white/5 hover:bg-white/10 hover:text-white/80 transition-all cursor-pointer"
+			>
+				Leave Player Seat
+			</button>
+		);
+	}
+
+	if (editing) {
+		return (
+			<form
+				className="flex items-center gap-2"
+				onSubmit={(e) => {
+					e.preventDefault();
+					const trimmed = name.trim();
+					if (!trimmed) return;
+					onJoin(trimmed);
+					setEditing(false);
+					setName("");
+				}}
+			>
+				<input
+					autoFocus
+					value={name}
+					onChange={(e) => {
+						setName(e.target.value.slice(0, 10));
+					}}
+					placeholder="Your name"
+					className="w-32 h-9 px-3 rounded-lg text-xs font-semibold bg-white/5 border border-border text-white placeholder:text-white/30 focus:outline-none focus:border-white/30"
+				/>
+				<button
+					type="submit"
+					disabled={!name.trim()}
+					className="flex items-center gap-2 px-4 h-9 rounded-lg text-xs font-semibold uppercase tracking-widest text-white bg-huddle hover:opacity-85 disabled:opacity-30 disabled:cursor-not-allowed transition-all cursor-pointer"
+				>
+					Join
+				</button>
+			</form>
+		);
+	}
+
+	return (
+		<button
+			type="button"
+			onClick={() => {
+				setEditing(true);
+			}}
+			className="flex items-center gap-2 px-4 h-9 rounded-lg text-xs font-semibold uppercase tracking-widest text-white/50 bg-white/5 hover:bg-white/10 hover:text-white/80 transition-all cursor-pointer"
+		>
+			Join as Player
+		</button>
 	);
 }
 

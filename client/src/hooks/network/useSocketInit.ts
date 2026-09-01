@@ -132,6 +132,8 @@ export function useSocketInit(): void {
 			socket.off("kicked", onKicked);
 			socket.off("rejoin_failed", onRejoinFailed);
 			socket.off("player_secret", onPlayerSecret);
+			socket.off("chat_message", onChatMessage);
+			socket.off("chat_history", onChatHistory);
 			socket.io.off("reconnect_attempt", onReconnectAttempt);
 			socket.io.off("reconnect_failed", onReconnectFailed);
 		};

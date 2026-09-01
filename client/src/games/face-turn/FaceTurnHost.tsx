@@ -4,7 +4,6 @@ import { useExitPresence } from "./hooks/useExitPresence";
 import { getBoardBucket } from "./lib/boardBucket";
 import { computeSceneKind, sceneKeyOf } from "./lib/phaseScenePredicate";
 import { GameScreen } from "./components/shell/GameScreen";
-import { BoardRecede } from "./components/scene/PhaseScene";
 import { HostSceneContent } from "./components/scene/PhaseSceneContent";
 import { PhaseBanner } from "./components/PhaseBanner";
 import { MoveAnnouncer } from "./components/MoveAnnouncer";
@@ -34,12 +33,12 @@ export function FaceTurnHost() {
 			className="relative w-full ft-app-bg overflow-hidden"
 			style={{ height: "100dvh" }}
 		>
-			<BoardRecede
-				active={sceneKind !== null}
-				intensity={sceneKind?.kind === "challenge" ? "light" : "full"}
-			>
-				<GameScreen board={<BoardGrid />} hud={<HudContent />} />
-			</BoardRecede>
+			<GameScreen
+				board={<BoardGrid />}
+				hud={<HudContent />}
+				recedeActive={sceneKind !== null}
+				recedeIntensity={sceneKind?.kind === "challenge" ? "light" : "full"}
+			/>
 			{sceneList.map((entry) => (
 				<HostSceneContent
 					key={entry.key}

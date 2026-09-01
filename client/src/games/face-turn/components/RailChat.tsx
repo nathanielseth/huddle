@@ -6,7 +6,7 @@ import { cn } from "../../../lib/utils/cn";
 import { MAX_CHAT_MESSAGE_LENGTH } from "@shared/core/chat";
 import type { ChatMessage } from "@shared/core/chat";
 
-const CHAT_MAX_HEIGHT_PX = 220;
+const CHAT_HEIGHT_PX = 220;
 
 function useTeamIndexOf(): (playerId: string) => number | null {
 	const { ft } = useFaceturnState();
@@ -91,8 +91,8 @@ export function RailChat() {
 
 			<div
 				ref={scrollRef}
-				className="flex flex-col gap-2 overflow-y-auto pr-1"
-				style={{ maxHeight: CHAT_MAX_HEIGHT_PX, touchAction: "pan-y" }}
+				className="flex flex-col gap-2 overflow-y-auto ft-scroll pr-1"
+				style={{ height: CHAT_HEIGHT_PX, touchAction: "pan-y" }}
 			>
 				{chatMessages.length === 0 ? (
 					<p className="text-xs text-white/25 italic">No messages yet.</p>
