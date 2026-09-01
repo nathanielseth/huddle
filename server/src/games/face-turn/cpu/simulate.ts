@@ -1,5 +1,6 @@
 import type { FaceturnsAction } from "../../../../../shared/games/face-turn/schemas";
 import type { Room, RoomPlayer, RoomSpectator } from "../../../room/registry";
+import type { ChatMessage } from "../../../../../shared/core/chat";
 import type { GameContext } from "../../../engine/GameEngine";
 import { faceturnsEngine } from "../index";
 import type { FaceturnServerState } from "../types";
@@ -11,6 +12,7 @@ const SIM_TIMER_DURATION_MS = 30_000;
 const roomPlayersCache = new Map<string, ReadonlyMap<string, RoomPlayer>>();
 const ROOM_PLAYERS_CACHE_MAX = 256;
 const EMPTY_SPECTATORS = new Map<string, RoomSpectator>();
+const EMPTY_CHAT_HISTORY: ChatMessage[] = [];
 
 function roomPlayersFor(
 	seatIds: readonly string[],
@@ -60,6 +62,7 @@ function makeSimRoom(state: FaceturnServerState): Room {
 		pausedTimerRemaining: null,
 		pauseReason: null,
 		hostReconnectDeadline: null,
+		chatHistory: EMPTY_CHAT_HISTORY,
 	};
 }
 

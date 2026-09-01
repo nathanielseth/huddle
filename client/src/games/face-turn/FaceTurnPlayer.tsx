@@ -6,6 +6,7 @@ import { useExitPresence } from "./hooks/useExitPresence";
 import { computeSceneKind, sceneKeyOf } from "./lib/phaseScenePredicate";
 import { isChallengeEligible } from "./lib/challengeEligibility";
 import { LogRow } from "./components/EventDrawer";
+import { RailChat } from "./components/RailChat";
 import { GameScreen } from "./components/shell/GameScreen";
 import { BoardRecede } from "./components/scene/PhaseScene";
 import { PlayerSceneContent } from "./components/scene/PhaseSceneContent";
@@ -208,22 +209,23 @@ function RailLogs() {
 	);
 }
 
-// single rail component, internal scroll, same instance across viewports
 function RailContent() {
 	return (
 		<div
-			className={cn(
-				"ft-panel-ink ft-rail",
-				"flex flex-col gap-3 overflow-y-auto",
-			)}
-			style={{ touchAction: "pan-y" }}
+			className={cn("ft-panel-ink ft-rail", "flex flex-col overflow-hidden")}
 		>
-			<RailTurnStatus />
-			<RailLogs />
+			<div
+				className="flex flex-col gap-3 overflow-y-auto min-h-0"
+				style={{ touchAction: "pan-y" }}
+			>
+				<RailTurnStatus />
+				<RailLogs />
+			</div>
 			<div className="flex-1 min-h-0" />
-			<div className="px-4 pb-4">
+			<div className="px-4 pb-4 shrink-0">
 				<TurnActions />
 			</div>
+			<RailChat />
 		</div>
 	);
 }

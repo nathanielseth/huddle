@@ -79,7 +79,11 @@ export function DraftFooter({
 						stroke="currentColor"
 						strokeWidth={3}
 					>
-						<path d="M6 9l6 6 6-6" strokeLinecap="round" strokeLinejoin="round" />
+						<path
+							d="M6 9l6 6 6-6"
+							strokeLinecap="round"
+							strokeLinejoin="round"
+						/>
 					</svg>
 				</button>
 			)}
@@ -106,7 +110,7 @@ export function DraftFooter({
 	return (
 		<div
 			ref={containerRef}
-			className="shrink-0 border-t border-white/10 bg-black/50 backdrop-blur-md"
+			className="shrink-0 border-t border-white/10 bg-white/5"
 			style={{ paddingBottom: "env(safe-area-inset-bottom)" }}
 		>
 			{stacked ? (

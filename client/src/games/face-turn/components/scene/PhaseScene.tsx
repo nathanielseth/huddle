@@ -37,13 +37,8 @@ export function PhaseScene({
 		<div
 			className={cn(
 				"ft-scene-backdrop",
-				// portaled to body, sibling of hand portal, so z-index competes with hand.
-				// confined to the board region (excludes the rail on desktop) via the
-				// same --rail-inset used by GameScreen to size the board slot; on mobile
-				// the rail sits below the board so full width is correct there anyway.
-				// top/left/bottom set explicitly (not via inset-0) so the lg:right override
-				// can't lose to a shorthand's implicit right:0 from later in the cascade.
-				"fixed top-0 left-0 bottom-0 right-0 lg:right-(--rail-inset) z-40 flex",
+				"fixed top-0 left-0 bottom-0 right-0 z-40 flex",
+				!fullBleed && "lg:right-(--rail-inset)",
 				!fullBleed && "items-center justify-center",
 				// let board clicks pass through wrapper; panel re-enables pointer events
 				boardClickThrough && "pointer-events-none",

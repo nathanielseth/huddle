@@ -17,6 +17,7 @@
 *, *::before, *::after { box-sizing: border-box; }
 
 html, body, #root { height: 100%; }
+body.ft-locked-viewport { overflow: hidden; }
 
 body {
   background-color: var(--color-bg);

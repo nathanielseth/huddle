@@ -231,7 +231,7 @@ function FilterPanel({
 
 			{open && (
 				<div className="absolute z-20 top-full right-0 mt-1 w-64 rounded-lg border border-white/15 ft-panel-ink shadow-xl overflow-hidden">
-					<div className="max-h-96 overflow-y-auto p-3 flex flex-col gap-4">
+					<div className="max-h-96 overflow-y-auto ft-scroll p-3 flex flex-col gap-4">
 						<FilterSection label="Status">
 							<div className="flex flex-col gap-1">
 								{PICKED_FILTERS.map((opt) => (
@@ -365,7 +365,7 @@ function CardGrid({
 	children: ReactNode;
 }) {
 	return (
-		<div className="overflow-x-auto">
+		<div className="overflow-x-auto ft-scroll">
 			<div
 				className="grid mx-auto"
 				style={{
@@ -686,7 +686,10 @@ export function DraftingPhase() {
 	const moveCycleItems = filteredMoves.map((m) => moveToCard(m));
 
 	const grid = (
-		<div ref={containerRef} className="flex-1 min-h-0 overflow-y-auto">
+		<div
+			ref={containerRef}
+			className="flex-1 min-h-0 overflow-y-auto ft-scroll"
+		>
 			{noAllResults && (
 				<p className="px-4 py-10 text-xs text-white/30 text-center">
 					No cards match "{query.trim()}".
@@ -934,7 +937,7 @@ export function DraftingPhase() {
 					/>
 				</div>
 
-				<div className="flex-1 min-h-0 overflow-y-auto">
+				<div className="flex-1 min-h-0 overflow-y-auto ft-scroll">
 					{pickedEntries.length === 0 ? (
 						<p className="px-4 py-6 text-xs text-white/30 text-center">
 							Nothing drafted yet — pick a boss, crew, and moves on the right.

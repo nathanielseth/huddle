@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import {
 	createRoom,
 	addPlayer,
@@ -11,6 +12,8 @@ import {
 	isHostSocket,
 	getPublicState,
 	touchRoom,
+	pushChatMessage,
+	resolveChatSender,
 	type Room,
 	type RoomRegistry,
 } from "./registry";
@@ -21,10 +24,11 @@ import {
 	RejoinRoomSchema,
 	KickPlayerSchema,
 	RemoveCpuSeatSchema,
+	SendChatMessageSchema,
 } from "./schemas";
 import type { GameRunner } from "../engine/GameRunner";
 import type { IO, ClientSocket } from "../types";
-import { createCooldown } from "../lib/rate-limit";
+import { createCooldown, createBurstLimiter } from "../lib/rate-limit";
 import { logger } from "../lib/logger";
 
 const DEFAULT_MAX_SEATS = 8;
@@ -34,6 +38,11 @@ const ACTION_RATE_LIMIT_MS = 100;
 const ROOM_LIFECYCLE_RATE_LIMIT_MS = 1_000;
 const MAX_ROOMS = 100;
 const MAX_SPECTATORS_PER_ROOM = 10;
+
+// chat rate limit looser than action, burst allows quick flurry without spam
+const CHAT_RATE_LIMIT_MS = 300;
+const CHAT_BURST_CAPACITY = 8;
+const CHAT_BURST_WINDOW_MS = 10_000;
 
 const hostGraceTimers = new Map<string, ReturnType<typeof setTimeout>>();
 
@@ -79,6 +88,8 @@ function joinAsSpectator(
 	store.trackSpectatorSocket(socket.id, room.code);
 	void socket.join(room.code);
 	socket.emit("joined_as_spectator", { reason });
+	if (room.chatHistory.length > 0)
+		socket.emit("chat_history", room.chatHistory);
 	broadcast(io, room);
 }
 
@@ -180,6 +191,11 @@ export function registerHandlers(
 	const createRoomCooldown = createCooldown(ROOM_LIFECYCLE_RATE_LIMIT_MS);
 	const joinRoomCooldown = createCooldown(ROOM_LIFECYCLE_RATE_LIMIT_MS);
 	const rejoinRoomCooldown = createCooldown(ROOM_LIFECYCLE_RATE_LIMIT_MS);
+	const chatCooldown = createCooldown(CHAT_RATE_LIMIT_MS);
+	const chatBurstLimiter = createBurstLimiter(
+		CHAT_BURST_CAPACITY,
+		CHAT_BURST_WINDOW_MS,
+	);
 
 	socket.on("create_room", (payload) => {
 		if (!createRoomCooldown.ready()) return;
@@ -256,6 +272,8 @@ export function registerHandlers(
 		void socket.join(code);
 		touchRoom(room);
 		logger.info("player " + outcome, { name, roomCode: code });
+		if (room.chatHistory.length > 0)
+			socket.emit("chat_history", room.chatHistory);
 		broadcast(io, room);
 	});
 
@@ -272,7 +290,7 @@ export function registerHandlers(
 			store.findBySocket(socket.id) ||
 			store.findSpectatorBySocket(socket.id)
 		) {
-			// this socket is already seated as host/player/spectator somewhere
+			// socket already in a room as host/player/spectator
 			socket.emit("room_error", "Already in a room.");
 			return;
 		}
@@ -328,6 +346,9 @@ export function registerHandlers(
 			touchRoom(room);
 			logger.info("host rejoined", { roomCode: code });
 
+			if (room.chatHistory.length > 0)
+				socket.emit("chat_history", room.chatHistory);
+
 			if (room.phase === "paused" && room.pauseReason === "host_disconnected") {
 				runner.onHostReconnect(room, io, store);
 				logger.info("host reconnected — resuming", { roomCode: code });
@@ -355,6 +376,8 @@ export function registerHandlers(
 		void socket.join(code);
 		touchRoom(room);
 		logger.info("player rejoined", { playerId, roomCode: code });
+		if (room.chatHistory.length > 0)
+			socket.emit("chat_history", room.chatHistory);
 		broadcast(io, room);
 		if (room.phase === "in_game") {
 			void runner.resendSecret(room, playerId, io);
@@ -389,13 +412,14 @@ export function registerHandlers(
 		const room = store.findBySocket(socket.id);
 		if (!room || !isHostSocket(room, socket.id) || room.phase !== "lobby")
 			return;
-		// at least one human (the party leader) must exist fore CPU seat
+		// need at least one human (party leader) for cpu seat
 		if (room.players.size === 0) return;
 
 		const engine = runner.getEngine(room.gameId);
 		if (!engine?.supportsCpuSeats) return;
 
-		const maxSeats = engine.getMaxSeats?.(room.configPayload) ?? DEFAULT_MAX_SEATS;
+		const maxSeats =
+			engine.getMaxSeats?.(room.configPayload) ?? DEFAULT_MAX_SEATS;
 		if (room.players.size >= maxSeats) {
 			socket.emit("room_error", "Room is full.");
 			return;
@@ -456,6 +480,37 @@ export function registerHandlers(
 		}
 
 		runner.handleAction(room, playerId, payload, io, store);
+	});
+
+	// chat not routed through game engine; available in every phase including lobby
+	socket.on("send_chat_message", (payload) => {
+		// cheap checks first
+		if (!chatCooldown.ready() || !chatBurstLimiter.ready()) return;
+
+		const result = SendChatMessageSchema.safeParse(payload);
+		if (!result.success) return;
+
+		const room =
+			store.findBySocket(socket.id) ?? store.findSpectatorBySocket(socket.id);
+		if (!room) return;
+
+		// server derives identity from room records, not payload
+		const sender = resolveChatSender(room, socket.id);
+		if (!sender) return;
+
+		const message = {
+			id: randomUUID(),
+			playerId: sender.playerId,
+			name: sender.name,
+			role: sender.role,
+			text: result.data.text,
+			sentAt: Date.now(),
+		};
+
+		pushChatMessage(room, message);
+		touchRoom(room);
+		// broadcast chat_message only, not game_state, to avoid bandwidth and unrelated UI updates
+		io.to(room.code).emit("chat_message", message);
 	});
 
 	socket.on("pause_game", () => {

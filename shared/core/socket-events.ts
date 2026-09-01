@@ -1,4 +1,5 @@
 import type { GameState } from "./room";
+import type { ChatMessage } from "./chat";
 
 export interface ServerToClientEvents {
 	game_state: (state: GameState) => void;
@@ -8,12 +9,13 @@ export interface ServerToClientEvents {
 	kicked: () => void;
 	rejoin_failed: () => void;
 	player_secret: (payload: unknown) => void;
-	// per-player rejection reason for their own last game action (illegal
-	// target, insufficient cash, wrong phase, etc). Distinct from
-	// room_error, which is room/connection-level, not tied to a specific
-	// action attempt. See EngineResult.actionRejections.
+	// per-player rejection for their own game action, distinct from room_error
 	action_rejected: (message: string) => void;
 	joined_as_spectator: (payload: { reason: "room_full" | "requested" }) => void;
+	// room chat, outside game engine, never routed through it
+	chat_message: (message: ChatMessage) => void;
+	// sent once to the newly joined socket for scrollback
+	chat_history: (messages: ChatMessage[]) => void;
 }
 
 export interface ClientToServerEvents {
@@ -37,4 +39,5 @@ export interface ClientToServerEvents {
 	kick_player: (payload: { playerId: string }) => void;
 	add_cpu_seat: () => void;
 	remove_cpu_seat: (payload: { playerId: string }) => void;
+	send_chat_message: (payload: { text: string }) => void;
 }

@@ -26,6 +26,13 @@ function InGame() {
 	const leaveRoom = useGameStore((s) => s.leaveRoom);
 	const resumeGame = useGameStore((s) => s.resumeGame);
 
+	useEffect(() => {
+		document.body.classList.add("ft-locked-viewport");
+		return () => {
+			document.body.classList.remove("ft-locked-viewport");
+		};
+	}, []);
+
 	const entry = GAME_REGISTRY.find((g) => g.id === gameId);
 
 	function handleQuit() {
@@ -76,7 +83,9 @@ export function Room() {
 			if (e.key === "Escape") useGameStore.getState().pauseGame();
 		};
 		window.addEventListener("keydown", onKeyDown);
-		return () => { window.removeEventListener("keydown", onKeyDown); };
+		return () => {
+			window.removeEventListener("keydown", onKeyDown);
+		};
 	}, [phase]);
 
 	if (!roomCode) return <Navigate to="/" replace />;

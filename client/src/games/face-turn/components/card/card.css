@@ -139,7 +139,7 @@ button.flip-container {
   -webkit-backface-visibility: hidden !important;
   will-change: transform;
   border-radius: 7.5cqw;
-  padding: 4.35cqw;
+  padding: 4.4cqw;
   box-sizing: border-box;
   --elegant-pattern-dark: radial-gradient(
       circle at 50% 100%,

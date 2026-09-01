@@ -5,6 +5,7 @@ import { toast } from "../../lib/utils/toast";
 import { loadRoomSession } from "../../lib/network/session";
 import { pulseActionRejection } from "./actionRejectionSignal";
 import type { GameState } from "@shared/core/room";
+import type { ChatMessage } from "@shared/core/chat";
 
 const CONN_TOAST_ID = "conn-status";
 
@@ -71,12 +72,6 @@ export function useSocketInit(): void {
 			getStore()._syncState(state);
 		};
 		const onRoomError = (msg: string) => toast.error(msg);
-		// per-action rejection from a game engine (e.g. an illegal move
-		// target, insufficient cash) — see EngineResult.actionRejections.
-		// Distinct from room_error, which is room/connection-level. Toasted
-		// the same way, plus pulses any locked action bar that opted into
-		// releaseOnRejection (see useActionLock.ts) so the UI doesn't sit
-		// looking unresponsive until its timeout fires.
 		const onActionRejected = (msg: string) => {
 			toast.error(msg, { duration: 3000 });
 			pulseActionRejection();
@@ -98,6 +93,12 @@ export function useSocketInit(): void {
 		const onPlayerSecret = (payload: unknown) => {
 			getStore()._setSecret(payload);
 		};
+		const onChatMessage = (message: ChatMessage) => {
+			getStore()._receiveChatMessage(message);
+		};
+		const onChatHistory = (messages: ChatMessage[]) => {
+			getStore()._receiveChatHistory(messages);
+		};
 
 		socket.on("connect", onConnect);
 		socket.on("disconnect", onDisconnect);
@@ -110,6 +111,8 @@ export function useSocketInit(): void {
 		socket.on("kicked", onKicked);
 		socket.on("rejoin_failed", onRejoinFailed);
 		socket.on("player_secret", onPlayerSecret);
+		socket.on("chat_message", onChatMessage);
+		socket.on("chat_history", onChatHistory);
 		socket.io.on("reconnect_attempt", onReconnectAttempt);
 		socket.io.on("reconnect_failed", onReconnectFailed);
 

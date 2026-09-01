@@ -17,6 +17,9 @@ export default defineConfig({
 		},
 		dedupe: ["react", "react-dom"],
 	},
+	optimizeDeps: {
+		include: ["react-compiler-runtime"],
+	},
 	server: {
 		port: 3000,
 		host: true,

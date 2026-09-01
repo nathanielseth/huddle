@@ -5,6 +5,7 @@ import type {
 	GameTimer,
 	PauseReason,
 } from "../../../shared/core/room";
+import { MAX_CHAT_HISTORY, type ChatMessage } from "../../../shared/core/chat";
 
 export interface RoomPlayer {
 	playerId: string;
@@ -39,6 +40,8 @@ export interface Room {
 	pausedTimerRemaining: number | null;
 	pauseReason: PauseReason | null;
 	hostReconnectDeadline: number | null;
+	// scrollback only, capped, never persisted
+	chatHistory: ChatMessage[];
 }
 
 const CODE_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
@@ -63,7 +66,7 @@ export class RoomRegistry {
 			this.socketToCode.delete(room.hostSocketId);
 			this.socketToPlayerId.delete(room.hostSocketId);
 			for (const p of room.players.values()) {
-				if (p.socketId === null) continue; // CPU seat: never tracked
+				if (p.socketId === null) continue; // cpu seat never tracked
 				this.socketToCode.delete(p.socketId);
 				this.socketToPlayerId.delete(p.socketId);
 			}
@@ -158,6 +161,7 @@ export function createRoom(
 		pausedTimerRemaining: null,
 		pauseReason: null,
 		hostReconnectDeadline: null,
+		chatHistory: [],
 	};
 }
 
@@ -309,4 +313,39 @@ export function getPublicState(room: Room): GameState {
 
 export function isExpired(room: Room): boolean {
 	return Date.now() - room.lastActiveAt > 1000 * 60 * 15;
+}
+
+// small n, o(n) shift is fine
+export function pushChatMessage(room: Room, message: ChatMessage): void {
+	room.chatHistory.push(message);
+	if (room.chatHistory.length > MAX_CHAT_HISTORY) {
+		room.chatHistory.shift();
+	}
+}
+
+export interface ChatSender {
+	playerId: string;
+	name: string;
+	role: "player" | "spectator";
+}
+
+// server resolves identity, never trust client. cpu seats have no socket. host not a chat participant.
+export function resolveChatSender(
+	room: Room,
+	socketId: string,
+): ChatSender | null {
+	for (const player of room.players.values()) {
+		if (player.socketId === socketId && !player.isCpu) {
+			return { playerId: player.playerId, name: player.name, role: "player" };
+		}
+	}
+	const spectator = room.spectators.get(socketId);
+	if (spectator) {
+		return {
+			playerId: `spectator::${socketId}`,
+			name: spectator.name,
+			role: "spectator",
+		};
+	}
+	return null;
 }
