@@ -1,6 +1,8 @@
 import "./rps.css";
+import "../../components/card/card.css";
 import { cn } from "../../../../lib/utils/cn";
 import { RpsGlyph } from "./RpsGlyph";
+import { FaceTurnLogo } from "../../components/card/ftLogo";
 import type { RpsChoice } from "@shared/games/face-turn/types";
 
 export interface RpsCardProps {
@@ -38,20 +40,21 @@ export function RpsCard({
 			style={{ width: size, height: size * 1.4 }}
 		>
 			<div className="rps-flip-inner">
-				{/* back: face-down, always the "unrevealed" state */}
 				<div
 					className={cn(
-						"rps-face-back rps-cardback-pattern ft-panel-ink border-2 transition-colors",
+						"rps-face-back border-2 transition-colors overflow-hidden",
 						TONE_RING[tone],
 						TONE_GLOW[tone],
 					)}
 				>
-					<div
-						className={cn(
-							"w-1/2 h-1/2 rounded-full border border-white/20",
-							!revealed && tone === "neutral" && "rps-cardback-shimmer",
-						)}
-					/>
+					<div className="back-panel">
+						<FaceTurnLogo
+							className={cn(
+								"back-panel-logo",
+								!revealed && tone === "neutral" && "rps-cardback-shimmer",
+							)}
+						/>
+					</div>
 				</div>
 				{/* front: revealed hand-sign */}
 				<div

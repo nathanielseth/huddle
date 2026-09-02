@@ -4,9 +4,7 @@ import type {
 } from "@shared/games/face-turn/types";
 
 export function isPlayerExposed(player: FaceturnsPlayerView): boolean {
-	// exposed when there's no face-down crew left to turn (including having
-	// no crew at all), so the next strike executes the boss instead
-	return player.crewSlots.every((slot) => slot.status === "face_up");
+	return player.isExposed;
 }
 
 export function getEnemyPlayers(

@@ -94,7 +94,7 @@ export function SlotButton({
 	);
 }
 
-const PICK_CARD_SIZE = 136;
+const PICK_CARD_SIZE = 180;
 
 export function CardPickButton({
 	cardId,
@@ -123,7 +123,7 @@ export function CardPickGrid({ children }: { children: React.ReactNode }) {
 	return (
 		<div
 			className="flex w-full flex-row flex-wrap justify-center gap-3"
-			style={{ "--card-vw-share": "22vw" } as React.CSSProperties}
+			style={{ "--card-vw-share": "28vw" } as React.CSSProperties}
 		>
 			{children}
 		</div>

@@ -50,8 +50,9 @@ export const moveChainWindowAction: PhaseActionHandler = (
 	if (playerId !== p1 && playerId !== p2) return noOp();
 
 	if (action.type === "chain_play_burst") {
-		// burst requires priority, same as slow moves
+		// burst requires priority, same as slow moves, but reserved for the turn player
 		if (playerId !== chain.responderId) return noOp();
+		if (playerId !== state.activePlayerId) return noOp();
 
 		const { moveId } = action;
 		if (!player.hand.includes(moveId))

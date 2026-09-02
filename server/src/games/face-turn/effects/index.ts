@@ -103,6 +103,7 @@ export {
 	hideCrewAtSlot,
 	firstTurnedSlot,
 	firstUnturnedSlot,
+	isPlayerExposed,
 	isStrikeDefendedByTerminal,
 	resolveStrikeOrExecute,
 	performStrike,

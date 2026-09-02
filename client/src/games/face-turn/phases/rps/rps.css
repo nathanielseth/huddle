@@ -1,6 +1,7 @@
 .rps-flip {
 	display: block;
 	perspective: 1200px;
+	container-type: inline-size;
 	-webkit-tap-highlight-color: transparent;
 }
 
@@ -35,24 +36,6 @@
 
 .rps-face-front {
 	transform: rotateY(180deg) translateZ(1px);
-}
-
-.rps-cardback-pattern {
-	background-image:
-		repeating-linear-gradient(
-			45deg,
-			rgba(255, 255, 255, 0.05) 0px,
-			rgba(255, 255, 255, 0.05) 1px,
-			transparent 1px,
-			transparent 8px
-		),
-		repeating-linear-gradient(
-			-45deg,
-			rgba(255, 255, 255, 0.05) 0px,
-			rgba(255, 255, 255, 0.05) 1px,
-			transparent 1px,
-			transparent 8px
-		);
 }
 
 @keyframes rps-cardback-shimmer {

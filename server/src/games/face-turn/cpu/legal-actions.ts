@@ -538,11 +538,8 @@ function legalMoveChainActions(
 		return [];
 	}
 
-	// only whoever currently holds priority may act — burst or slow, and
-	// pass. computeChainPlayableMoveIds is the same server-authoritative
-	// gating chain_play_burst/chain_play_slow enforce (see
-	// state-builders.ts) — delegate to it instead of re-deriving the rules
-	// here, so this can't drift out of sync again.
+	// only the seat with priority may act: slow always, burst only if also turn player, plus pass
+	// delegate to computeChainPlayableMoveIds (server-authoritative) instead of re-deriving rules to avoid drift
 	const isResponder = seat === chain.responderId;
 	const actions: FaceturnsAction[] = isResponder
 		? [{ type: "chain_pass" }]

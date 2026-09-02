@@ -144,6 +144,10 @@ export function firstTurnedSlot(player: FaceturnServerPlayer): 0 | 1 | null {
 	return null;
 }
 
+export function isPlayerExposed(player: FaceturnServerPlayer): boolean {
+	return firstUnturnedSlot(player) === null;
+}
+
 export type StrikeOrExecuteOutcome =
 	| { outcome: "crew_turned"; slot: 0 | 1 }
 	| { outcome: "crew_killed"; slot: 0 | 1; refilledFromReserve: boolean }

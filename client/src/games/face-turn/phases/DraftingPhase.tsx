@@ -42,23 +42,67 @@ const MOVES_PER_DECK = FACETURN_CONSTANTS.MOVES_PER_DECK;
 
 const DRAFTABLE_CREW = CREW_DISPLAY.filter(isDraftable);
 
-const CREW_FILTERS: readonly ("all" | CrewClass)[] = [
-	"all",
-	"striker",
-	"defender",
-	"collector",
-	"hider",
-];
-const MOVE_FILTERS: readonly ("all" | MoveType)[] = [
-	"all",
-	"burst",
-	"slow",
-	"active",
-];
-
 type DraftTab = "boss" | "crew" | "moves" | "all";
 
-// search matches name and effect text, precomputed once
+const SORT_OPTIONS = ["type", "name", "cost"] as const;
+type SortValue = (typeof SORT_OPTIONS)[number];
+const SORT_LABEL: Record<SortValue, string> = {
+	name: "Name",
+	type: "Type",
+	cost: "Cash cost",
+};
+
+const SORT_DIRECTIONS = ["asc", "desc"] as const;
+type SortDirection = (typeof SORT_DIRECTIONS)[number];
+const SORT_DIRECTION_LABEL: Record<SortDirection, string> = {
+	asc: "Ascending",
+	desc: "Descending",
+};
+
+// single consistent sort. "type" sorts by class/type, bosses fall back to name.
+// "cost" only for moves, everything else falls back to name.
+function sortBosses(
+	bosses: typeof BOSS_DISPLAY,
+	_sort: SortValue,
+	direction: SortDirection,
+) {
+	const arr = [...bosses].sort((a, b) => a.name.localeCompare(b.name));
+	return direction === "desc" ? arr.reverse() : arr;
+}
+function sortCrew(
+	crew: typeof DRAFTABLE_CREW,
+	sort: SortValue,
+	direction: SortDirection,
+) {
+	const arr = [...crew];
+	if (sort === "type") {
+		arr.sort(
+			(a, b) => a.class.localeCompare(b.class) || a.name.localeCompare(b.name),
+		);
+	} else {
+		arr.sort((a, b) => a.name.localeCompare(b.name));
+	}
+	return direction === "desc" ? arr.reverse() : arr;
+}
+function sortMoves(
+	moves: typeof MOVE_DISPLAY,
+	sort: SortValue,
+	direction: SortDirection,
+) {
+	const arr = [...moves];
+	if (sort === "type") {
+		arr.sort(
+			(a, b) =>
+				a.moveType.localeCompare(b.moveType) || a.name.localeCompare(b.name),
+		);
+	} else if (sort === "cost") {
+		arr.sort((a, b) => a.baseCost - b.baseCost || a.name.localeCompare(b.name));
+	} else {
+		arr.sort((a, b) => a.name.localeCompare(b.name));
+	}
+	return direction === "desc" ? arr.reverse() : arr;
+}
+
 function buildHaystack(name: string, ...effectParts: (string | undefined)[]) {
 	return [name, ...effectParts.filter(Boolean)].join(" ").toLowerCase();
 }
@@ -86,7 +130,7 @@ function CountBadge({ current, max }: { current: number; max: number }) {
 				"text-xs font-black tabular-nums px-2 py-0.5 rounded-full border",
 				current === max
 					? "border-emerald-400/40 bg-emerald-400/10 text-emerald-300"
-					: "border-white/15 bg-white/5 text-white/50",
+					: "border-amber-400/40 bg-amber-400/10 text-amber-300",
 			)}
 		>
 			{current}/{max}
@@ -105,55 +149,6 @@ function ReserveStamp() {
 	);
 }
 
-function FilterChips<T extends string>({
-	options,
-	active,
-	onSelect,
-}: {
-	options: readonly T[];
-	active: T;
-	onSelect: (value: T) => void;
-}) {
-	return (
-		<div className="flex gap-1.5 overflow-x-auto scrollbar-none min-w-0">
-			{options.map((opt) => {
-				const isAll = opt === "all";
-				const theme = !isAll
-					? CARD_VARIANT_THEME[opt as CrewClass | MoveType]
-					: null;
-				const isActive = active === opt;
-				return (
-					<button
-						key={opt}
-						type="button"
-						onClick={() => {
-							onSelect(opt);
-						}}
-						className={cn(
-							"shrink-0 px-2.5 py-1 rounded-full text-[10px] font-black uppercase tracking-widest border transition-all cursor-pointer",
-							isActive
-								? "text-white"
-								: "border-white/10 bg-white/3 text-white/40 hover:text-white/60",
-						)}
-						style={
-							isActive
-								? {
-										borderColor: theme ? theme.accent : "rgba(255,255,255,0.3)",
-										backgroundColor: theme
-											? `${theme.accent}26`
-											: "rgba(255,255,255,0.1)",
-									}
-								: undefined
-						}
-					>
-						{isAll ? "All" : theme!.label}
-					</button>
-				);
-			})}
-		</div>
-	);
-}
-
 const PICKED_FILTERS = ["all", "picked", "unpicked"] as const;
 type PickedFilterValue = (typeof PICKED_FILTERS)[number];
 
@@ -164,6 +159,176 @@ const CREW_CLASS_OPTIONS: readonly CrewClass[] = [
 	"hider",
 ];
 const MOVE_TYPE_OPTIONS: readonly MoveType[] = ["burst", "slow", "active"];
+
+// shared shell for toolbar popovers, outside click and escape to dismiss
+function ToolbarPopover({
+	label,
+	icon,
+	active,
+	open,
+	onToggle,
+	children,
+	panelClassName,
+	disabled,
+}: {
+	label: string;
+	icon: ReactNode;
+	active: boolean;
+	open: boolean;
+	onToggle: () => void;
+	children: ReactNode;
+	panelClassName?: string;
+	disabled?: boolean;
+}) {
+	const containerRef = useRef<HTMLDivElement>(null);
+
+	useEffect(() => {
+		if (!open) return;
+		function onClickOutside(e: globalThis.MouseEvent) {
+			if (!containerRef.current?.contains(e.target as Node)) onToggle();
+		}
+		function onKeyDown(e: globalThis.KeyboardEvent) {
+			if (e.key === "Escape") onToggle();
+		}
+		document.addEventListener("mousedown", onClickOutside);
+		document.addEventListener("keydown", onKeyDown);
+		return () => {
+			document.removeEventListener("mousedown", onClickOutside);
+			document.removeEventListener("keydown", onKeyDown);
+		};
+		// eslint-disable-next-line react-hooks/exhaustive-deps
+	}, [open]);
+
+	return (
+		<div ref={containerRef} className="relative shrink-0">
+			<button
+				type="button"
+				disabled={disabled}
+				onClick={onToggle}
+				className={cn(
+					"flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-xs font-bold uppercase tracking-widest transition-all",
+					disabled
+						? "border-white/10 text-white/20 cursor-not-allowed"
+						: cn(
+								"cursor-pointer",
+								active || open
+									? "border-white/30 bg-white/10 text-white"
+									: "border-white/15 bg-white/5 text-white/60 hover:bg-white/10 hover:text-white",
+							),
+				)}
+			>
+				{icon}
+				{label}
+			</button>
+
+			{open && !disabled && (
+				<div
+					className={cn(
+						"absolute z-20 top-full right-0 mt-1 rounded-lg border ft-draft-panel shadow-xl overflow-hidden",
+						panelClassName ?? "w-64",
+					)}
+				>
+					{children}
+				</div>
+			)}
+		</div>
+	);
+}
+
+function SortPanel({
+	sort,
+	onChange,
+	direction,
+	onDirectionChange,
+}: {
+	sort: SortValue;
+	onChange: (value: SortValue) => void;
+	direction: SortDirection;
+	onDirectionChange: (value: SortDirection) => void;
+}) {
+	const [open, setOpen] = useState(false);
+
+	return (
+		<ToolbarPopover
+			label="Sort"
+			active={direction !== "asc"}
+			open={open}
+			onToggle={() => setOpen((v) => !v)}
+			panelClassName="w-44"
+			icon={
+				<svg
+					viewBox="0 0 24 24"
+					className="w-3.5 h-3.5"
+					fill="none"
+					stroke="currentColor"
+					strokeWidth={2.5}
+				>
+					<path
+						d="M6 8h12M9 13h6M11 18h2"
+						strokeLinecap="round"
+						strokeLinejoin="round"
+					/>
+				</svg>
+			}
+		>
+			<div className="p-1.5 flex flex-col gap-0.5">
+				{SORT_OPTIONS.map((opt) => (
+					<button
+						key={opt}
+						type="button"
+						onClick={() => {
+							onChange(opt);
+							setOpen(false);
+						}}
+						className={cn(
+							"flex items-center justify-between px-2.5 py-1.5 rounded-md text-xs font-bold text-left transition-colors cursor-pointer",
+							sort === opt
+								? "bg-white/10 text-white"
+								: "text-white/60 hover:bg-white/5 hover:text-white/80",
+						)}
+					>
+						{SORT_LABEL[opt]}
+						{sort === opt && (
+							<svg
+								viewBox="0 0 24 24"
+								className="w-3.5 h-3.5 text-emerald-300"
+								fill="none"
+								stroke="currentColor"
+								strokeWidth={2.5}
+							>
+								<path
+									d="M5 13l4 4L19 7"
+									strokeLinecap="round"
+									strokeLinejoin="round"
+								/>
+							</svg>
+						)}
+					</button>
+				))}
+			</div>
+
+			<div className="border-t border-white/10 p-1.5 flex flex-col gap-0.5">
+				{SORT_DIRECTIONS.map((dir) => (
+					<label
+						key={dir}
+						className="flex items-center gap-2 px-2.5 py-1.5 rounded-md hover:bg-white/5 cursor-pointer"
+					>
+						<input
+							type="radio"
+							name="sort-direction"
+							checked={direction === dir}
+							onChange={() => onDirectionChange(dir)}
+							className="accent-emerald-400"
+						/>
+						<span className="text-xs text-white/80">
+							{SORT_DIRECTION_LABEL[dir]}
+						</span>
+					</label>
+				))}
+			</div>
+		</ToolbarPopover>
+	);
+}
 
 function FilterPanel({
 	pickedFilter,
@@ -179,31 +344,15 @@ function FilterPanel({
 	onReset: () => void;
 }) {
 	const [open, setOpen] = useState(false);
-	const containerRef = useRef<HTMLDivElement>(null);
-
-	useEffect(() => {
-		if (!open) return;
-		function onClickOutside(e: globalThis.MouseEvent) {
-			if (!containerRef.current?.contains(e.target as Node)) setOpen(false);
-		}
-		document.addEventListener("mousedown", onClickOutside);
-		return () => document.removeEventListener("mousedown", onClickOutside);
-	}, [open]);
-
 	const activeCount = (pickedFilter !== "all" ? 1 : 0) + variantFilter.size;
 
 	return (
-		<div ref={containerRef} className="relative shrink-0">
-			<button
-				type="button"
-				onClick={() => setOpen((v) => !v)}
-				className={cn(
-					"flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-xs font-bold uppercase tracking-widest transition-all cursor-pointer",
-					activeCount > 0 || open
-						? "border-white/30 bg-white/10 text-white"
-						: "border-white/15 bg-white/5 text-white/60 hover:bg-white/10 hover:text-white",
-				)}
-			>
+		<ToolbarPopover
+			label="Filter"
+			active={activeCount > 0}
+			open={open}
+			onToggle={() => setOpen((v) => !v)}
+			icon={
 				<svg
 					viewBox="0 0 24 24"
 					className="w-3.5 h-3.5"
@@ -217,88 +366,136 @@ function FilterPanel({
 						strokeLinejoin="round"
 					/>
 				</svg>
-				Filter
-				<span
+			}
+		>
+			<div className="max-h-96 overflow-y-auto ft-scroll p-3 flex flex-col gap-4">
+				<FilterSection label="Status">
+					<div className="flex flex-col gap-1">
+						{PICKED_FILTERS.map((opt) => (
+							<label
+								key={opt}
+								className="flex items-center gap-2 px-2 py-1.5 rounded-md hover:bg-white/5 cursor-pointer"
+							>
+								<input
+									type="radio"
+									name="picked-filter"
+									checked={pickedFilter === opt}
+									onChange={() => onPickedChange(opt)}
+									className="accent-emerald-400"
+								/>
+								<span className="text-xs text-white/80 capitalize">
+									{opt === "all" ? "All cards" : opt}
+								</span>
+							</label>
+						))}
+					</div>
+				</FilterSection>
+
+				<FilterSection label="Crew class">
+					<div className="flex flex-wrap gap-1.5">
+						{CREW_CLASS_OPTIONS.map((cls) => (
+							<VariantToggle
+								key={cls}
+								value={cls}
+								active={variantFilter.has(cls)}
+								onToggle={onToggleVariant}
+							/>
+						))}
+					</div>
+				</FilterSection>
+
+				<FilterSection label="Move type">
+					<div className="flex flex-wrap gap-1.5">
+						{MOVE_TYPE_OPTIONS.map((type) => (
+							<VariantToggle
+								key={type}
+								value={type}
+								active={variantFilter.has(type)}
+								onToggle={onToggleVariant}
+							/>
+						))}
+					</div>
+				</FilterSection>
+			</div>
+
+			<div className="border-t border-white/10 p-2">
+				<button
+					type="button"
+					disabled={activeCount === 0}
+					onClick={onReset}
 					className={cn(
-						"flex items-center justify-center w-4 h-4 rounded-full bg-emerald-400 text-black text-[10px] font-black transition-opacity",
-						activeCount > 0 ? "opacity-100" : "opacity-0",
+						"w-full px-2 py-1.5 rounded text-[10px] font-black uppercase tracking-widest transition-colors",
+						activeCount > 0
+							? "bg-white/10 hover:bg-white/20 text-white/80 cursor-pointer"
+							: "bg-white/5 text-white/25 cursor-not-allowed",
 					)}
-					aria-hidden={activeCount === 0}
 				>
-					{activeCount > 0 ? activeCount : 0}
-				</span>
-			</button>
+					Reset filters
+				</button>
+			</div>
+		</ToolbarPopover>
+	);
+}
 
-			{open && (
-				<div className="absolute z-20 top-full right-0 mt-1 w-64 rounded-lg border border-white/15 ft-panel-ink shadow-xl overflow-hidden">
-					<div className="max-h-96 overflow-y-auto ft-scroll p-3 flex flex-col gap-4">
-						<FilterSection label="Status">
-							<div className="flex flex-col gap-1">
-								{PICKED_FILTERS.map((opt) => (
-									<label
-										key={opt}
-										className="flex items-center gap-2 px-2 py-1.5 rounded-md hover:bg-white/5 cursor-pointer"
-									>
-										<input
-											type="radio"
-											name="picked-filter"
-											checked={pickedFilter === opt}
-											onChange={() => onPickedChange(opt)}
-											className="accent-emerald-400"
-										/>
-										<span className="text-xs text-white/80 capitalize">
-											{opt === "all" ? "All cards" : opt}
-										</span>
-									</label>
-								))}
-							</div>
-						</FilterSection>
+// clear confirmation as popover, consistent with sort/filter
+function ClearPopover({
+	disabled,
+	onConfirm,
+}: {
+	disabled: boolean;
+	onConfirm: () => void;
+}) {
+	const [open, setOpen] = useState(false);
 
-						<FilterSection label="Crew class">
-							<div className="flex flex-wrap gap-1.5">
-								{CREW_CLASS_OPTIONS.map((cls) => (
-									<VariantToggle
-										key={cls}
-										value={cls}
-										active={variantFilter.has(cls)}
-										onToggle={onToggleVariant}
-									/>
-								))}
-							</div>
-						</FilterSection>
-
-						<FilterSection label="Move type">
-							<div className="flex flex-wrap gap-1.5">
-								{MOVE_TYPE_OPTIONS.map((type) => (
-									<VariantToggle
-										key={type}
-										value={type}
-										active={variantFilter.has(type)}
-										onToggle={onToggleVariant}
-									/>
-								))}
-							</div>
-						</FilterSection>
-					</div>
-
-					<div className="border-t border-white/10 p-2">
-						<button
-							type="button"
-							disabled={activeCount === 0}
-							onClick={onReset}
-							className={cn(
-								"w-full px-2 py-1.5 rounded text-[10px] font-black uppercase tracking-widest transition-colors",
-								activeCount > 0
-									? "bg-white/10 hover:bg-white/20 text-white/80 cursor-pointer"
-									: "bg-white/5 text-white/25 cursor-not-allowed",
-							)}
-						>
-							Reset filters
-						</button>
-					</div>
+	return (
+		<ToolbarPopover
+			label="Clear"
+			active={false}
+			open={open}
+			disabled={disabled}
+			onToggle={() => setOpen((v) => !v)}
+			panelClassName="w-56"
+			icon={
+				<svg
+					viewBox="0 0 24 24"
+					className="w-3.5 h-3.5"
+					fill="none"
+					stroke="currentColor"
+					strokeWidth={2}
+				>
+					<path
+						d="M3 6h18M8 6V4a2 2 0 012-2h4a2 2 0 012 2v2m3 0-1 14a2 2 0 01-2 2H7a2 2 0 01-2-2L4 6h16z"
+						strokeLinecap="round"
+						strokeLinejoin="round"
+					/>
+				</svg>
+			}
+		>
+			<div className="p-3 flex flex-col gap-2.5">
+				<p className="text-xs text-white/70 leading-snug">
+					Unselect everything you've picked so far?
+				</p>
+				<div className="flex gap-2">
+					<button
+						type="button"
+						onClick={() => setOpen(false)}
+						className="flex-1 px-2 py-1.5 rounded text-[10px] font-black uppercase tracking-widest bg-white/5 hover:bg-white/10 text-white/70 cursor-pointer transition-colors"
+					>
+						Cancel
+					</button>
+					<button
+						type="button"
+						onClick={() => {
+							setOpen(false);
+							onConfirm();
+						}}
+						className="flex-1 px-2 py-1.5 rounded text-[10px] font-black uppercase tracking-widest bg-red-500/15 hover:bg-red-500/25 border border-red-400/30 text-red-300 cursor-pointer transition-colors"
+					>
+						Clear
+					</button>
 				</div>
-			)}
-		</div>
+			</div>
+		</ToolbarPopover>
 	);
 }
 
@@ -383,11 +580,11 @@ function CardGrid({
 
 export function DraftingPhase() {
 	const { ft, secret, playerId } = useFaceturnState();
-	// width based, not input device, see useIsDraftMobile
+	// width based, not pointer
 	const isMobile = useIsDraftMobile();
 	const [tab, setTab] = useState<DraftTab>("all");
-	const [crewFilter, setCrewFilter] = useState<"all" | CrewClass>("all");
-	const [moveFilter, setMoveFilter] = useState<"all" | MoveType>("all");
+	const [sort, setSort] = useState<SortValue>("type");
+	const [sortDirection, setSortDirection] = useState<SortDirection>("asc");
 	const [pickedFilter, setPickedFilter] = useState<
 		"all" | "picked" | "unpicked"
 	>("all");
@@ -420,32 +617,33 @@ export function DraftingPhase() {
 	const q = query.trim().toLowerCase();
 
 	const filteredCrew = useMemo(() => {
-		const byClass =
-			crewFilter === "all"
-				? DRAFTABLE_CREW
-				: DRAFTABLE_CREW.filter((c) => c.class === crewFilter);
-		return q
-			? byClass.filter((c) => CREW_SEARCH_TEXT.get(c.id)!.includes(q))
-			: byClass;
-	}, [crewFilter, q]);
+		const byVariant =
+			variantFilter.size > 0
+				? DRAFTABLE_CREW.filter((c) => variantFilter.has(c.class))
+				: DRAFTABLE_CREW;
+		const searched = q
+			? byVariant.filter((c) => CREW_SEARCH_TEXT.get(c.id)!.includes(q))
+			: byVariant;
+		return sortCrew(searched, sort, sortDirection);
+	}, [variantFilter, q, sort, sortDirection]);
 
 	const filteredMoves = useMemo(() => {
-		const byType =
-			moveFilter === "all"
-				? MOVE_DISPLAY
-				: MOVE_DISPLAY.filter((m) => m.moveType === moveFilter);
-		return q
-			? byType.filter((m) => MOVE_SEARCH_TEXT.get(m.id)!.includes(q))
-			: byType;
-	}, [moveFilter, q]);
+		const byVariant =
+			variantFilter.size > 0
+				? MOVE_DISPLAY.filter((m) => variantFilter.has(m.moveType))
+				: MOVE_DISPLAY;
+		const searched = q
+			? byVariant.filter((m) => MOVE_SEARCH_TEXT.get(m.id)!.includes(q))
+			: byVariant;
+		return sortMoves(searched, sort, sortDirection);
+	}, [variantFilter, q, sort, sortDirection]);
 
-	const filteredBosses = useMemo(
-		() =>
-			q
-				? BOSS_DISPLAY.filter((b) => BOSS_SEARCH_TEXT.get(b.id)!.includes(q))
-				: BOSS_DISPLAY,
-		[q],
-	);
+	const filteredBosses = useMemo(() => {
+		const searched = q
+			? BOSS_DISPLAY.filter((b) => BOSS_SEARCH_TEXT.get(b.id)!.includes(q))
+			: BOSS_DISPLAY;
+		return sortBosses(searched, sort, sortDirection);
+	}, [q, sort, sortDirection]);
 
 	if (!ft || ft.phase !== "drafting" || !secret?.draftSelections) return null;
 
@@ -460,47 +658,33 @@ export function DraftingPhase() {
 	const crewFull = sel.crewIds.length >= crewMax;
 	const movesFull = sel.moveIds.length >= MOVES_PER_DECK;
 
-	// dealer reserve crew index mirrors server assignment
+	// dealer reserve index mirrors server assignment
 	const reserveCrewId =
 		isDealer && sel.crewIds.length > CREW_SLOTS
 			? sel.crewIds[CREW_SLOTS]
 			: null;
 
-	// extra filters for "all" tab applied after memoized base lists
-	const allFilteredBosses =
-		tab === "all"
-			? filteredBosses.filter((b) => {
-					if (pickedFilter === "picked") return sel.bossId === b.id;
-					if (pickedFilter === "unpicked") return sel.bossId !== b.id;
-					return true;
-				})
-			: filteredBosses;
+	const allFilteredBosses = filteredBosses.filter((b) => {
+		if (pickedFilter === "picked") return sel.bossId === b.id;
+		if (pickedFilter === "unpicked") return sel.bossId !== b.id;
+		return true;
+	});
 
-	const allFilteredCrew =
-		tab === "all"
-			? filteredCrew.filter((c) => {
-					const picked = sel.crewIds.includes(c.id);
-					if (pickedFilter === "picked" && !picked) return false;
-					if (pickedFilter === "unpicked" && picked) return false;
-					if (variantFilter.size > 0 && !variantFilter.has(c.class))
-						return false;
-					return true;
-				})
-			: filteredCrew;
+	const allFilteredCrew = filteredCrew.filter((c) => {
+		const picked = sel.crewIds.includes(c.id);
+		if (pickedFilter === "picked" && !picked) return false;
+		if (pickedFilter === "unpicked" && picked) return false;
+		return true;
+	});
 
-	const allFilteredMoves =
-		tab === "all"
-			? filteredMoves.filter((m) => {
-					const picked = sel.moveIds.includes(m.id);
-					if (pickedFilter === "picked" && !picked) return false;
-					if (pickedFilter === "unpicked" && picked) return false;
-					if (variantFilter.size > 0 && !variantFilter.has(m.moveType))
-						return false;
-					return true;
-				})
-			: filteredMoves;
+	const allFilteredMoves = filteredMoves.filter((m) => {
+		const picked = sel.moveIds.includes(m.id);
+		if (pickedFilter === "picked" && !picked) return false;
+		if (pickedFilter === "unpicked" && picked) return false;
+		return true;
+	});
 
-	// pick order: boss first, crew, then moves
+	// pick order: boss, crew, moves
 	const pickedEntries: PickedEntry[] = [];
 	if (sel.bossId) {
 		const boss = BOSS_DISPLAY.find((b) => b.id === sel.bossId);
@@ -530,7 +714,7 @@ export function DraftingPhase() {
 			});
 	}
 
-	// select_boss toggles server side, so deselect is re-sending same id
+	// select_boss toggles server-side
 	function deselect(entry: PickedEntry) {
 		if (entry.kind === "boss") {
 			sendFaceturnAction({ type: "select_boss", bossId: entry.id });
@@ -541,7 +725,6 @@ export function DraftingPhase() {
 		}
 	}
 
-	// load overwrites, confirm first if picks exist
 	async function loadSavedDeck(deck: SavedDeck) {
 		if (pickedEntries.length > 0) {
 			const ok = await modal.confirm({
@@ -565,7 +748,6 @@ export function DraftingPhase() {
 		});
 	}
 
-	// server fills empty picks, never touches existing
 	function handleRandomize() {
 		sendFaceturnAction({ type: "randomize_draft" });
 	}
@@ -584,15 +766,9 @@ export function DraftingPhase() {
 		}
 	}
 
-	// unselect everything via empty load_draft, destructive confirm
-	async function handleClear() {
+	// unselect everything via empty load_draft; confirmation in Clear popover
+	function handleClear() {
 		if (pickedEntries.length === 0) return;
-		const ok = await modal.destructive({
-			title: "Clear your draft?",
-			body: "This unselects everything you've picked so far.",
-			confirmLabel: "Clear draft",
-		});
-		if (!ok) return;
 		sendFaceturnAction({
 			type: "load_draft",
 			bossId: null,
@@ -614,13 +790,16 @@ export function DraftingPhase() {
 		);
 	}
 
-	const noAllResults =
-		tab === "all" &&
-		allFilteredBosses.length === 0 &&
-		allFilteredCrew.length === 0 &&
-		allFilteredMoves.length === 0;
+	const noResults =
+		(tab === "all" &&
+			allFilteredBosses.length === 0 &&
+			allFilteredCrew.length === 0 &&
+			allFilteredMoves.length === 0) ||
+		(tab === "boss" && allFilteredBosses.length === 0) ||
+		(tab === "crew" && allFilteredCrew.length === 0) ||
+		(tab === "moves" && allFilteredMoves.length === 0);
 
-	// "all" interleaves boss, crew, moves in one grid, each with its own click behavior
+	// "all" interleaves boss, crew, moves in one grid
 	const allEntries =
 		tab === "all"
 			? [
@@ -679,20 +858,21 @@ export function DraftingPhase() {
 				]
 			: [];
 
-	// one cycle list per tab, matching render order
 	const allEntriesCycleItems = allEntries.map((e) => e.cardProps);
-	const bossCycleItems = filteredBosses.map((b) => bossToCard(b));
-	const crewCycleItems = filteredCrew.map((c) => crewToCard(c));
-	const moveCycleItems = filteredMoves.map((m) => moveToCard(m));
+	const bossCycleItems = allFilteredBosses.map((b) => bossToCard(b));
+	const crewCycleItems = allFilteredCrew.map((c) => crewToCard(c));
+	const moveCycleItems = allFilteredMoves.map((m) => moveToCard(m));
 
 	const grid = (
 		<div
 			ref={containerRef}
 			className="flex-1 min-h-0 overflow-y-auto ft-scroll"
 		>
-			{noAllResults && (
+			{noResults && (
 				<p className="px-4 py-10 text-xs text-white/30 text-center">
-					No cards match "{query.trim()}".
+					{query.trim()
+						? `No cards match "${query.trim()}".`
+						: "No cards match your filters."}
 				</p>
 			)}
 
@@ -730,14 +910,14 @@ export function DraftingPhase() {
 				</CardGrid>
 			)}
 
-			{tab === "boss" && filteredBosses.length > 0 && (
+			{tab === "boss" && allFilteredBosses.length > 0 && (
 				<CardGrid
 					cardSize={cardSize}
 					columns={gridMetrics.columns}
 					gap={gridMetrics.gap}
 					paddingX={gridMetrics.paddingX}
 				>
-					{filteredBosses.map((boss, i) => {
+					{allFilteredBosses.map((boss, i) => {
 						const selected = sel.bossId === boss.id;
 						const cardProps = bossCycleItems[i];
 						return (
@@ -766,14 +946,14 @@ export function DraftingPhase() {
 				</CardGrid>
 			)}
 
-			{tab === "crew" && filteredCrew.length > 0 && (
+			{tab === "crew" && allFilteredCrew.length > 0 && (
 				<CardGrid
 					cardSize={cardSize}
 					columns={gridMetrics.columns}
 					gap={gridMetrics.gap}
 					paddingX={gridMetrics.paddingX}
 				>
-					{filteredCrew.map((crew, i) => {
+					{allFilteredCrew.map((crew, i) => {
 						const selected = sel.crewIds.includes(crew.id);
 						const cardProps = crewCycleItems[i];
 						const isReserve = crew.id === reserveCrewId;
@@ -815,14 +995,14 @@ export function DraftingPhase() {
 				</CardGrid>
 			)}
 
-			{tab === "moves" && filteredMoves.length > 0 && (
+			{tab === "moves" && allFilteredMoves.length > 0 && (
 				<CardGrid
 					cardSize={cardSize}
 					columns={gridMetrics.columns}
 					gap={gridMetrics.gap}
 					paddingX={gridMetrics.paddingX}
 				>
-					{filteredMoves.map((move, i) => {
+					{allFilteredMoves.map((move, i) => {
 						const selected = sel.moveIds.includes(move.id);
 						const cardProps = moveCycleItems[i];
 						return (
@@ -874,10 +1054,10 @@ export function DraftingPhase() {
 					moveMax={MOVES_PER_DECK}
 					query={query}
 					setQuery={setQuery}
-					crewFilter={crewFilter}
-					setCrewFilter={setCrewFilter}
-					moveFilter={moveFilter}
-					setMoveFilter={setMoveFilter}
+					sort={sort}
+					setSort={setSort}
+					sortDirection={sortDirection}
+					setSortDirection={setSortDirection}
 					pickedFilter={pickedFilter}
 					setPickedFilter={setPickedFilter}
 					variantFilter={variantFilter}
@@ -885,7 +1065,7 @@ export function DraftingPhase() {
 					onResetFilters={resetAllFilters}
 					onRandomize={handleRandomize}
 					randomizeDisabled={allDone || locked}
-					onClear={() => void handleClear()}
+					onClear={handleClear}
 					clearDisabled={pickedEntries.length === 0 || locked}
 					onCopyCode={() => void handleCopyCode()}
 					copyCodeDisabled={pickedEntries.length === 0}
@@ -924,7 +1104,7 @@ export function DraftingPhase() {
 
 	return (
 		<div className="flex h-full min-h-0 ft-draft-bg">
-			<div className="w-72 shrink-0 flex flex-col min-h-0 border-r border-white/10 bg-white/3">
+			<div className="w-72 shrink-0 flex flex-col min-h-0 border-r border-white/10">
 				<div className="px-4 py-3 border-b border-white/10 flex items-center justify-between shrink-0">
 					<p className="text-[10px] font-black tracking-widest uppercase text-white/40">
 						Your draft
@@ -1053,29 +1233,19 @@ export function DraftingPhase() {
 						</button>
 					</div>
 
-					{tab === "crew" && (
-						<FilterChips
-							options={CREW_FILTERS}
-							active={crewFilter}
-							onSelect={setCrewFilter}
-						/>
-					)}
-					{tab === "moves" && (
-						<FilterChips
-							options={MOVE_FILTERS}
-							active={moveFilter}
-							onSelect={setMoveFilter}
-						/>
-					)}
-					{tab === "all" && (
-						<FilterPanel
-							pickedFilter={pickedFilter}
-							onPickedChange={setPickedFilter}
-							variantFilter={variantFilter}
-							onToggleVariant={toggleVariant}
-							onReset={resetAllFilters}
-						/>
-					)}
+					<SortPanel
+						sort={sort}
+						onChange={setSort}
+						direction={sortDirection}
+						onDirectionChange={setSortDirection}
+					/>
+					<FilterPanel
+						pickedFilter={pickedFilter}
+						onPickedChange={setPickedFilter}
+						variantFilter={variantFilter}
+						onToggleVariant={toggleVariant}
+						onReset={resetAllFilters}
+					/>
 
 					<div className="flex items-center gap-2 shrink-0 ml-auto">
 						<button
@@ -1143,33 +1313,10 @@ export function DraftingPhase() {
 							Randomize
 						</button>
 
-						<button
-							type="button"
+						<ClearPopover
 							disabled={pickedEntries.length === 0 || locked}
-							onClick={() => void handleClear()}
-							title="Unselect everything you've picked so far"
-							className={cn(
-								"flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-xs font-bold uppercase tracking-widest transition-all shrink-0",
-								pickedEntries.length > 0 && !locked
-									? "border-white/15 bg-white/5 text-white/60 hover:bg-red-500/10 hover:border-red-400/30 hover:text-red-300 cursor-pointer"
-									: "border-white/10 text-white/20 cursor-not-allowed",
-							)}
-						>
-							<svg
-								viewBox="0 0 24 24"
-								className="w-3.5 h-3.5"
-								fill="none"
-								stroke="currentColor"
-								strokeWidth={2}
-							>
-								<path
-									d="M3 6h18M8 6V4a2 2 0 012-2h4a2 2 0 012 2v2m3 0-1 14a2 2 0 01-2 2H7a2 2 0 01-2-2L4 6h16z"
-									strokeLinecap="round"
-									strokeLinejoin="round"
-								/>
-							</svg>
-							Clear
-						</button>
+							onConfirm={handleClear}
+						/>
 					</div>
 				</div>
 

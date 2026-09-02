@@ -4,6 +4,7 @@ import { cn } from "../../../../lib/utils/cn";
 import { Card } from "../card/Card";
 import { moveToCard } from "../card/cardAdapters";
 import { useCardInspect } from "../card/useCardInspect";
+import { useHoverPreview } from "../hand/useHoverPreview";
 import { useReducedMotion } from "../../../../hooks/a11y/useReducedMotion";
 import type { MoveChainEntry } from "@shared/games/face-turn/types";
 
@@ -25,6 +26,53 @@ const VARIANT_TITLE: Record<ChainStackVariant, string> = {
 
 const STACK_OVERLAP = 0.42;
 const STACK_RISE_PX = 10;
+
+function ChainStackCard({
+	entry,
+	index,
+	entryCount,
+	cardSize,
+	actorName,
+	reducedMotion,
+	inspect,
+}: {
+	entry: ChainStackEntry;
+	index: number;
+	entryCount: number;
+	cardSize: number;
+	actorName: string;
+	reducedMotion: boolean;
+	inspect: (card: ReturnType<typeof moveToCard>) => void;
+}) {
+	const move = getMoveDisplay(entry.moveId);
+	const cardProps = moveToCard(move);
+	const hoverPreviewProps = useHoverPreview(cardProps);
+	const resolving = entry.resolving ?? false;
+	const resolvingLift = resolving && !reducedMotion ? 22 : 0;
+
+	return (
+		<div
+			className={cn(
+				"absolute bottom-0 left-0",
+				reducedMotion ? "transition-opacity" : "transition-[transform,opacity]",
+			)}
+			style={{
+				transform: `translateX(${index * cardSize * (1 - STACK_OVERLAP)}px) translateY(${-index * STACK_RISE_PX - resolvingLift}px) scale(${resolving && !reducedMotion ? 1.05 : 1})`,
+				transitionDuration: reducedMotion ? "0.15s" : "0.4s",
+				zIndex: resolving ? entryCount + 1 : index,
+				opacity: resolving ? 0 : 1,
+			}}
+			title={`${index + 1}. ${move.name} — ${actorName}`}
+			onContextMenu={(e) => {
+				e.preventDefault();
+				inspect(cardProps);
+			}}
+			{...hoverPreviewProps}
+		>
+			<Card {...cardProps} size={cardSize} />
+		</div>
+	);
+}
 
 export function ChainStack({
 	entries,
@@ -76,37 +124,18 @@ export function ChainStack({
 							(cardSize * 88) / 63 + STACK_RISE_PX * (entries.length - 1) + 24,
 					}}
 				>
-					{entries.map((entry, i) => {
-						const move = getMoveDisplay(entry.moveId);
-						const cardProps = moveToCard(move);
-						const actorName = playerMap[entry.actorId]?.name ?? entry.actorId;
-						const resolving = entry.resolving ?? false;
-						const resolvingLift = resolving && !reducedMotion ? 22 : 0;
-						return (
-							<div
-								key={`${entry.moveId}-${i}`}
-								className={cn(
-									"absolute bottom-0 left-0",
-									reducedMotion
-										? "transition-opacity"
-										: "transition-[transform,opacity]",
-								)}
-								style={{
-									transform: `translateX(${i * cardSize * (1 - STACK_OVERLAP)}px) translateY(${-i * STACK_RISE_PX - resolvingLift}px) scale(${resolving && !reducedMotion ? 1.05 : 1})`,
-									transitionDuration: reducedMotion ? "0.15s" : "0.4s",
-									zIndex: resolving ? entries.length + 1 : i,
-									opacity: resolving ? 0 : 1,
-								}}
-								title={`${i + 1}. ${move.name} — ${actorName}`}
-								onContextMenu={(e) => {
-									e.preventDefault();
-									inspect(cardProps);
-								}}
-							>
-								<Card {...cardProps} size={cardSize} />
-							</div>
-						);
-					})}
+					{entries.map((entry, i) => (
+						<ChainStackCard
+							key={`${entry.moveId}-${i}`}
+							entry={entry}
+							index={i}
+							entryCount={entries.length}
+							cardSize={cardSize}
+							actorName={playerMap[entry.actorId]?.name ?? entry.actorId}
+							reducedMotion={reducedMotion}
+							inspect={inspect}
+						/>
+					))}
 				</div>
 			)}
 			{inspectModal}

@@ -110,7 +110,7 @@ export function DraftFooter({
 	return (
 		<div
 			ref={containerRef}
-			className="shrink-0 border-t border-white/10 bg-white/5"
+			className="shrink-0 border-t border-white/10 ft-draft-bg"
 			style={{ paddingBottom: "env(safe-area-inset-bottom)" }}
 		>
 			{stacked ? (

@@ -29,7 +29,7 @@ export function PicksDrawer({
 						onClick={onClose}
 					/>
 					<m.div
-						className="fixed inset-x-0 bottom-0 z-40 flex flex-col max-h-[70vh] rounded-t-2xl border-t border-white/15 ft-panel-ink shadow-2xl shadow-black/60"
+						className="fixed inset-x-0 bottom-0 z-40 flex flex-col max-h-[70vh] rounded-t-2xl border-t border-white/15 ft-draft-panel shadow-2xl shadow-black/60"
 						style={{
 							paddingBottom: "env(safe-area-inset-bottom)",
 						}}

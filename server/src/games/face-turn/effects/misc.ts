@@ -83,15 +83,6 @@ export const miscHandlers = {
 		}
 		const crewId = actor.crewIds[slot];
 		actor.redHerringMark = { slot, crewId };
-
-		if (ctx.moveId) {
-			const activeSlot = actor.activeMoves.indexOf(ctx.moveId);
-			if (activeSlot !== -1) {
-				actor.activeMoves[activeSlot] = null;
-				actor.discardPile.push(ctx.moveId);
-				actor.totalCardsDiscarded++;
-			}
-		}
 	},
 
 	gain_cash_and_draw_ally(effect, ctx) {
@@ -123,6 +114,8 @@ export const miscHandlers = {
 		actor.derived.crewClassOverrides.delete(s);
 		actor.disabledPassiveSlots.delete(s);
 		recomputePassives(actor, ctx.state);
+
+		triggerCrewTurnedEffects(ctx.state, actor, s);
 
 		ctx.state.lastResolution = {
 			type: "crew_class_revealed",

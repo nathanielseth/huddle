@@ -18,7 +18,7 @@ import type { FaceturnServerState, FaceturnServerPlayer } from "./types";
 import type { PendingInteraction } from "./interactions/types";
 import { getInteractionSpec } from "./interactions/registry";
 import { getCrew, getMove, getBoss } from "./cards";
-import { moveHasLegalTarget } from "./effects";
+import { moveHasLegalTarget, isPlayerExposed } from "./effects";
 import { effectiveCost } from "./game";
 
 let simulationModeActive = false;
@@ -57,13 +57,6 @@ function computePlayableMoveIds(
 	return playable;
 }
 
-// server is the sole authority on move-chain legality — this is the exact
-// same gating actions/challenge-and-chain.ts enforces for chain_play_burst
-// and chain_play_slow, kept in lockstep so the client can just render
-// whatever's in chainPlayableMoveIds instead of re-deriving priority rules
-// itself: only whoever currently holds priority (chain.responderId) may
-// play anything, burst or slow — the other participant is locked out
-// until priority comes back to them.
 export function computeChainPlayableMoveIds(
 	state: FaceturnServerState,
 	player: FaceturnServerPlayer,
@@ -72,9 +65,12 @@ export function computeChainPlayableMoveIds(
 	if (!chain || !chain.participants.includes(player.playerId)) return [];
 	if (player.playerId !== chain.responderId) return [];
 
+	const canBurst = player.playerId === state.activePlayerId;
+
 	const playable: string[] = [];
 	for (const moveId of player.hand) {
 		const move = getMove(moveId);
+		if (move.moveType === "burst" && !canBurst) continue;
 		if (move.moveType !== "burst" && move.moveType !== "slow") continue;
 		const cost = effectiveCost(state, player, moveId);
 		if (player.cash < cost) continue;
@@ -192,6 +188,7 @@ function buildPlayerView(
 		totalCardsDiscarded: player.totalCardsDiscarded,
 		totalMovesPlayed: player.totalMovesPlayed,
 		hasArmoredBossThisGame: player.hasArmoredBossThisGame,
+		isExposed: isPlayerExposed(player),
 		poisonStacks: totalIncomingPoison,
 		cashGainPerTurn: player.derived.cashGainPerTurn,
 		moveBaseCostReduction: player.derived.moveBaseCostReduction,

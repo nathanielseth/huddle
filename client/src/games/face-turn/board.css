@@ -1,13 +1,10 @@
-/* board/panel theme vars, all on :root so they resolve everywhere .ft-panel-ink,
-   .ft-table-surface, .ft-eyebrow, and .ft-rail are used, regardless of nesting */
+/* board/panel vars on :root so they resolve everywhere used */
 :root {
 	--table-rail-width: 320px;
-	/* separate name for board/hud insets so call sites read as distinct concerns */
+	/* separate name so call sites read as distinct concerns */
 	--rail-inset: var(--table-rail-width);
 
-	/* felt table surface, distinct from panel ink so cards read as objects on a table.
-	   deep navy blue, faintly lit from the center and darkening toward the outer edges —
-	   kept close in value to the panel ink so it reads as ambient light, not a spotlight. */
+	/* felt surface, distinct from panel ink. navy gradient, ambient, not spotlight */
 	--table-felt: radial-gradient(
 			ellipse 110% 90% at 50% 38%,
 			#152a52 0%,
@@ -17,11 +14,7 @@
 			#0a1526 100%
 		);
 
-	/* panel ink: was previously scoped to an .ft-board-scope class that's never
-	   applied anywhere in the tree, so these variables were resolving to nothing
-	   and every .ft-panel-ink surface (rail, boss/crew cards) was rendering with
-	   a transparent background-color, showing only whatever sat behind it. moved
-	   to :root so they actually resolve everywhere .ft-panel-ink is used. */
+	/* board ink moved to :root. .ft-board-scope never applied, variables were resolving to nothing */
 	--board-ink: #0f1e38;
 
 	--board-hairline: rgba(160, 190, 240, 0.16);
@@ -29,27 +22,25 @@
 	--board-eyebrow-dim: rgba(224, 233, 252, 0.36);
 	--board-body: rgba(230, 237, 252, 0.9);
 
-	/* bebas neue vertical metrics offset, fixed px since not in sized container */
+	/* fixed px since not in sized container */
 	--board-bebas-offset: 1px;
 }
 
-/* shared app-level background: flat navy, no glow — the rail sits directly on top
-   of this and is transparent, so any radial light here would bleed into the rail.
-   the "lit from the center" look belongs to the table surface below, not the app shell. */
+/* app background flat navy, no glow. radial light would bleed into transparent rail.
+   lit look belongs to table surface, not app shell */
 .ft-app-bg {
 	background: #0b1526;
 }
 
-/* drafting screen background: same navy family, slightly flatter/brighter so
-   long reading sessions over card grids don't feel as moody as the live table */
+/* draft background flat neutral grey. blue reserved for live table */
 .ft-draft-bg {
-	background:
-		radial-gradient(
-			ellipse 130% 60% at 50% 0%,
-			rgba(105, 145, 215, 0.18),
-			transparent 65%
-		),
-		linear-gradient(180deg, #16294c 0%, #101f3e 60%, #0c1730 100%);
+	background: #1a1c1f;
+}
+
+/* draft popovers dark grey, matching draft bg, not blue panel ink */
+.ft-draft-panel {
+	background-color: #202226;
+	border-color: rgba(255, 255, 255, 0.12);
 }
 
 .ft-eyebrow {
@@ -68,8 +59,7 @@
 	);
 }
 
-/* flat variant for empty slot placeholders (crew slots, active move slots) —
-   no sheen, so the dashed "Empty" boxes stay visually quiet against the board */
+/* flat variant, no sheen, keeps empty placeholders quiet */
 .ft-panel-ink-flat {
 	background-color: var(--board-ink);
 	background-image: none;
@@ -80,7 +70,7 @@
 	background-image: var(--table-felt);
 }
 
-/* rail responsive shape: plain css media query, not tailwind, because the class shape differs fundamentally */
+/* rail responsive via media query, not tailwind, shape differs fundamentally */
 .ft-rail {
 	border-top: 1px solid var(--board-hairline, rgba(255, 255, 255, 0.08));
 	border-radius: 16px 16px 0 0;
@@ -97,7 +87,7 @@
 	}
 }
 
-/* whole-board drop zone highlight for no_target moves, same gold family as armed ring */
+/* whole board drop zone highlight, same gold family */
 .ft-drop-zone-legal {
 	outline: 2px solid rgba(251, 191, 36, 0.55);
 	outline-offset: 2px;

@@ -123,7 +123,7 @@ export function MyDecksMenu({
 			</button>
 
 			{open && (
-				<div className="absolute z-20 top-full left-0 mt-1 w-64 rounded-lg border border-white/15 ft-panel-ink shadow-xl overflow-hidden">
+				<div className="absolute z-20 top-full left-0 mt-1 w-64 rounded-lg border ft-draft-panel shadow-xl overflow-hidden">
 					<div className="max-h-56 overflow-y-auto">
 						{decks.length === 0 ? (
 							<p className="px-3 py-4 text-[11px] text-white/35 text-center leading-relaxed">

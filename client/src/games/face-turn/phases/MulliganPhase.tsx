@@ -12,7 +12,7 @@ import {
 	PlayerButton,
 } from "../components/interaction-prompts/SimplePrompts";
 
-const MULLIGAN_CARD_SIZE = 220;
+const MULLIGAN_CARD_SIZE = 280;
 
 export function MulliganPhase() {
 	const { ft, secret, myPlayer } = useFaceturnState();
@@ -40,7 +40,7 @@ export function MulliganPhase() {
 			</p>
 			<div
 				className="flex flex-row flex-nowrap justify-center gap-2 py-1 overflow-x-auto"
-				style={{ "--card-vw-share": "28vw" } as CSSProperties}
+				style={{ "--card-vw-share": "34vw" } as CSSProperties}
 			>
 				{hand.map((id, i) => {
 					const cardProps = cycleItems[i];

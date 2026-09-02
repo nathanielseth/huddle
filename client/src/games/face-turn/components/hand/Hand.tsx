@@ -26,6 +26,7 @@ import { useReducedMotion } from "../../../../hooks/a11y/useReducedMotion";
 import { DragPortal } from "./DragPortal";
 import { useCardInspect, type InspectCycle } from "../card/useCardInspect";
 import { HandFanController, type HandFanSlot } from "./handFan";
+import { useStableHandKeys } from "./useStableHandKeys";
 import {
 	setCardHoverPreview,
 	clearCardHoverPreview,
@@ -218,6 +219,7 @@ export function Hand<T = string>({
 			),
 		[cardIds, getCost],
 	);
+	const stableKeys = useStableHandKeys(cardIds);
 	const reducedMotion = useReducedMotion();
 	const getReducedMotion = useEffectEvent(() => reducedMotion);
 
@@ -299,7 +301,7 @@ export function Hand<T = string>({
 				>
 					{cardIds.map((moveId, i) => (
 						<ConnectedHandCardSlot
-							key={`${moveId}-${i}`}
+							key={stableKeys[i]}
 							moveId={moveId}
 							index={i}
 							getCost={getCost}
