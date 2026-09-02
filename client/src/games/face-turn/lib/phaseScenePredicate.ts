@@ -103,14 +103,25 @@ export function isBoardClickInteractionType(
 	return BOARD_CLICK_INTERACTION_TYPES.has(type);
 }
 
+export function sceneRecedeIntensity(
+	sceneKind: PhaseSceneKind,
+): "full" | "light" {
+	if (!sceneKind) return "full";
+	if (sceneKind.kind === "challenge") return "light";
+	if (
+		sceneKind.kind === "interaction" &&
+		isBoardClickInteractionType(sceneKind.interaction.type)
+	) {
+		return "light";
+	}
+	return "full";
+}
+
 // stable key for AnimatePresence, changes only when the moment changes
 export function sceneKeyOf(sceneKind: PhaseSceneKind): string {
 	if (!sceneKind) return "none";
 	if (sceneKind.kind === "phase") {
-		// rps -> rps_reveal is a reveal within the same panel, not a new
-		// scene — keep one key across both so it doesn't remount/re-enter
-		const phase =
-			sceneKind.phase === "rps_reveal" ? "rps" : sceneKind.phase;
+		const phase = sceneKind.phase === "rps_reveal" ? "rps" : sceneKind.phase;
 		return `phase:${phase}`;
 	}
 	if (sceneKind.kind === "challenge") return `challenge:${sceneKind.phase}`;

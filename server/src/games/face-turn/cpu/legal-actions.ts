@@ -473,6 +473,8 @@ function legalFaceTurnActions(
 	const actions: FaceturnsAction[] = [];
 
 	for (const enemy of getEnemies(state, player.playerId)) {
+		if (isStrikeDefendedByTerminal(enemy)) continue;
+
 		const faceDownSlots = eligibleFaceDownSlots(enemy);
 		const faceUpSlots = eligibleFaceUpSlots(enemy);
 
@@ -792,6 +794,26 @@ function legalInteractionActions(
 			return interaction.eligibleTargetIds.map((targetPlayerId) => ({
 				type: "resolve_bear_bones_steal_pick" as const,
 				targetPlayerId,
+			}));
+
+		case "watcher_hide_offer": {
+			const actions: FaceturnsAction[] = [
+				{ type: "resolve_watcher_hide_offer" },
+			];
+			for (const target of interaction.eligibleTargets) {
+				actions.push({
+					type: "resolve_watcher_hide_offer",
+					targetPlayerId: target.playerId,
+					slot: target.slot,
+				});
+			}
+			return actions;
+		}
+
+		case "watcher_steal_pick":
+			return [...new Set(interaction.revealedCards)].map((cardId) => ({
+				type: "resolve_watcher_steal_pick" as const,
+				cardId,
 			}));
 
 		case "bear_bones_bonus_strike": {

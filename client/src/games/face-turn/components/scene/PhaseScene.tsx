@@ -47,11 +47,11 @@ export function PhaseScene({
 		>
 			<div
 				className={cn(
-					backdrop === "light"
-						? "absolute inset-0 bg-[#050a18]/45"
-						: "absolute inset-0 bg-[#050a18]/80 backdrop-blur-[2px]",
-					// dim via BoardRecede; don't block board clicks
-					boardClickThrough && "pointer-events-none bg-[#050a18]/55",
+					"absolute inset-0",
+					backdrop === "light" ? "bg-[#050a18]/45" : "bg-[#050a18]/80",
+					boardClickThrough
+						? "pointer-events-none bg-[#050a18]/55"
+						: "backdrop-blur-[2px]",
 				)}
 			/>
 

@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import type { LogEntry } from "@shared/games/face-turn/log";
 import { useReducedMotion } from "../../../hooks/a11y/useReducedMotion";
 
-const DISPLAY_MS = 4000;
+const DISPLAY_MS = 2000;
 const REDUCED_MOTION_DISPLAY_MS = 400;
 
 export interface MovePlayFlash {
@@ -13,9 +13,7 @@ export interface MovePlayFlash {
 }
 
 export interface UseMovePlayFlashResult {
-	// move play flashing in the move area, or null
 	readonly current: MovePlayFlash | null;
-	readonly onExited: () => void;
 }
 
 function toFlash(
@@ -29,8 +27,8 @@ function toFlash(
 	};
 }
 
-// scoped to move_played, sources from log so multiple plays aren't skipped.
-// newest-wins: new move replaces current immediately.
+// rail flash for move_played, sourced from log so rapid plays aren't skipped.
+// newest wins: a new play replaces the current one immediately.
 export function useMovePlayFlash(
 	log: readonly LogEntry[],
 ): UseMovePlayFlashResult {
@@ -38,7 +36,7 @@ export function useMovePlayFlash(
 	const displayMs = reducedMotion ? REDUCED_MOTION_DISPLAY_MS : DISPLAY_MS;
 
 	const [current, setCurrent] = useState<MovePlayFlash | null>(null);
-	// state, not ref, so render-time comparison is safe
+	// state so render-time log comparison is safe, not a ref
 	const [seenLog, setSeenLog] = useState<readonly LogEntry[] | null>(null);
 
 	if (seenLog !== log) {
@@ -61,13 +59,13 @@ export function useMovePlayFlash(
 		}
 	}
 
-	// re-arms on every new current, so a fresh move gets full window
+	// re-arms on every new current so each gets its full window
 	const displayTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 	useEffect(() => {
 		if (current === null) return;
 		const id = current.id;
 		displayTimer.current = setTimeout(() => {
-			// only clear if this timer's flash is still showing
+			// only clear if this timer's flash still showing
 			setCurrent((prev) => (prev?.id === id ? null : prev));
 		}, displayMs);
 		return () => {
@@ -75,6 +73,5 @@ export function useMovePlayFlash(
 		};
 	}, [current, displayMs]);
 
-	// onExitComplete is a no-op, no queue to advance
-	return { current, onExited: () => {} };
+	return { current };
 }

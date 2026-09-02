@@ -3,7 +3,11 @@ import { useFaceturnState } from "./hooks/useFaceturnState";
 import { useFitBoardCardSize } from "./hooks/useFitBoardCardSize";
 import { usePhaseSceneQueue } from "./hooks/usePhaseSceneQueue";
 import { useExitPresence } from "./hooks/useExitPresence";
-import { computeSceneKind, sceneKeyOf } from "./lib/phaseScenePredicate";
+import {
+	computeSceneKind,
+	sceneKeyOf,
+	sceneRecedeIntensity,
+} from "./lib/phaseScenePredicate";
 import { isChallengeEligible } from "./lib/challengeEligibility";
 import { LogRow } from "./components/EventDrawer";
 import { RailChat } from "./components/RailChat";
@@ -223,15 +227,17 @@ function RailLogs() {
 				{log.length === 0 ? (
 					<p className="text-xs text-white/25 italic">Nothing yet.</p>
 				) : (
-					[...log].reverse().map((entry, i) => (
-						<LogRow
-							key={entry.seq}
-							entry={entry}
-							playerMap={playerMap}
-							dim={i !== 0}
-							showBreakdown={true}
-						/>
-					))
+					[...log]
+						.reverse()
+						.map((entry, i) => (
+							<LogRow
+								key={entry.seq}
+								entry={entry}
+								playerMap={playerMap}
+								dim={i !== 0}
+								showBreakdown={true}
+							/>
+						))
 				)}
 			</div>
 		</div>
@@ -293,7 +299,7 @@ export function FaceTurnPlayer() {
 				hud={<HudContent />}
 				rail={<RailContent />}
 				recedeActive={sceneKind !== null}
-				recedeIntensity={sceneKind?.kind === "challenge" ? "light" : "full"}
+				recedeIntensity={sceneRecedeIntensity(sceneKind)}
 			/>
 			{sceneList.map((entry) => (
 				<PlayerSceneContent

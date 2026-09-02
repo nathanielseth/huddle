@@ -1508,8 +1508,7 @@ export const MOVE_POST_PLACEMENT_TARGET: Readonly<
 		field: "targetAllySlot",
 	},
 	"warrant-of-arrest": { required: true, scope: "enemy_crew" },
-	"poison-breath": { required: false, scope: "enemy_player" },
-	// primary target already supplies both fields, no secondary pick
+	"poison-breath": null,
 	sabotage: null,
 	"neetos-clock": null,
 };

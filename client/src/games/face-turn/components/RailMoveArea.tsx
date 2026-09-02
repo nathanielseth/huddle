@@ -1,7 +1,5 @@
 import "../board.css";
 import { useEffect, useState } from "react";
-import { AnimatePresence } from "motion/react";
-import * as m from "motion/react-m";
 import { getMoveDisplay } from "@shared/games/face-turn/card-display";
 import { cn } from "../../../lib/utils/cn";
 import { useFaceturnState } from "../hooks/useFaceturnState";
@@ -9,7 +7,10 @@ import { useReducedMotion } from "../../../hooks/a11y/useReducedMotion";
 import { useBoardTarget } from "../hooks/boardTargetRegistry";
 import { useIsLegalDropTarget } from "../lib/moveTargetLegality";
 import { useArmedMove, useArmedMoveStore } from "../hooks/useArmedMove";
-import { useMovePlayFlash } from "../hooks/useMovePlayFlash";
+import {
+	useMovePlayFlash,
+	type MovePlayFlash,
+} from "../hooks/useMovePlayFlash";
 import { useChainLeeway } from "../lib/animation/useChainLeeway";
 import { useChainReplay } from "../lib/animation/useChainReplay";
 import { describeChainResolutionStep } from "../lib/describeEvent";
@@ -22,6 +23,7 @@ import { ChainStack, type ChainStackEntry } from "./move-chain/ChainStack";
 const FLASH_CARD_SIZE = 170;
 const ARMED_CARD_SIZE = 170;
 
+// unified rail drop zone: chain stack, armed preview, move play flash
 export function RailMoveArea() {
 	const { ft, playerId, playerMap, isChainParticipant } = useFaceturnState();
 
@@ -53,7 +55,7 @@ export function RailMoveArea() {
 	const chainRelevant = chainOpen && isChainParticipant;
 	const showChain = chainRelevant || (replay.active && wasParticipant);
 	const showArmed = Boolean(armed);
-	const showFlash = Boolean(flash.current) && !showArmed && !showChain;
+	const showFlash = !showArmed && !showChain;
 
 	return (
 		<div
@@ -69,9 +71,7 @@ export function RailMoveArea() {
 				</span>
 			)}
 
-			<div
-				className="flex-1 min-h-0 flex flex-col overflow-hidden"
-			>
+			<div className="flex-1 min-h-0 flex flex-col overflow-hidden">
 				{showChain ? (
 					<div className="flex flex-col items-center justify-start h-full pt-1">
 						<ChainAreaContent
@@ -90,12 +90,7 @@ export function RailMoveArea() {
 					</div>
 				) : showFlash ? (
 					<div className="flex items-center justify-center h-full">
-						<MovePlayFlashCard
-							key={flash.current!.id}
-							flash={flash.current!}
-							playerMap={playerMap}
-							onExited={flash.onExited}
-						/>
+						<MovePlayFlashCard flash={flash.current} playerMap={playerMap} />
 					</div>
 				) : null}
 			</div>
@@ -139,66 +134,91 @@ function ArmedCardPreview({ moveId }: { moveId: string }) {
 }
 
 const FLIP_REVEAL_DELAY_MS = 120;
+const EXIT_DURATION_MS = 200;
 
 function MovePlayFlashCard({
 	flash,
 	playerMap,
-	onExited,
 }: {
-	flash: NonNullable<ReturnType<typeof useMovePlayFlash>["current"]>;
+	flash: MovePlayFlash | null;
 	playerMap: Record<string, { name: string }>;
-	onExited: () => void;
 }) {
 	const reducedMotion = useReducedMotion();
-	const move = getMoveDisplay(flash.moveId);
-	const cardProps = moveToCard(move);
+
+	const [shown, setShown] = useState<MovePlayFlash | null>(flash);
+	const [visible, setVisible] = useState(Boolean(flash));
+
+	if (flash && flash.id !== shown?.id) {
+		setShown(flash);
+		setVisible(true);
+	} else if (!flash && shown && visible) {
+		setVisible(false);
+	}
+
+	useEffect(() => {
+		if (visible || !shown) return;
+		const t = setTimeout(
+			() => setShown(null),
+			reducedMotion ? 0 : EXIT_DURATION_MS,
+		);
+		return () => clearTimeout(t);
+	}, [visible, shown, reducedMotion]);
+
+	const move = shown ? getMoveDisplay(shown.moveId) : null;
+	const cardProps = move ? moveToCard(move) : null;
 	const { inspect } = useCardInspect();
 	const hoverPreviewProps = useHoverPreview(cardProps);
-	const actorName = playerMap[flash.actorId]?.name ?? flash.actorId;
-	const targetName = flash.targetPlayerId
-		? (playerMap[flash.targetPlayerId]?.name ?? flash.targetPlayerId)
-		: null;
 
 	const [revealed, setRevealed] = useState(reducedMotion);
+	const [revealedForId, setRevealedForId] = useState<string | null>(null);
+	if (shown && shown.id !== revealedForId) {
+		setRevealedForId(shown.id);
+		if (!reducedMotion) setRevealed(false);
+	}
 	useEffect(() => {
-		if (reducedMotion) return;
+		if (reducedMotion || revealed) return;
 		const t = setTimeout(() => setRevealed(true), FLIP_REVEAL_DELAY_MS);
 		return () => clearTimeout(t);
-	}, [reducedMotion]);
+	}, [revealed, reducedMotion, revealedForId]);
 
-	const transition = { duration: reducedMotion ? 0 : 0.2, ease: [0.4, 0, 0.2, 1] as const };
+	if (!shown || !cardProps) return null;
+
+	const actorName = playerMap[shown.actorId]?.name ?? shown.actorId;
+	const targetName = shown.targetPlayerId
+		? (playerMap[shown.targetPlayerId]?.name ?? shown.targetPlayerId)
+		: null;
 
 	return (
-		<AnimatePresence mode="wait" onExitComplete={onExited}>
-			<m.div
-				key={flash.id}
-				initial={{ opacity: 0, scale: 0.9 }}
-				animate={{ opacity: 1, scale: 1, transition }}
-				exit={{ opacity: 0, scale: 0.95, transition }}
-				className="flex flex-col items-center gap-2"
+		<div
+			className={cn(
+				"flex flex-col items-center gap-2 transition-[opacity,transform] ease-in-out",
+				visible ? "opacity-100 scale-100" : "opacity-0 scale-95",
+			)}
+			style={{
+				transitionDuration: reducedMotion ? "0ms" : `${EXIT_DURATION_MS}ms`,
+			}}
+		>
+			<div
+				onContextMenu={(e) => {
+					e.preventDefault();
+					inspect(cardProps);
+				}}
+				{...hoverPreviewProps}
 			>
-				<div
-					onContextMenu={(e) => {
-						e.preventDefault();
-						inspect(cardProps);
-					}}
-					{...hoverPreviewProps}
-				>
-					<Card {...cardProps} size={FLASH_CARD_SIZE} flipped={!revealed} />
-				</div>
-				<div className="flex items-center gap-1.5 leading-tight">
-					<span className="ft-eyebrow text-[11px] text-white/80">
-						{actorName}
-					</span>
-					{targetName && (
-						<>
-							<span className="text-white/20">→</span>
-							<span className="text-[11px] text-white/50">{targetName}</span>
-						</>
-					)}
-				</div>
-			</m.div>
-		</AnimatePresence>
+				<Card {...cardProps} size={FLASH_CARD_SIZE} flipped={!revealed} />
+			</div>
+			<div className="flex items-center gap-1.5 leading-tight">
+				<span className="ft-eyebrow text-[11px] text-white/80">
+					{actorName}
+				</span>
+				{targetName && (
+					<>
+						<span className="text-white/20">→</span>
+						<span className="text-[11px] text-white/50">{targetName}</span>
+					</>
+				)}
+			</div>
+		</div>
 	);
 }
 

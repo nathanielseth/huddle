@@ -103,6 +103,9 @@ export interface FaceturnsPlayerView {
 	readonly totalMovesPlayed: number;
 	readonly hasArmoredBossThisGame: boolean;
 
+	// no face-down crew left to turn, next strike executes boss instead
+	readonly isExposed: boolean;
+
 	// total incoming poison damage from all sources, applied at round end
 	readonly poisonStacks: number;
 

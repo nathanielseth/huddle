@@ -18,7 +18,7 @@ import type { FaceturnServerState, FaceturnServerPlayer } from "./types";
 import type { PendingInteraction } from "./interactions/types";
 import { getInteractionSpec } from "./interactions/registry";
 import { getCrew, getMove, getBoss } from "./cards";
-import { moveHasLegalTarget } from "./effects";
+import { moveHasLegalTarget, isPlayerExposed } from "./effects";
 import { effectiveCost } from "./game";
 
 let simulationModeActive = false;
@@ -192,6 +192,7 @@ function buildPlayerView(
 		totalCardsDiscarded: player.totalCardsDiscarded,
 		totalMovesPlayed: player.totalMovesPlayed,
 		hasArmoredBossThisGame: player.hasArmoredBossThisGame,
+		isExposed: isPlayerExposed(player),
 		poisonStacks: totalIncomingPoison,
 		cashGainPerTurn: player.derived.cashGainPerTurn,
 		moveBaseCostReduction: player.derived.moveBaseCostReduction,
