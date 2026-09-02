@@ -1,5 +1,4 @@
 import type { LogEntry } from "@shared/games/face-turn/log";
-import { getMoveDisplay } from "@shared/games/face-turn/card-display";
 import type { MoveType } from "@shared/games/face-turn/types";
 
 type PlayerLookup = Record<string, { name: string }>;
@@ -9,7 +8,6 @@ function nameOf(playerMap: PlayerLookup, id: string | null): string {
 	return playerMap[id]?.name ?? id;
 }
 
-// what the on-screen announcement banner needs to render itself
 export interface Announcement {
 	readonly id: string;
 	readonly headline: string;
@@ -24,7 +22,7 @@ const CLASS_ACTION_LABEL: Record<string, string> = {
 	defend: "Defend",
 };
 
-// turns one freshly-appended log entry into a display-ready announcement
+// move_played is excluded: it has its own rail flash, not the top banner
 export function toAnnouncement(
 	entry: LogEntry,
 	playerMap: PlayerLookup,
@@ -35,17 +33,8 @@ export function toAnnouncement(
 		case "turn_start":
 			return null;
 
-		case "move_played": {
-			const move = getMoveDisplay(entry.moveId);
-			return {
-				id: `log-${entry.seq}`,
-				headline: move.name,
-				subline: entry.targetPlayerId
-					? `${who(entry.actorId)} → ${who(entry.targetPlayerId)}`
-					: who(entry.actorId),
-				tone: move.moveType,
-			};
-		}
+		case "move_played":
+			return null;
 
 		case "class_action_declared": {
 			const label = CLASS_ACTION_LABEL[entry.action] ?? entry.action;

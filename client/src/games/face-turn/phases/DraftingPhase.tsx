@@ -15,7 +15,7 @@ import { encodeDeckCode } from "@shared/games/face-turn/deck-code";
 import { sendFaceturnAction } from "../actions";
 import { useFaceturnState } from "../hooks/useFaceturnState";
 import { useActionLock } from "../../../hooks/network/useActionLock";
-import { Card } from "../components/card/Card";
+import { Card, type CardProps } from "../components/card/Card";
 import { useCardInspect } from "../components/card/useCardInspect";
 import { CARD_VARIANT_THEME } from "../components/card/cardVariants";
 import {
@@ -28,6 +28,11 @@ import { MyDecksMenu } from "./drafting/MyDecksMenu";
 import { DraftFooter } from "./drafting/DraftFooter";
 import { PicksDrawer } from "./drafting/PicksDrawer";
 import { MobileBrowseHeader } from "./drafting/MobileBrowseHeader";
+import {
+	DraftInspectPanel,
+	type DraftInspectCycle,
+	type DraftInspectTarget,
+} from "./drafting/DraftInspectPanel";
 import {
 	DESKTOP_GRID,
 	MOBILE_GRID,
@@ -59,13 +64,18 @@ const SORT_DIRECTION_LABEL: Record<SortDirection, string> = {
 	desc: "Descending",
 };
 
-// single consistent sort. "type" sorts by class/type, bosses fall back to name.
-// "cost" only for moves, everything else falls back to name.
+// single consistent sort across every tab. "type" sorts by crew class /
+// move type (bosses have no type, so they fall back to name). "cost" only
+// applies to moves (the only cards with a cash cost) — everything else
+// falls back to name so the option still does something predictable rather
+// than a no-op. direction reverses whatever order was produced, applied last
+// so ties (e.g. same class/type) still land in a sensible order either way.
 function sortBosses(
 	bosses: typeof BOSS_DISPLAY,
 	_sort: SortValue,
 	direction: SortDirection,
 ) {
+	// bosses have no type or cost, so every sort mode falls back to name
 	const arr = [...bosses].sort((a, b) => a.name.localeCompare(b.name));
 	return direction === "desc" ? arr.reverse() : arr;
 }
@@ -103,6 +113,7 @@ function sortMoves(
 	return direction === "desc" ? arr.reverse() : arr;
 }
 
+// search matches name and effect text, precomputed once
 function buildHaystack(name: string, ...effectParts: (string | undefined)[]) {
 	return [name, ...effectParts.filter(Boolean)].join(" ").toLowerCase();
 }
@@ -149,6 +160,48 @@ function ReserveStamp() {
 	);
 }
 
+// small expand affordance in the corner of every draft grid card — click
+// opens the same inspect view as right-clicking the card. Always visible on
+// mobile (no hover to reveal it there, and no right-click gesture either);
+// fades in on hover on desktop so it doesn't clutter the grid otherwise
+function InspectCornerButton({
+	onInspect,
+	alwaysVisible,
+}: {
+	onInspect: () => void;
+	alwaysVisible: boolean;
+}) {
+	return (
+		<button
+			type="button"
+			onClick={(e) => {
+				e.stopPropagation();
+				onInspect();
+			}}
+			aria-label="Inspect card"
+			title="Inspect"
+			className={cn(
+				"absolute top-5 right-5 z-20 w-7 h-7 rounded-md flex items-center justify-center bg-black/60 text-white/60 border border-white/10 hover:opacity-100! hover:text-white hover:bg-black/80 transition-all cursor-pointer",
+				alwaysVisible ? "opacity-100" : "opacity-0 group-hover:opacity-100",
+			)}
+		>
+			<svg
+				viewBox="0 0 24 24"
+				className="w-5.5 h-5.5"
+				fill="none"
+				stroke="currentColor"
+				strokeWidth={2.5}
+			>
+				<path
+					d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7"
+					strokeLinecap="round"
+					strokeLinejoin="round"
+				/>
+			</svg>
+		</button>
+	);
+}
+
 const PICKED_FILTERS = ["all", "picked", "unpicked"] as const;
 type PickedFilterValue = (typeof PICKED_FILTERS)[number];
 
@@ -160,7 +213,9 @@ const CREW_CLASS_OPTIONS: readonly CrewClass[] = [
 ];
 const MOVE_TYPE_OPTIONS: readonly MoveType[] = ["burst", "slow", "active"];
 
-// shared shell for toolbar popovers, outside click and escape to dismiss
+// shared shell for the sort / filter / clear popovers so they all look and
+// behave the same way — anchored dropdown, dark grey panel, outside-click
+// and Escape to dismiss. No modal for any of these.
 function ToolbarPopover({
 	label,
 	icon,
@@ -437,7 +492,7 @@ function FilterPanel({
 	);
 }
 
-// clear confirmation as popover, consistent with sort/filter
+// clear confirmation as a popover, consistent with sort/filter — no modal
 function ClearPopover({
 	disabled,
 	onConfirm,
@@ -580,7 +635,7 @@ function CardGrid({
 
 export function DraftingPhase() {
 	const { ft, secret, playerId } = useFaceturnState();
-	// width based, not pointer
+	// width based, not input device, see useIsDraftMobile
 	const isMobile = useIsDraftMobile();
 	const [tab, setTab] = useState<DraftTab>("all");
 	const [sort, setSort] = useState<SortValue>("type");
@@ -613,6 +668,41 @@ export function DraftingPhase() {
 	const myDraft = ft?.draft?.[playerId];
 	const { locked, runLocked } = useActionLock(myDraft?.isDraftLocked);
 	const { inspect, modal: inspectModal } = useCardInspect();
+
+	// desktop drafting gets the richer side-by-side panel; mobile keeps the
+	// swipeable full-screen modal above since there's no room for a rail
+	const [inspectPanel, setInspectPanel] = useState<DraftInspectCycle | null>(
+		null,
+	);
+	function openInspectPanel(
+		items: readonly DraftInspectTarget[],
+		index: number,
+	) {
+		setInspectPanel({ items, index });
+	}
+	function stepInspectPanel(delta: 1 | -1) {
+		setInspectPanel((prev) => {
+			if (!prev) return prev;
+			const nextIndex = prev.index + delta;
+			if (nextIndex < 0 || nextIndex >= prev.items.length) return prev;
+			return { ...prev, index: nextIndex };
+		});
+	}
+
+	// single entry point for opening a card's inspect view, shared by the
+	// right-click handler and the corner expand button on every grid card
+	function triggerInspect(
+		cardProps: CardProps,
+		cycleItems: readonly CardProps[],
+		inspectItems: readonly DraftInspectTarget[],
+		index: number,
+	) {
+		if (isMobile) {
+			inspect(cardProps, { items: cycleItems, index });
+		} else {
+			openInspectPanel(inspectItems, index);
+		}
+	}
 
 	const q = query.trim().toLowerCase();
 
@@ -658,12 +748,14 @@ export function DraftingPhase() {
 	const crewFull = sel.crewIds.length >= crewMax;
 	const movesFull = sel.moveIds.length >= MOVES_PER_DECK;
 
-	// dealer reserve index mirrors server assignment
+	// dealer reserve crew index mirrors server assignment
 	const reserveCrewId =
 		isDealer && sel.crewIds.length > CREW_SLOTS
 			? sel.crewIds[CREW_SLOTS]
 			: null;
 
+	// status ("picked"/"unpicked") filter applies consistently on every tab,
+	// same as variant filtering which already happened above
 	const allFilteredBosses = filteredBosses.filter((b) => {
 		if (pickedFilter === "picked") return sel.bossId === b.id;
 		if (pickedFilter === "unpicked") return sel.bossId !== b.id;
@@ -684,7 +776,7 @@ export function DraftingPhase() {
 		return true;
 	});
 
-	// pick order: boss, crew, moves
+	// pick order: boss first, crew, then moves
 	const pickedEntries: PickedEntry[] = [];
 	if (sel.bossId) {
 		const boss = BOSS_DISPLAY.find((b) => b.id === sel.bossId);
@@ -714,7 +806,7 @@ export function DraftingPhase() {
 			});
 	}
 
-	// select_boss toggles server-side
+	// select_boss toggles server side, so deselect is re-sending same id
 	function deselect(entry: PickedEntry) {
 		if (entry.kind === "boss") {
 			sendFaceturnAction({ type: "select_boss", bossId: entry.id });
@@ -725,6 +817,7 @@ export function DraftingPhase() {
 		}
 	}
 
+	// load overwrites, confirm first if picks exist
 	async function loadSavedDeck(deck: SavedDeck) {
 		if (pickedEntries.length > 0) {
 			const ok = await modal.confirm({
@@ -748,6 +841,7 @@ export function DraftingPhase() {
 		});
 	}
 
+	// server fills empty picks, never touches existing
 	function handleRandomize() {
 		sendFaceturnAction({ type: "randomize_draft" });
 	}
@@ -766,7 +860,8 @@ export function DraftingPhase() {
 		}
 	}
 
-	// unselect everything via empty load_draft; confirmation in Clear popover
+	// unselect everything via empty load_draft; confirmation happens in the
+	// Clear popover itself, not a modal
 	function handleClear() {
 		if (pickedEntries.length === 0) return;
 		sendFaceturnAction({
@@ -799,7 +894,7 @@ export function DraftingPhase() {
 		(tab === "crew" && allFilteredCrew.length === 0) ||
 		(tab === "moves" && allFilteredMoves.length === 0);
 
-	// "all" interleaves boss, crew, moves in one grid
+	// "all" interleaves boss, crew, moves in one grid, each with its own click behavior
 	const allEntries =
 		tab === "all"
 			? [
@@ -858,10 +953,37 @@ export function DraftingPhase() {
 				]
 			: [];
 
+	// one cycle list per tab, matching render order
 	const allEntriesCycleItems = allEntries.map((e) => e.cardProps);
 	const bossCycleItems = allFilteredBosses.map((b) => bossToCard(b));
 	const crewCycleItems = allFilteredCrew.map((c) => crewToCard(c));
 	const moveCycleItems = allFilteredMoves.map((m) => moveToCard(m));
+
+	// parallel cycles carrying the raw display data the inspect panel needs
+	// (full effect text, flavor, synergyIds) — CardProps alone doesn't have it
+	const allEntriesInspectItems: DraftInspectTarget[] = [
+		...allFilteredBosses.map(
+			(b): DraftInspectTarget => ({ kind: "boss", display: b }),
+		),
+		...allFilteredCrew.map(
+			(c): DraftInspectTarget => ({ kind: "crew", display: c }),
+		),
+		...allFilteredMoves.map(
+			(m): DraftInspectTarget => ({ kind: "move", display: m }),
+		),
+	];
+	const bossInspectItems: DraftInspectTarget[] = allFilteredBosses.map((b) => ({
+		kind: "boss",
+		display: b,
+	}));
+	const crewInspectItems: DraftInspectTarget[] = allFilteredCrew.map((c) => ({
+		kind: "crew",
+		display: c,
+	}));
+	const moveInspectItems: DraftInspectTarget[] = allFilteredMoves.map((m) => ({
+		kind: "move",
+		display: m,
+	}));
 
 	const grid = (
 		<div
@@ -887,15 +1009,17 @@ export function DraftingPhase() {
 						<div
 							key={entry.key}
 							className={cn(
-								"relative transition-opacity",
+								"relative group transition-opacity",
 								entry.selected && "opacity-45",
 							)}
 							onContextMenu={(e) => {
 								e.preventDefault();
-								inspect(entry.cardProps, {
-									items: allEntriesCycleItems,
-									index: i,
-								});
+								triggerInspect(
+									entry.cardProps,
+									allEntriesCycleItems,
+									allEntriesInspectItems,
+									i,
+								);
 							}}
 						>
 							<Card
@@ -903,6 +1027,17 @@ export function DraftingPhase() {
 								size={cardSize}
 								selected={entry.selected}
 								onClick={entry.onClick}
+							/>
+							<InspectCornerButton
+								alwaysVisible={isMobile}
+								onInspect={() =>
+									triggerInspect(
+										entry.cardProps,
+										allEntriesCycleItems,
+										allEntriesInspectItems,
+										i,
+									)
+								}
 							/>
 							{entry.isReserve && <ReserveStamp />}
 						</div>
@@ -923,10 +1058,18 @@ export function DraftingPhase() {
 						return (
 							<div
 								key={boss.id}
-								className={cn("transition-opacity", selected && "opacity-45")}
+								className={cn(
+									"relative group transition-opacity",
+									selected && "opacity-45",
+								)}
 								onContextMenu={(e) => {
 									e.preventDefault();
-									inspect(cardProps, { items: bossCycleItems, index: i });
+									triggerInspect(
+										cardProps,
+										bossCycleItems,
+										bossInspectItems,
+										i,
+									);
 								}}
 							>
 								<Card
@@ -939,6 +1082,17 @@ export function DraftingPhase() {
 											bossId: boss.id,
 										});
 									}}
+								/>
+								<InspectCornerButton
+									alwaysVisible={isMobile}
+									onInspect={() =>
+										triggerInspect(
+											cardProps,
+											bossCycleItems,
+											bossInspectItems,
+											i,
+										)
+									}
 								/>
 							</div>
 						);
@@ -961,12 +1115,17 @@ export function DraftingPhase() {
 							<div
 								key={crew.id}
 								className={cn(
-									"relative transition-opacity",
+									"relative group transition-opacity",
 									selected && "opacity-45",
 								)}
 								onContextMenu={(e) => {
 									e.preventDefault();
-									inspect(cardProps, { items: crewCycleItems, index: i });
+									triggerInspect(
+										cardProps,
+										crewCycleItems,
+										crewInspectItems,
+										i,
+									);
 								}}
 							>
 								<Card
@@ -988,6 +1147,17 @@ export function DraftingPhase() {
 										});
 									}}
 								/>
+								<InspectCornerButton
+									alwaysVisible={isMobile}
+									onInspect={() =>
+										triggerInspect(
+											cardProps,
+											crewCycleItems,
+											crewInspectItems,
+											i,
+										)
+									}
+								/>
 								{isReserve && <ReserveStamp />}
 							</div>
 						);
@@ -1008,10 +1178,18 @@ export function DraftingPhase() {
 						return (
 							<div
 								key={move.id}
-								className={cn("transition-opacity", selected && "opacity-45")}
+								className={cn(
+									"relative group transition-opacity",
+									selected && "opacity-45",
+								)}
 								onContextMenu={(e) => {
 									e.preventDefault();
-									inspect(cardProps, { items: moveCycleItems, index: i });
+									triggerInspect(
+										cardProps,
+										moveCycleItems,
+										moveInspectItems,
+										i,
+									);
 								}}
 							>
 								<Card
@@ -1032,6 +1210,17 @@ export function DraftingPhase() {
 											moveId: move.id,
 										});
 									}}
+								/>
+								<InspectCornerButton
+									alwaysVisible={isMobile}
+									onInspect={() =>
+										triggerInspect(
+											cardProps,
+											moveCycleItems,
+											moveInspectItems,
+											i,
+										)
+									}
 								/>
 							</div>
 						);
@@ -1324,6 +1513,13 @@ export function DraftingPhase() {
 			</div>
 
 			{inspectModal}
+			{inspectPanel && (
+				<DraftInspectPanel
+					cycle={inspectPanel}
+					onClose={() => setInspectPanel(null)}
+					onStep={stepInspectPanel}
+				/>
+			)}
 		</div>
 	);
 }

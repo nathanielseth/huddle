@@ -5,7 +5,7 @@ import type { ComponentType } from "react";
 import { useReducedMotion } from "../../../hooks/a11y/useReducedMotion";
 import { cn } from "../../../lib/utils/cn";
 import { useFaceturnState } from "../hooks/useFaceturnState";
-import { useMoveAnnouncements } from "../hooks/useMoveAnnouncements";
+import { useEventAnnouncements } from "../hooks/useEventAnnouncements";
 import type { Announcement } from "../lib/announceEvent";
 import {
 	BurstIcon,
@@ -39,10 +39,10 @@ const TONE_ACCENT: Record<Announcement["tone"], string> = {
 	neutral: "#8A93A0",
 };
 
-export function MoveAnnouncer() {
+export function EventAnnouncer() {
 	const { ft, playerMap } = useFaceturnState();
 	const log = ft?.log ?? [];
-	const { current, onExited } = useMoveAnnouncements(log, playerMap);
+	const { current, onExited } = useEventAnnouncements(log, playerMap);
 	const reducedMotion = useReducedMotion();
 
 	return (

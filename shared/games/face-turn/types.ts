@@ -103,9 +103,6 @@ export interface FaceturnsPlayerView {
 	readonly totalMovesPlayed: number;
 	readonly hasArmoredBossThisGame: boolean;
 
-	// no face-down crew left to turn, next strike executes boss instead
-	readonly isExposed: boolean;
-
 	// total incoming poison damage from all sources, applied at round end
 	readonly poisonStacks: number;
 
@@ -205,6 +202,11 @@ export interface RpsState {
 
 export interface RpsOrderChoiceState {
 	readonly winnerId: string;
+	// true when the winner was decided by a coinflip (equal or missing
+	// choices) rather than real rock-paper-scissors logic — drives whether
+	// the client plays a suspense flicker before the go-first/second choice
+	// becomes interactive
+	readonly wasTie: boolean;
 }
 
 export interface DraftPlayerView {

@@ -6,7 +6,7 @@ import { computeSceneKind, sceneKeyOf } from "./lib/phaseScenePredicate";
 import { GameScreen } from "./components/shell/GameScreen";
 import { HostSceneContent } from "./components/scene/PhaseSceneContent";
 import { PhaseBanner } from "./components/PhaseBanner";
-import { MoveAnnouncer } from "./components/MoveAnnouncer";
+import { EventAnnouncer } from "./components/EventAnnouncer";
 import { PlayerBoard } from "./components/PlayerBoard";
 import { CardPreviewDock } from "./components/hand/CardPreviewDock";
 import { ChainStack } from "./components/move-chain/ChainStack";
@@ -47,7 +47,7 @@ export function FaceTurnHost() {
 					panelRef={entry.panelRef}
 				/>
 			))}
-			<MoveAnnouncer />
+			<EventAnnouncer />
 		</div>
 	);
 }

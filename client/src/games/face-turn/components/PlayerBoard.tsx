@@ -2,8 +2,6 @@ import { useRef, useState } from "react";
 import { cn } from "../../../lib/utils/cn";
 import type { FaceturnsPlayerView } from "@shared/games/face-turn/types";
 import { FACETURN_CONSTANTS } from "@shared/games/face-turn/constants";
-import { sendFaceturnAction } from "../actions";
-import { useActionLock } from "../../../hooks/network/useActionLock";
 import {
 	BossPanel,
 	CrewSlotBadge,
@@ -448,7 +446,6 @@ export function PlayerBoard({
 
 			<div className="flex items-end justify-between gap-2">
 				<BoardFooter player={player} handFull={handFull} isMe={isMe} />
-				{isMe && <EndTurnButton />}
 			</div>
 			{player.isEliminated && (
 				<span className="ft-eyebrow text-[9px] text-red-400/60">
@@ -456,33 +453,6 @@ export function PlayerBoard({
 				</span>
 			)}
 		</div>
-	);
-}
-
-// bottom-right of your own board, only live during your active turn;
-// scoped action lock so it doesn't share state with other board actions
-function EndTurnButton() {
-	const { isMyTurn } = useFaceturnState();
-	const { locked, runLocked } = useActionLock(undefined);
-	if (!isMyTurn) return null;
-	return (
-		<button
-			type="button"
-			disabled={locked}
-			onClick={() => {
-				runLocked(() => {
-					sendFaceturnAction({ type: "end_turn" });
-				});
-			}}
-			className={cn(
-				"shrink-0 px-3 py-1.5 rounded-lg border text-xs font-bold transition-all",
-				locked
-					? "border-white/10 bg-white/5 text-white/20 cursor-not-allowed"
-					: "border-amber-400/60 bg-amber-400/10 text-amber-200 cursor-pointer hover:bg-amber-400/20",
-			)}
-		>
-			Pass turn
-		</button>
 	);
 }
 

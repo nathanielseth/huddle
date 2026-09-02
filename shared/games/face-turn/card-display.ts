@@ -43,14 +43,12 @@ export const BOSS_DISPLAY: readonly BossCardDisplay[] = [
 		artSrc: "/assets/games/face-turn/cards/boss/the-bastion.avif",
 		name: "The Bastion",
 		effectText: {
-			command:
-				"Deal damage to an enemy Boss equal to my current Armor. My Armor is then emptied.",
-			passive:
-				"I start with 15 Armor. Whenever I take damage, you gain 1 Cash.",
+			command: "Deal damage equal to my Armor, then empty my Armor.",
+			passive: "I start with 15 Armor. Whenever I take damage, gain 1 Cash.",
 		},
 		flavorText: "Scars can break us, or give us the strength to endure.",
 		lore: "",
-		synergyIds: [],
+		synergyIds: ["glob", "rilla-gorilla", "miss-direction", "bulletproof-vest"],
 		maxHp: 110,
 		startingArmor: 15,
 	},
@@ -65,7 +63,7 @@ export const BOSS_DISPLAY: readonly BossCardDisplay[] = [
 		},
 		flavorText: "The house always wins. Luckily, I run the house.",
 		lore: "",
-		synergyIds: [],
+		synergyIds: ["rat-queen", "doctor-norman", "job-application", "dataminer"],
 		maxHp: 100,
 		hasCustomCommandLogic: true,
 	},
@@ -75,12 +73,12 @@ export const BOSS_DISPLAY: readonly BossCardDisplay[] = [
 		name: "The Razor",
 		effectText: {
 			command:
-				"Guess the class of one face-down enemy Crew. If correct, turn it face-up.",
+				"Guess a face-down enemy Crew's class. If correct, turn it face-up.",
 			passive: "Damage you deal is increased by 7.",
 		},
 		flavorText: "Only a true star player commands a visionary empire.",
 		lore: "",
-		synergyIds: [],
+		synergyIds: ["cool-guy", "monkey-man", "suplex", "truth-serum"],
 		maxHp: 110,
 		hasCustomCommandLogic: true,
 	},
@@ -90,13 +88,13 @@ export const BOSS_DISPLAY: readonly BossCardDisplay[] = [
 		name: "The Watcher",
 		effectText: {
 			command:
-				"See 2 random cards from an enemy's hand and take 1, then steal 1 Cash.",
+				"Look at 2 random cards in an enemy's hand, take 1, then steal 1 Cash.",
 			passive:
-				"Whenever you win a challenge, draw 2, and turn one of your Crew face-down.",
+				"Whenever you win a challenge, draw 2, then turn an allied Crew face-down.",
 		},
 		flavorText: "Nothing dangerous stays unwatched.",
 		lore: "",
-		synergyIds: [],
+		synergyIds: ["bear-bones", "suplex", "mama-mercy", "extortion"],
 		maxHp: 120,
 	},
 ];
@@ -117,7 +115,7 @@ export const CREW_DISPLAY: readonly CrewCardDisplay[] = [
 		},
 		flavorText: "Reeks of cheap scum. Time to take out the trash.",
 		lore: "",
-		synergyIds: [],
+		synergyIds: ["the-razor"],
 	},
 	{
 		id: "black-fist",
@@ -129,7 +127,7 @@ export const CREW_DISPLAY: readonly CrewCardDisplay[] = [
 		},
 		flavorText: "Out of the way! I have business to finish.",
 		lore: "",
-		synergyIds: [],
+		synergyIds: ["the-razor", "the-dealer"],
 	},
 	{
 		id: "g-rone",
@@ -141,7 +139,7 @@ export const CREW_DISPLAY: readonly CrewCardDisplay[] = [
 		},
 		flavorText: "The white gazes into the unseen...",
 		lore: "",
-		synergyIds: [],
+		synergyIds: ["the-razor"],
 	},
 	{
 		id: "hot-girl",
@@ -154,7 +152,7 @@ export const CREW_DISPLAY: readonly CrewCardDisplay[] = [
 		},
 		flavorText: "FEED THE FLAMES!!",
 		lore: "",
-		synergyIds: [],
+		synergyIds: ["the-razor"],
 	},
 	{
 		id: "monkey-man",
@@ -168,7 +166,7 @@ export const CREW_DISPLAY: readonly CrewCardDisplay[] = [
 		},
 		flavorText: "Finders keepers, sucker!",
 		lore: "",
-		synergyIds: [],
+		synergyIds: ["the-razor"],
 	},
 	{
 		id: "pektus",
@@ -181,7 +179,7 @@ export const CREW_DISPLAY: readonly CrewCardDisplay[] = [
 		},
 		flavorText: "Bullseye.",
 		lore: "",
-		synergyIds: [],
+		synergyIds: ["the-razor"],
 	},
 	{
 		id: "shrike",
@@ -193,7 +191,7 @@ export const CREW_DISPLAY: readonly CrewCardDisplay[] = [
 		},
 		flavorText: "Alright. Let's make this quick.",
 		lore: "",
-		synergyIds: [],
+		synergyIds: ["the-razor"],
 	},
 	{
 		id: "whisper",
@@ -206,7 +204,7 @@ export const CREW_DISPLAY: readonly CrewCardDisplay[] = [
 		},
 		flavorText: "You'll never know what kills you.",
 		lore: "",
-		synergyIds: [],
+		synergyIds: ["the-razor"],
 	},
 	{
 		id: "wolfman",
@@ -216,7 +214,7 @@ export const CREW_DISPLAY: readonly CrewCardDisplay[] = [
 		effectText: { revealed: "I deal 40 damage to an enemy Boss." },
 		flavorText: "...IN WOLF'S CLOTHING!!",
 		lore: "",
-		synergyIds: [],
+		synergyIds: ["the-razor"],
 		draftable: false,
 	},
 
@@ -232,7 +230,7 @@ export const CREW_DISPLAY: readonly CrewCardDisplay[] = [
 		},
 		flavorText: "Exquisite! Another breakthrough.",
 		lore: "",
-		synergyIds: [],
+		synergyIds: ["the-dealer", "the-bastion", "black-fist", "empty-the-clip"],
 	},
 	{
 		id: "frontline",
@@ -244,7 +242,7 @@ export const CREW_DISPLAY: readonly CrewCardDisplay[] = [
 		},
 		flavorText: "You will survive. I'll make sure of it.",
 		lore: "",
-		synergyIds: [],
+		synergyIds: ["the-bastion", "pull-counter"],
 	},
 	{
 		id: "glob",
@@ -257,7 +255,7 @@ export const CREW_DISPLAY: readonly CrewCardDisplay[] = [
 		},
 		flavorText: "glorb. goob. gaaarb.",
 		lore: "",
-		synergyIds: [],
+		synergyIds: ["the-bastion"],
 	},
 	{
 		id: "lighthouse",
@@ -270,7 +268,7 @@ export const CREW_DISPLAY: readonly CrewCardDisplay[] = [
 		},
 		flavorText: "Hope is dead... but the light remains.",
 		lore: "",
-		synergyIds: [],
+		synergyIds: ["the-razor"],
 	},
 	{
 		id: "lotus",
@@ -282,7 +280,7 @@ export const CREW_DISPLAY: readonly CrewCardDisplay[] = [
 		},
 		flavorText: "Don't die. I've already wasted enough time on you.",
 		lore: "",
-		synergyIds: [],
+		synergyIds: ["bagman"],
 	},
 	{
 		id: "mama-mercy",
@@ -295,7 +293,7 @@ export const CREW_DISPLAY: readonly CrewCardDisplay[] = [
 		},
 		flavorText: "Nobody touches my people.",
 		lore: "",
-		synergyIds: [],
+		synergyIds: ["the-bastion", "the-watcher", "suplex"],
 	},
 	{
 		id: "rilla-gorilla",
@@ -308,7 +306,7 @@ export const CREW_DISPLAY: readonly CrewCardDisplay[] = [
 		},
 		flavorText: "GRRR-AAAAAH!",
 		lore: "",
-		synergyIds: [],
+		synergyIds: ["the-bastion", "the-razor", "pull-counter"],
 	},
 	{
 		id: "silencer",
@@ -321,7 +319,7 @@ export const CREW_DISPLAY: readonly CrewCardDisplay[] = [
 		},
 		flavorText: "...",
 		lore: "",
-		synergyIds: [],
+		synergyIds: ["the-bastion"],
 	},
 
 	// collectors
@@ -336,7 +334,7 @@ export const CREW_DISPLAY: readonly CrewCardDisplay[] = [
 		},
 		flavorText: "Here comes the money.",
 		lore: "",
-		synergyIds: [],
+		synergyIds: ["lotus"],
 	},
 	{
 		id: "bear-bones",
@@ -350,7 +348,7 @@ export const CREW_DISPLAY: readonly CrewCardDisplay[] = [
 		},
 		flavorText: "I would do anything for my Ursula. Especially a felony.",
 		lore: "",
-		synergyIds: [],
+		synergyIds: ["the-watcher"],
 	},
 	{
 		id: "belladonna",
@@ -363,7 +361,7 @@ export const CREW_DISPLAY: readonly CrewCardDisplay[] = [
 		},
 		flavorText: "Mmm, I like this. I think I'll make one just for me.",
 		lore: "",
-		synergyIds: [],
+		synergyIds: ["the-razor"],
 	},
 	{
 		id: "claw-machine",
@@ -373,7 +371,7 @@ export const CREW_DISPLAY: readonly CrewCardDisplay[] = [
 		effectText: { revealed: "You draw 3." },
 		flavorText: "That's going in my collection.",
 		lore: "",
-		synergyIds: [],
+		synergyIds: ["the-dealer"],
 	},
 	{
 		id: "cool-guy",
@@ -386,7 +384,7 @@ export const CREW_DISPLAY: readonly CrewCardDisplay[] = [
 		},
 		flavorText: "Ice to meet ya!",
 		lore: "",
-		synergyIds: [],
+		synergyIds: ["the-razor", "zednem"],
 	},
 	{
 		id: "mayumi",
@@ -396,7 +394,7 @@ export const CREW_DISPLAY: readonly CrewCardDisplay[] = [
 		effectText: { revealed: "You gain 2 Cash and draw 1." },
 		flavorText: "Curiosity pays surprisingly well...",
 		lore: "",
-		synergyIds: [],
+		synergyIds: ["the-dealer"],
 	},
 	{
 		id: "rat-queen",
@@ -408,7 +406,7 @@ export const CREW_DISPLAY: readonly CrewCardDisplay[] = [
 		},
 		flavorText: "We're here! We're there! We're everywhere!",
 		lore: "",
-		synergyIds: [],
+		synergyIds: ["the-dealer"],
 	},
 	{
 		id: "too-big",
@@ -421,7 +419,7 @@ export const CREW_DISPLAY: readonly CrewCardDisplay[] = [
 		},
 		flavorText: "You ever tried drowning someone?",
 		lore: "",
-		synergyIds: [],
+		synergyIds: ["warrant-of-arrest"],
 	},
 
 	// hiders
@@ -436,7 +434,7 @@ export const CREW_DISPLAY: readonly CrewCardDisplay[] = [
 		},
 		flavorText: "Just a sheep..",
 		lore: "",
-		synergyIds: [],
+		synergyIds: ["full-moon", "zednem", "command-center", "dataminer"],
 	},
 	{
 		id: "handles",
@@ -449,7 +447,7 @@ export const CREW_DISPLAY: readonly CrewCardDisplay[] = [
 		},
 		flavorText: "First I steal your ankles, bro, then I take your teeth.",
 		lore: "",
-		synergyIds: [],
+		synergyIds: ["miss-direction", "the-watcher", "the-bastion"],
 	},
 	{
 		id: "miss-direction",
@@ -462,7 +460,7 @@ export const CREW_DISPLAY: readonly CrewCardDisplay[] = [
 		},
 		flavorText: "You'll be safe here.",
 		lore: "",
-		synergyIds: [],
+		synergyIds: ["handles", "the-watcher"],
 	},
 	{
 		id: "keeper",
@@ -475,7 +473,7 @@ export const CREW_DISPLAY: readonly CrewCardDisplay[] = [
 		},
 		flavorText: "Moving things that bite. Looking for a buyer.",
 		lore: "",
-		synergyIds: [],
+		synergyIds: ["the-watcher", "trickle-down-economics"],
 	},
 	{
 		id: "retro",
@@ -488,7 +486,7 @@ export const CREW_DISPLAY: readonly CrewCardDisplay[] = [
 		},
 		flavorText: "How many times do you think I've tried?",
 		lore: "",
-		synergyIds: [],
+		synergyIds: ["the-dealer", "zednem"],
 	},
 	{
 		id: "suplex",
@@ -502,7 +500,7 @@ export const CREW_DISPLAY: readonly CrewCardDisplay[] = [
 		},
 		flavorText: "You picked the wrong ring, brother!",
 		lore: "",
-		synergyIds: [],
+		synergyIds: ["the-razor", "the-watcher", "mama-mercy"],
 	},
 	{
 		id: "terminal",
@@ -514,7 +512,7 @@ export const CREW_DISPLAY: readonly CrewCardDisplay[] = [
 		},
 		flavorText: "[SYS_FLAG] USER_SURVIVAL :: PRIORITY_MAX",
 		lore: "",
-		synergyIds: [],
+		synergyIds: ["the-bastion"],
 	},
 	{
 		id: "zednem",
@@ -527,7 +525,7 @@ export const CREW_DISPLAY: readonly CrewCardDisplay[] = [
 		},
 		flavorText: "THIS CITY HAS ENOUGH MONSTERS!",
 		lore: "",
-		synergyIds: [],
+		synergyIds: ["cool-guy", "retro", "heel-turn", "pull-counter"],
 	},
 ];
 
@@ -905,7 +903,7 @@ export const MOVE_DISPLAY: readonly MoveCardDisplay[] = [
 			"If The Iterated Void's Arms, Legs, and Torso are all in your ongoing zone, you win the game.",
 		flavorText: "DELETE. ALL. BUT. I.",
 		lore: "",
-		synergyIds: [],
+		synergyIds: ["void-arms", "void-legs", "void-torso"],
 	},
 	{
 		id: "dig-deep",
@@ -1130,7 +1128,7 @@ export const MOVE_DISPLAY: readonly MoveCardDisplay[] = [
 		name: "Take It Back",
 		baseCost: 1,
 		moveType: "burst",
-		effectText: "Return 1 card from your discard pile to your hand.",
+		effectText: "Return 1 random card from your discard pile to your hand.",
 		flavorText: "",
 		lore: "",
 		synergyIds: [],

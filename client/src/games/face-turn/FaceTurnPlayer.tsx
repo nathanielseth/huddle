@@ -10,11 +10,12 @@ import { RailChat } from "./components/RailChat";
 import { GameScreen } from "./components/shell/GameScreen";
 import { PlayerSceneContent } from "./components/scene/PhaseSceneContent";
 import { PhaseTimer } from "./components/PhaseTimer";
-import { MoveAnnouncer } from "./components/MoveAnnouncer";
+import { EventAnnouncer } from "./components/EventAnnouncer";
 import { PlayerBoard } from "./components/PlayerBoard";
-import { MoveChainBar } from "./components/MoveChainBar";
+import { RailMoveArea } from "./components/RailMoveArea";
+import { PassButton } from "./components/PassButton";
 import { TurnActionBar } from "./components/turn-action-bar/TurnActionBar";
-import { ChallengeBar } from "./components/ChallengeBar";
+import { ChainMoveSection } from "./components/turn-action-bar/ChainMoveSection";
 import { Hand } from "./components/hand/Hand";
 import { CardPreviewDock } from "./components/hand/CardPreviewDock";
 import {
@@ -161,22 +162,18 @@ function PersistentHand() {
 	);
 }
 
-// inline action content; MoveChainBar also mounted in active_turn because chain replay can still be live
+// headless controllers only; RailMoveArea (mounted separately in
+// RailContent, always live) renders the drop zone, chain stack, armed
+// preview, and pass/end-turn button for both phases
 function TurnActions() {
 	const { ft, myPlayer } = useFaceturnState();
 	if (!ft || !myPlayer) return null;
 
 	switch (ft.phase) {
 		case "active_turn":
-			return (
-				<div className="flex flex-col gap-3">
-					<TurnActionBar />
-					<ChallengeBar />
-					<MoveChainBar />
-				</div>
-			);
+			return <TurnActionBar />;
 		case "move_chain_window":
-			return <MoveChainBar />;
+			return <ChainMoveSection />;
 		default:
 			return null;
 	}
@@ -191,7 +188,7 @@ function RailTurnStatus() {
 		: null;
 
 	return (
-		<div className="flex items-center justify-between gap-2 px-4 py-3">
+		<div className="flex items-center justify-between gap-2 px-4 py-3 border-b border-white/10">
 			<div className="flex items-center gap-2 min-w-0">
 				{ft.turn && (
 					<span className="ft-eyebrow text-sm text-white/80 tabular-nums shrink-0">
@@ -209,34 +206,33 @@ function RailTurnStatus() {
 	);
 }
 
-// player logs as plain scroll, no collapse
+const LOGS_HEIGHT_PX = 176;
+
+// player logs as plain scroll, no collapse — fixed height like chat, so the
+// rail's four sections (header/logs/move area/chat) never resize with content
 function RailLogs() {
 	const { ft, playerMap } = useFaceturnState();
 	const log = ft?.log ?? [];
-	if (log.length === 0) {
-		return (
-			<div className="flex flex-col gap-1 px-4">
-				<SectionTitle>Logs</SectionTitle>
-				<p className="text-xs text-white/25 italic">Nothing yet.</p>
-			</div>
-		);
-	}
 	return (
-		<div className="flex flex-col gap-1 px-4">
+		<div className="shrink-0 flex flex-col gap-1 px-4 py-3 border-b border-white/10">
 			<SectionTitle>Logs</SectionTitle>
 			<div
-				className="flex flex-col gap-1 max-h-40 lg:max-h-56 overflow-y-auto ft-scroll pr-1"
-				style={{ touchAction: "pan-y" }}
+				className="flex flex-col gap-1 overflow-y-auto ft-scroll pr-1"
+				style={{ height: LOGS_HEIGHT_PX, touchAction: "pan-y" }}
 			>
-				{[...log].reverse().map((entry, i) => (
-					<LogRow
-						key={entry.seq}
-						entry={entry}
-						playerMap={playerMap}
-						dim={i !== 0}
-						showBreakdown={true}
-					/>
-				))}
+				{log.length === 0 ? (
+					<p className="text-xs text-white/25 italic">Nothing yet.</p>
+				) : (
+					[...log].reverse().map((entry, i) => (
+						<LogRow
+							key={entry.seq}
+							entry={entry}
+							playerMap={playerMap}
+							dim={i !== 0}
+							showBreakdown={true}
+						/>
+					))
+				)}
 			</div>
 		</div>
 	);
@@ -247,17 +243,10 @@ function RailContent() {
 		<div
 			className={cn("ft-panel-ink ft-rail", "flex flex-col overflow-hidden")}
 		>
-			<div
-				className="flex flex-col gap-3 overflow-y-auto ft-scroll min-h-0"
-				style={{ touchAction: "pan-y" }}
-			>
-				<RailTurnStatus />
-				<RailLogs />
-			</div>
-			<div className="flex-1 min-h-0" />
-			<div className="px-4 pb-4 shrink-0">
-				<TurnActions />
-			</div>
+			<RailTurnStatus />
+			<RailLogs />
+			<TurnActions />
+			<RailMoveArea />
 			<RailChat />
 		</div>
 	);
@@ -268,6 +257,9 @@ function HudContent() {
 		<div className="flex flex-col h-full">
 			<div className="pointer-events-auto">
 				<PersistentHand />
+			</div>
+			<div className="pointer-events-none fixed right-4 bottom-28 lg:right-(--rail-inset) z-40 flex justify-end pr-4">
+				<PassButton />
 			</div>
 		</div>
 	);
@@ -311,7 +303,7 @@ export function FaceTurnPlayer() {
 					panelRef={entry.panelRef}
 				/>
 			))}
-			<MoveAnnouncer />
+			<EventAnnouncer />
 		</div>
 	);
 }

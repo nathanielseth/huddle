@@ -212,11 +212,15 @@ export function ConfirmButton({
 	onClick,
 	ready,
 	locked,
+	size = "md",
+	className,
 }: {
 	label: React.ReactNode;
 	onClick: () => void;
 	ready: boolean;
 	locked?: boolean;
+	size?: "md" | "lg";
+	className?: string;
 }) {
 	const disabled = !ready || Boolean(locked);
 	return (
@@ -225,10 +229,12 @@ export function ConfirmButton({
 			disabled={disabled}
 			onClick={onClick}
 			className={cn(
-				"ft-panel-ink px-4 py-2 rounded-lg border text-sm font-bold self-start transition-all",
+				"ft-panel-ink rounded-lg border font-bold self-start transition-all",
+				size === "lg" ? "px-8 py-4 text-lg rounded-xl" : "px-4 py-2 text-sm",
 				disabled
 					? "border-white/10 text-white/20 cursor-not-allowed"
 					: "border-amber-400/60 text-amber-200 cursor-pointer shadow-[inset_0_0_0_1px_rgba(251,191,36,0.25)]",
+				className,
 			)}
 		>
 			{label}

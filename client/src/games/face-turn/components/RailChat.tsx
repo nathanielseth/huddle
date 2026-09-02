@@ -86,7 +86,7 @@ export function RailChat() {
 	}
 
 	return (
-		<div className="flex flex-col gap-1.5 px-4 pb-4 pt-1 border-t border-white/10 shrink-0">
+		<div className="shrink-0 flex flex-col gap-1.5 px-4 pb-4 pt-1 border-t border-white/10">
 			<SectionTitle>Chat</SectionTitle>
 
 			<div
@@ -101,7 +101,7 @@ export function RailChat() {
 				)}
 			</div>
 
-			<form onSubmit={handleSubmit} className="flex items-center gap-2 pt-1">
+			<form onSubmit={handleSubmit} className="flex items-center gap-2 pt-1 shrink-0">
 				<input
 					type="text"
 					value={draft}

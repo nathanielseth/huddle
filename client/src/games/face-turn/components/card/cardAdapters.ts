@@ -1,7 +1,10 @@
-import type {
-	BossCardDisplay,
-	CrewCardDisplay,
-	MoveCardDisplay,
+import {
+	BOSS_DISPLAY_MAP,
+	CREW_DISPLAY_MAP,
+	MOVE_DISPLAY_MAP,
+	type BossCardDisplay,
+	type CrewCardDisplay,
+	type MoveCardDisplay,
 } from "@shared/games/face-turn/card-display";
 import type { CardAbility, CardProps } from "./Card";
 import type { CardVariant } from "./cardVariants";
@@ -94,4 +97,14 @@ export function moveToCard(
 		artAlt: move.name,
 		badgeText: String(cost),
 	};
+}
+
+export function cardIdToCard(id: string): CardProps | undefined {
+	const boss = BOSS_DISPLAY_MAP.get(id);
+	if (boss) return bossToCard(boss);
+	const crew = CREW_DISPLAY_MAP.get(id);
+	if (crew) return crewToCard(crew);
+	const move = MOVE_DISPLAY_MAP.get(id);
+	if (move) return moveToCard(move);
+	return undefined;
 }

@@ -10,7 +10,7 @@ export type BoardTarget =
 
 interface RegistryEntry {
 	target: BoardTarget;
-	el: HTMLElement;
+	els: Set<HTMLElement>;
 }
 
 export function targetKey(target: BoardTarget): string {
@@ -32,19 +32,18 @@ class BoardTargetRegistry {
 	register(target: BoardTarget, el: HTMLElement): () => void {
 		const key = targetKey(target);
 
-		if (import.meta.env.DEV && this.entries.has(key)) {
-			console.warn(
-				`[BoardTargetRegistry] duplicate registration for "${key}" — ` +
-					"overwriting previous entry. This usually means two cells " +
-					"are registering the same (kind, playerId, slotIndex).",
-			);
+		const existing = this.entries.get(key);
+		if (existing) {
+			existing.els.add(el);
+		} else {
+			this.entries.set(key, { target, els: new Set([el]) });
 		}
-
-		this.entries.set(key, { target, el });
 
 		return () => {
 			const current = this.entries.get(key);
-			if (current && current.el === el) {
+			if (!current) return;
+			current.els.delete(el);
+			if (current.els.size === 0) {
 				this.entries.delete(key);
 			}
 		};
@@ -53,15 +52,22 @@ class BoardTargetRegistry {
 	getTargetAt(point: { x: number; y: number }): BoardTarget | null {
 		const matchesByKind: Partial<Record<BoardTarget["kind"], BoardTarget>> = {};
 
-		for (const { target, el } of this.entries.values()) {
+		for (const { target, els } of this.entries.values()) {
 			if (matchesByKind[target.kind]) continue;
 
-			const rect = el.getBoundingClientRect();
-			const hit =
-				point.x >= rect.left &&
-				point.x <= rect.right &&
-				point.y >= rect.top &&
-				point.y <= rect.bottom;
+			let hit = false;
+			for (const el of els) {
+				const rect = el.getBoundingClientRect();
+				if (
+					point.x >= rect.left &&
+					point.x <= rect.right &&
+					point.y >= rect.top &&
+					point.y <= rect.bottom
+				) {
+					hit = true;
+					break;
+				}
+			}
 			if (!hit) continue;
 
 			matchesByKind[target.kind] = target;

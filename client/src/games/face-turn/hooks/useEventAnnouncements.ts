@@ -8,20 +8,18 @@ type PlayerLookup = Record<string, { name: string }>;
 const DISPLAY_MS = 1500;
 const REDUCED_MOTION_DISPLAY_MS = 400;
 
-// caps backlog so reconnecting clients don't replay entire match history one event at a time
 const MAX_BACKLOG = 3;
 
-export interface UseMoveAnnouncementsResult {
+export interface UseEventAnnouncementsResult {
 	// the announcement on screen, or null when none
 	readonly current: Announcement | null;
 	readonly onExited: () => void;
 }
 
-// sources from the log rather than lastEvent so multiple events arriving between renders aren't skipped
-export function useMoveAnnouncements(
+export function useEventAnnouncements(
 	log: readonly LogEntry[],
 	playerMap: PlayerLookup,
-): UseMoveAnnouncementsResult {
+): UseEventAnnouncementsResult {
 	const reducedMotion = useReducedMotion();
 	const displayMs = reducedMotion ? REDUCED_MOTION_DISPLAY_MS : DISPLAY_MS;
 

@@ -1,16 +1,23 @@
 import "./rps.css";
 import "../../components/card/card.css";
+import type { CSSProperties } from "react";
+import { m } from "motion/react";
 import { cn } from "../../../../lib/utils/cn";
 import { RpsGlyph } from "./RpsGlyph";
 import { FaceTurnLogo } from "../../components/card/ftLogo";
+import { RPS_TEAM_ACCENT, type RpsTeamColor } from "./rpsTeamColors";
 import type { RpsChoice } from "@shared/games/face-turn/types";
 
 export interface RpsCardProps {
 	choice?: RpsChoice;
 	revealed: boolean;
+	teamColor: RpsTeamColor;
 	size?: number;
 	tone?: "neutral" | "selected" | "win" | "lose";
 	className?: string;
+	// when set, the card is rendered as a motion element sharing this id —
+	// used to fly the picked option card into its reveal slot (see RpsPhase)
+	layoutId?: string;
 }
 
 const TONE_RING: Record<NonNullable<RpsCardProps["tone"]>, string> = {
@@ -30,16 +37,30 @@ const TONE_GLOW: Record<NonNullable<RpsCardProps["tone"]>, string> = {
 export function RpsCard({
 	choice,
 	revealed,
-	size = 88,
+	teamColor,
+	size = 150,
 	tone = "neutral",
 	className,
+	layoutId,
 }: RpsCardProps) {
+	const { accent, glow } = RPS_TEAM_ACCENT[teamColor];
+
+	const Wrapper = layoutId ? m.div : "div";
+	const wrapperProps = layoutId
+		? {
+				layoutId,
+				transition: { type: "spring" as const, stiffness: 320, damping: 32 },
+			}
+		: {};
+
 	return (
-		<div
+		<Wrapper
 			className={cn("rps-flip", revealed && "is-flipped", className)}
-			style={{ width: size, height: size * 1.4 }}
+			style={{ width: size, height: size * (88 / 63) }}
+			{...wrapperProps}
 		>
 			<div className="rps-flip-inner">
+				{/* back: face-down, always the "unrevealed" state — same card back art as everywhere else */}
 				<div
 					className={cn(
 						"rps-face-back border-2 transition-colors overflow-hidden",
@@ -56,17 +77,26 @@ export function RpsCard({
 						/>
 					</div>
 				</div>
-				{/* front: revealed hand-sign */}
+				{/* front: real card frame, minus badge/title/text — team-colored
+				    "art" area holds the revealed hand-sign */}
 				<div
 					className={cn(
-						"rps-face-front border-2 bg-[#f4efe4] text-[#1b1712] transition-colors",
+						"rps-face-front rps-art-face border-2 transition-colors",
 						TONE_RING[tone],
 						TONE_GLOW[tone],
 					)}
+					style={
+						{
+							"--rps-accent": accent,
+							"--rps-glow": glow,
+						} as CSSProperties
+					}
 				>
-					{choice && <RpsGlyph choice={choice} className="w-3/5 h-3/5" />}
+					<div className="rps-art-inner">
+						{choice && <RpsGlyph choice={choice} className="rps-art-glyph" />}
+					</div>
 				</div>
 			</div>
-		</div>
+		</Wrapper>
 	);
 }

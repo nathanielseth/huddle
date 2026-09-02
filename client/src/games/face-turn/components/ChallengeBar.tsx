@@ -58,35 +58,69 @@ export function ChallengeBar() {
 
 	if (!ft || !myPlayer) return null;
 
+	let content: React.ReactNode = null;
+
 	if (ft.phase === "challenge_window") {
-		if (!canChallenge) return null;
+		if (canChallenge) {
+			const pending = ft.pendingAction;
+			const canDefend = pending?.type === "class_action_strike";
+			const title = pending
+				? `${pending.actorId === playerId ? "You" : "Someone"} declared ${ACTION_LABEL[pending.type]} — respond`
+				: "Respond";
+			// wrong challenge executes the challenger if they are exposed
+			const challengeIsFatalIfWrong = isPlayerExposed(myPlayer);
+			content = (
+				<PromptShell title={title} tone="red">
+					{challengeIsFatalIfWrong && (
+						<p className="text-xs text-red-300/90 mb-1.5">
+							⚠️ Your Crew is fully exposed — if you challenge and they weren't
+							bluffing, you'll be executed.
+						</p>
+					)}
+					<div className="flex gap-2 flex-wrap">
+						<ActionButton
+							label="Challenge (call bluff)"
+							tone="red"
+							disabled={locked}
+							onClick={() => {
+								runLocked(() => {
+									sendFaceturnAction({ type: "challenge" });
+								});
+							}}
+						/>
+						{canDefend && (
+							<ActionButton
+								label="Defend"
+								tone="sky"
+								disabled={locked}
+								onClick={() => {
+									runLocked(() => {
+										sendFaceturnAction({ type: "defend" });
+									});
+								}}
+							/>
+						)}
+						<ActionButton
+							label="Pass"
+							tone="neutral"
+							disabled={locked}
+							onClick={() => {
+								runLocked(() => {
+									sendFaceturnAction({ type: "pass_challenge" });
+								});
+							}}
+						/>
+					</div>
+				</PromptShell>
+			);
+		}
+	} else if (ft.phase === "defend_window") {
 		const pending = ft.pendingAction;
-		const canDefend = pending?.type === "class_action_strike";
-		const title = pending
-			? `${pending.actorId === playerId ? "You" : "Someone"} declared ${ACTION_LABEL[pending.type]} — respond`
-			: "Respond";
-		// wrong challenge executes the challenger if they are exposed
-		const challengeIsFatalIfWrong = isPlayerExposed(myPlayer);
-		return (
-			<PromptShell title={title} tone="red">
-				{challengeIsFatalIfWrong && (
-					<p className="text-xs text-red-300/90 mb-1.5">
-						⚠️ Your Crew is fully exposed — if you challenge and they weren't
-						bluffing, you'll be executed.
-					</p>
-				)}
-				<div className="flex gap-2 flex-wrap">
-					<ActionButton
-						label="Challenge (call bluff)"
-						tone="red"
-						disabled={locked}
-						onClick={() => {
-							runLocked(() => {
-								sendFaceturnAction({ type: "challenge" });
-							});
-						}}
-					/>
-					{canDefend && (
+		const targetId = pending?.targetPlayerId;
+		if (pending && targetId && isPlayerOrTeammate(ft, playerId, targetId)) {
+			content = (
+				<PromptShell title="Ambush incoming — defend it?" tone="sky">
+					<div className="flex gap-2 flex-wrap">
 						<ActionButton
 							label="Defend"
 							tone="sky"
@@ -97,105 +131,71 @@ export function ChallengeBar() {
 								});
 							}}
 						/>
-					)}
-					<ActionButton
-						label="Pass"
-						tone="neutral"
-						disabled={locked}
-						onClick={() => {
-							runLocked(() => {
-								sendFaceturnAction({ type: "pass_challenge" });
-							});
-						}}
-					/>
-				</div>
-			</PromptShell>
-		);
-	}
-
-	if (ft.phase === "defend_window") {
-		const pending = ft.pendingAction;
-		const targetId = pending?.targetPlayerId;
-		if (!pending || !targetId) return null;
-		const isTarget = isPlayerOrTeammate(ft, playerId, targetId);
-		if (!isTarget) return null;
-		return (
-			<PromptShell title="Ambush incoming — defend it?" tone="sky">
-				<div className="flex gap-2 flex-wrap">
-					<ActionButton
-						label="Defend"
-						tone="sky"
-						disabled={locked}
-						onClick={() => {
-							runLocked(() => {
-								sendFaceturnAction({ type: "defend" });
-							});
-						}}
-					/>
-					<ActionButton
-						label="Pass"
-						tone="neutral"
-						disabled={locked}
-						onClick={() => {
-							runLocked(() => {
-								sendFaceturnAction({ type: "pass_challenge" });
-							});
-						}}
-					/>
-				</div>
-			</PromptShell>
-		);
-	}
-
-	if (ft.phase === "defend_declared") {
-		const pending = ft.pendingAction;
-		if (!pending) return null;
-		// after defend, actorId is defender, targetPlayerId is original striker
-		const isOriginalStriker = pending.targetPlayerId === playerId;
-		if (!isOriginalStriker) return null;
-		const canChallengeDefend = pending.originalActionType !== "card_strike";
-		const challengeDefendIsFatalIfWrong = isPlayerExposed(myPlayer);
-		return (
-			<PromptShell title="Your strike was defended" tone="violet">
-				{canChallengeDefend && challengeDefendIsFatalIfWrong && (
-					<p className="text-xs text-red-300/90 mb-1.5">
-						⚠️ Your Crew is fully exposed — if you challenge the defend and it
-						was real, you'll be executed.
-					</p>
-				)}
-				{!canChallengeDefend && (
-					<p className="text-xs text-white/60 mb-1.5">
-						Ambush defends can't be challenged — accept it or let the timer run
-						out.
-					</p>
-				)}
-				<div className="flex gap-2 flex-wrap">
-					{canChallengeDefend && (
 						<ActionButton
-							label="Challenge the defend"
-							tone="red"
+							label="Pass"
+							tone="neutral"
 							disabled={locked}
 							onClick={() => {
 								runLocked(() => {
-									sendFaceturnAction({ type: "challenge_defend" });
+									sendFaceturnAction({ type: "pass_challenge" });
 								});
 							}}
 						/>
-					)}
-					<ActionButton
-						label="Accept the defend"
-						tone="neutral"
-						disabled={locked}
-						onClick={() => {
-							runLocked(() => {
-								sendFaceturnAction({ type: "accept_defend" });
-							});
-						}}
-					/>
-				</div>
-			</PromptShell>
-		);
+					</div>
+				</PromptShell>
+			);
+		}
+	} else if (ft.phase === "defend_declared") {
+		const pending = ft.pendingAction;
+		if (pending) {
+			// after defend, actorId is defender, targetPlayerId is original striker
+			const isOriginalStriker = pending.targetPlayerId === playerId;
+			if (isOriginalStriker) {
+				const canChallengeDefend = pending.originalActionType !== "card_strike";
+				const challengeDefendIsFatalIfWrong = isPlayerExposed(myPlayer);
+				content = (
+					<PromptShell title="Your strike was defended" tone="violet">
+						{canChallengeDefend && challengeDefendIsFatalIfWrong && (
+							<p className="text-xs text-red-300/90 mb-1.5">
+								⚠️ Your Crew is fully exposed — if you challenge the defend and
+								it was real, you'll be executed.
+							</p>
+						)}
+						{!canChallengeDefend && (
+							<p className="text-xs text-white/60 mb-1.5">
+								Ambush defends can't be challenged — accept it or let the timer
+								run out.
+							</p>
+						)}
+						<div className="flex gap-2 flex-wrap">
+							{canChallengeDefend && (
+								<ActionButton
+									label="Challenge the defend"
+									tone="red"
+									disabled={locked}
+									onClick={() => {
+										runLocked(() => {
+											sendFaceturnAction({ type: "challenge_defend" });
+										});
+									}}
+								/>
+							)}
+							<ActionButton
+								label="Accept the defend"
+								tone="neutral"
+								disabled={locked}
+								onClick={() => {
+									runLocked(() => {
+										sendFaceturnAction({ type: "accept_defend" });
+									});
+								}}
+							/>
+						</div>
+					</PromptShell>
+				);
+			}
+		}
 	}
 
-	return null;
+	return content;
 }
