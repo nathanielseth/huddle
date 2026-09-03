@@ -224,11 +224,6 @@ export type EffectPrimitive =
 			type: "passive_negate_damage_percent";
 			percent: number;
 	  }
-	// skipped when undefendable or cannotBeMultiplied
-	| {
-			type: "passive_flat_damage_bonus";
-			amount: number;
-	  }
 	| {
 			type: "passive_disable_all_crew_skills";
 	  }
@@ -284,6 +279,11 @@ export type EffectPrimitive =
 	| {
 			type: "passive_steal_cash_on_damage_dealt";
 			amount: number;
+	  }
+	// the razor: strike, or deal damage with a move other than Stab,
+	// to add a copy of Stab to hand
+	| {
+			type: "passive_razor_stab_on_strike_or_damage";
 	  }
 	| {
 			type: "win_if_void_pieces_assembled";
@@ -495,7 +495,6 @@ const EFFECT_TARGETING_TABLE = {
 	passive_watcher_hide_on_challenge_win: { scope: "self" },
 	passive_armor_on_ally_crew_turn: { scope: "self" },
 	passive_negate_damage_percent: { scope: "self" },
-	passive_flat_damage_bonus: { scope: "self" },
 	passive_disable_all_crew_skills: { scope: "self" },
 	passive_disable_all_enemy_crew_passives: { scope: "none" },
 	passive_defender_chooses_crew_to_turn: { scope: "self" },
@@ -512,6 +511,7 @@ const EFFECT_TARGETING_TABLE = {
 	passive_turn_self_down_on_enemy_crew_kill: { scope: "self" },
 	passive_all_damage_is_piercing: { scope: "self" },
 	passive_steal_cash_on_damage_dealt: { scope: "self" },
+	passive_razor_stab_on_strike_or_damage: { scope: "self" },
 	become_also_striker: { scope: "self" },
 	become_also_hider: { scope: "self" },
 	become_also_defender: { scope: "self" },
@@ -614,7 +614,7 @@ const BOSS_MECHANICS: Record<
 	},
 	"the-razor": {
 		commandEffects: [{ type: "command_guess_crew_class_turn_if_correct" }],
-		passiveEffects: [{ type: "passive_flat_damage_bonus", amount: 7 }],
+		passiveEffects: [{ type: "passive_razor_stab_on_strike_or_damage" }],
 	},
 	"the-bastion": {
 		commandEffects: [{ type: "command_deal_damage_equal_to_armor" }],
@@ -937,6 +937,9 @@ const MOVE_MECHANICS: Record<string, Pick<MoveCard, "effects">> = {
 	"claim-the-bounty": {
 		effects: [{ type: "deal_damage", target: "enemy_boss", amount: 25 }],
 	},
+	stab: {
+		effects: [{ type: "deal_damage", target: "enemy_boss", amount: 5 }],
+	},
 	ambush: {
 		effects: [{ type: "strike_enemy_crew_defendable" }],
 	},
@@ -1194,8 +1197,8 @@ export function getMove(id: string): MoveCard {
 	return card;
 }
 
-export function isDraftable(crew: CrewCard): boolean {
-	return crew.draftable !== false;
+export function isDraftable(card: CrewCard | MoveCard): boolean {
+	return card.draftable !== false;
 }
 
 export type MoveTargetScope = "enemy" | "ally" | "none";
@@ -1315,7 +1318,7 @@ export const CARD_IDS = {
 		SPARE_CHANGE: "spare-change",
 		PAYCHECK: "paycheck",
 		SUCKER_PUNCH: "sucker-punch",
-		WOLFBLASTER: "wolfblaster",
+		STAB: "stab",		WOLFBLASTER: "wolfblaster",
 		DEAD_DROP_RETRIEVAL: "dead-drop-retrieval",
 		CHEAP_SHOT: "cheap-shot",
 		UNFINISHED_BUSINESS: "unfinished-business",

@@ -112,7 +112,7 @@ export {
 	executedPlayerIdFrom,
 	type StrikeOrExecuteOutcome,
 } from "./strikes";
-export { clampHp, applyDamage, applyPoisonToVictim } from "./damage";
+export { clampHp, applyDamage, applyPoisonToVictim, maybeTriggerRazorStabGrant } from "./damage";
 export {
 	drawCards,
 	discardFromHand,

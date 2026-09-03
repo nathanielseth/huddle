@@ -40,6 +40,16 @@ export const DESKTOP_GRID: GridMetrics = {
 	sizeMax: 310,
 };
 
+// used while the sidebar is expanded to full cards
+// so fewer columns and a bit less breathing room per card
+export const DESKTOP_GRID_COMPACT: GridMetrics = {
+	columns: 3,
+	gap: 32,
+	paddingX: 32,
+	sizeMin: 120,
+	sizeMax: 310,
+};
+
 export const MOBILE_GRID: GridMetrics = {
 	columns: 2,
 	gap: 8,
@@ -93,8 +103,8 @@ function useResponsiveCardSizeFor(metrics: GridMetrics) {
 	return { containerRef: setContainerNode, cardSize };
 }
 
-export function useDesktopCardSize() {
-	return useResponsiveCardSizeFor(DESKTOP_GRID);
+export function useDesktopCardSize(metrics: GridMetrics = DESKTOP_GRID) {
+	return useResponsiveCardSizeFor(metrics);
 }
 
 export function useMobileCardSize() {

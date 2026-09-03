@@ -12,7 +12,7 @@ import {
 	findEffectAmount,
 } from "./shared";
 import { resolveEffects } from "./index";
-import { consumeLifeInsuranceProtecting } from "./damage";
+import { consumeLifeInsuranceProtecting, maybeTriggerRazorStabGrant } from "./damage";
 import { pushLog } from "../log";
 
 function discardRedHerringMove(
@@ -267,7 +267,10 @@ export function resolveStrikeOrExecute(
 
 	if (isStrike && actorId) {
 		const striker = state.players.get(actorId);
-		if (striker) applyBloodMoneyOnStrike(state, striker);
+		if (striker) {
+			applyBloodMoneyOnStrike(state, striker);
+			maybeTriggerRazorStabGrant(striker);
+		}
 	}
 	return result;
 }

@@ -51,7 +51,7 @@ export function isChallengeEligible(
 
 	if (ft.phase === "defend_declared") {
 		// post-defend, actorId flips to the defender and targetPlayerId
-		// becomes the original striker — see ChallengeBar's isOriginalStriker
+		// becomes the original striker
 		return ft.pendingAction?.targetPlayerId === playerId;
 	}
 

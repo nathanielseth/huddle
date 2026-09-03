@@ -112,7 +112,7 @@ function ToolbarPopover({
 			{open && !disabled && (
 				<div
 					className={cn(
-						"absolute z-20 top-full right-0 mt-1 rounded-lg border ft-draft-panel shadow-xl overflow-hidden",
+						"absolute z-30 top-full right-0 mt-1 rounded-lg border ft-draft-panel shadow-xl overflow-hidden",
 						panelClassName ?? "w-72",
 					)}
 				>

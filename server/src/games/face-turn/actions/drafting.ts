@@ -60,7 +60,12 @@ export const draftingAction: PhaseActionHandler = (
 			break;
 		}
 		case "select_move": {
-			if (!MOVE_MAP.has(action.moveId) || draft.moveIds.includes(action.moveId))
+			const moveDef = MOVE_MAP.get(action.moveId);
+			if (
+				!moveDef ||
+				!isDraftable(moveDef) ||
+				draft.moveIds.includes(action.moveId)
+			)
 				return noOp();
 			if (draft.moveIds.length >= C.MOVES_PER_DECK) return noOp();
 			draft.moveIds.push(action.moveId);

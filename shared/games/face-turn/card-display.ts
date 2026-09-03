@@ -33,6 +33,7 @@ export interface MoveCardDisplay extends BaseCardDisplay {
 	readonly baseCost: number;
 	readonly moveType: MoveType;
 	readonly effectText: string;
+	readonly draftable?: boolean;
 }
 
 // bosses
@@ -74,7 +75,8 @@ export const BOSS_DISPLAY: readonly BossCardDisplay[] = [
 		effectText: {
 			command:
 				"Guess a face-down enemy Crew's class. If correct, turn it face-up.",
-			passive: "Damage you deal is increased by 7.",
+			passive:
+				"Whenever you Strike or deal damage with anything but Stab, create  a Stab.",
 		},
 		flavorText: "Only a true star player commands a visionary empire.",
 		lore: "",
@@ -434,7 +436,7 @@ export const CREW_DISPLAY: readonly CrewCardDisplay[] = [
 		},
 		flavorText: "Just a sheep..",
 		lore: "",
-		synergyIds: ["full-moon", "zednem", "command-center", "dataminer"],
+		synergyIds: ["wolfman","full-moon", "zednem", "command-center"],
 	},
 	{
 		id: "handles",
@@ -1144,6 +1146,18 @@ export const MOVE_DISPLAY: readonly MoveCardDisplay[] = [
 		lore: "",
 		synergyIds: [],
 	},
+	{
+		id: "stab",
+		artSrc: "/assets/games/face-turn/cards/moves/stab.avif",
+		name: "Stab",
+		baseCost: 1,
+		moveType: "burst",
+		effectText: "Deal 5 damage to an enemy Boss.",
+		flavorText: "",
+		lore: "",
+		synergyIds: ["the-razor"],
+		draftable: false,
+	},
 
 	// slow moves
 	{
@@ -1437,6 +1451,7 @@ export const MOVE_TARGET_KIND: Readonly<Record<string, MoveTargetKind>> = {
 	restock: "no_target",
 	sabotage: "enemy_active",
 	"spare-change": "no_target",
+	stab: "enemy_boss",
 	"sucker-punch": "enemy_boss",
 	"switch-up": "no_target",
 	"tactical-support": "ally_player",
@@ -1553,6 +1568,8 @@ export function getMoveDisplay(id: string): MoveCardDisplay {
 	return card;
 }
 
-export function isDraftable(crew: CrewCardDisplay): boolean {
-	return crew.draftable !== false;
+export function isDraftable(
+	card: CrewCardDisplay | MoveCardDisplay,
+): boolean {
+	return card.draftable !== false;
 }

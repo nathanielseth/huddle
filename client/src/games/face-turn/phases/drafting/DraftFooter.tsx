@@ -16,6 +16,10 @@ export function DraftFooter({
 	pickedCount,
 	onDone,
 	onReviewPicks,
+	// desktop passes false: the sidebar's section headers already show
+	// live Boss/Crew/Moves counts, so repeating them here is redundant.
+	// Mobile keeps stats since the pick list isn't always on screen.
+	showStats = true,
 }: {
 	bossDone: boolean;
 	crewCount: number;
@@ -28,6 +32,7 @@ export function DraftFooter({
 	onDone: () => void;
 	// present only on layouts (mobile) where the pick list isn't already visible
 	onReviewPicks?: () => void;
+	showStats?: boolean;
 }) {
 	const containerRef = useRef<HTMLDivElement>(null);
 	const [stacked, setStacked] = useState(false);
@@ -90,6 +95,8 @@ export function DraftFooter({
 		</div>
 	);
 
+	const fullWidthButton = stacked || !showStats;
+
 	const doneButton = (
 		<button
 			type="button"
@@ -97,7 +104,7 @@ export function DraftFooter({
 			onClick={onDone}
 			className={cn(
 				"shrink-0 px-6 py-2.5 rounded-lg border text-xs font-bold uppercase tracking-widest transition-all min-w-26",
-				stacked && "w-full",
+				fullWidthButton && "w-full",
 				allDone && !locked
 					? "border-amber-400/60 bg-amber-400/10 text-amber-200 cursor-pointer active:scale-95"
 					: "border-white/10 text-white/20 cursor-not-allowed",
@@ -113,7 +120,9 @@ export function DraftFooter({
 			className="shrink-0 border-t border-white/10 ft-draft-bg"
 			style={{ paddingBottom: "env(safe-area-inset-bottom)" }}
 		>
-			{stacked ? (
+			{!showStats ? (
+				<div className="px-4 py-2.5">{doneButton}</div>
+			) : stacked ? (
 				<div className="flex flex-col gap-2 px-4 py-2.5">
 					{stats}
 					{doneButton}

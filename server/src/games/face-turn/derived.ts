@@ -30,6 +30,9 @@ export interface FaceturnDerivedPlayerStats {
 	hasAllDamagePiercingPassive: boolean;
 	// monkey man: cash stolen from the boss whenever this player deals damage to it
 	stealCashOnDamageDealtAmount: number;
+	// the razor: strike, or deal damage with a move other than Stab, to add a
+	// copy of Stab to hand
+	hasRazorStabPassive: boolean;
 	armorPerTurn: number;
 	// global move cost reduction; distinct from per-card costOverrides
 	moveBaseCostReduction: number;
@@ -89,6 +92,7 @@ export function makeEmptyDerivedStats(): FaceturnDerivedPlayerStats {
 		hasBastionPassive: false,
 		hasAllDamagePiercingPassive: false,
 		stealCashOnDamageDealtAmount: 0,
+		hasRazorStabPassive: false,
 		armorPerTurn: 0,
 		moveBaseCostReduction: 0,
 		burstMoveCostReduction: 0,
@@ -261,8 +265,8 @@ function recomputePassiveSwitch(
 		case "passive_armor_per_turn":
 			stats.armorPerTurn += effect.amount;
 			break;
-		case "passive_flat_damage_bonus":
-			stats.damageBonusFlat += effect.amount;
+		case "passive_razor_stab_on_strike_or_damage":
+			stats.hasRazorStabPassive = true;
 			break;
 		case "passive_negate_damage_percent":
 			stats.damageReductionPercent = Math.max(

@@ -3,15 +3,23 @@ import {
 	listSavedDecks,
 	saveDeck as saveDeckToStorage,
 	deleteSavedDeck as deleteDeckFromStorage,
+	listRecentDecks,
+	deleteRecentDeck as deleteRecentDeckFromStorage,
 	subscribe,
 	type SavedDeck,
 } from "../savedDecks";
 
 export function useSavedDecks() {
 	const [decks, setDecks] = useState<SavedDeck[]>(() => listSavedDecks());
+	const [recentDecks, setRecentDecks] = useState<SavedDeck[]>(() =>
+		listRecentDecks(),
+	);
 
 	useEffect(() => {
-		return subscribe(() => setDecks(listSavedDecks()));
+		return subscribe(() => {
+			setDecks(listSavedDecks());
+			setRecentDecks(listRecentDecks());
+		});
 	}, []);
 
 	function save(
@@ -29,5 +37,9 @@ export function useSavedDecks() {
 		return deleteDeckFromStorage(id);
 	}
 
-	return { decks, save, remove };
+	function removeRecent(id: string) {
+		return deleteRecentDeckFromStorage(id);
+	}
+
+	return { decks, recentDecks, save, remove, removeRecent };
 }

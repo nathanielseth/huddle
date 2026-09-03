@@ -66,7 +66,7 @@ export function crewToCard(crew: CrewCardDisplay): CardProps {
 	};
 }
 
-const MOVE_TAG_LABEL: Record<MoveCardDisplay["moveType"], string> = {
+export const MOVE_TAG_LABEL: Record<MoveCardDisplay["moveType"], string> = {
 	active: "Ongoing",
 	burst: "Burst",
 	slow: "Slow",

@@ -5,6 +5,7 @@ import {
 	recomputePassives,
 	triggerCrewTurnedEffects,
 	applyBloodMoneyOnStrike,
+	maybeTriggerRazorStabGrant,
 } from "../effects";
 import {
 	buildStrikeResolution,
@@ -40,7 +41,10 @@ export const chooseCrewToTurnSpec: InteractionSpec<Interaction> = {
 
 		if (interaction.isStrike) {
 			const striker = state.players.get(interaction.actorId);
-			if (striker) applyBloodMoneyOnStrike(state, striker);
+			if (striker) {
+				applyBloodMoneyOnStrike(state, striker);
+				maybeTriggerRazorStabGrant(striker);
+			}
 		}
 
 		// always set the resolution for this crew turn
@@ -72,7 +76,10 @@ export const chooseCrewToTurnSpec: InteractionSpec<Interaction> = {
 
 			if (interaction.isStrike) {
 				const striker = state.players.get(interaction.actorId);
-				if (striker) applyBloodMoneyOnStrike(state, striker);
+				if (striker) {
+					applyBloodMoneyOnStrike(state, striker);
+					maybeTriggerRazorStabGrant(striker);
+				}
 			}
 
 			state.lastResolution = buildStrikeResolution(

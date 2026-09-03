@@ -3,22 +3,6 @@ import { cn } from "../../../../lib/utils/cn";
 import { toast } from "../../../../lib/utils/toast";
 import { useSavedDecks } from "../../hooks/useSavedDecks";
 import type { SavedDeck } from "../../savedDecks";
-import { decodeDeckCode } from "@shared/games/face-turn/deck-code";
-
-function decodedDeckAsSavedDeck(deck: {
-	bossId: string | null;
-	crewIds: string[];
-	moveIds: string[];
-}): SavedDeck {
-	return {
-		id: `imported-${Date.now()}`,
-		name: "Imported deck",
-		bossId: deck.bossId,
-		crewIds: deck.crewIds,
-		moveIds: deck.moveIds,
-		savedAt: Date.now(),
-	};
-}
 
 export function MyDecksMenu({
 	currentSelections,
@@ -35,11 +19,10 @@ export function MyDecksMenu({
 	disabled: boolean;
 	onLoad: (deck: SavedDeck) => void;
 }) {
-	const { decks, save, remove } = useSavedDecks();
+	const { decks, recentDecks, save, remove, removeRecent } = useSavedDecks();
 	const [open, setOpen] = useState(false);
 	const [naming, setNaming] = useState(false);
 	const [nameDraft, setNameDraft] = useState("");
-	const [importText, setImportText] = useState("");
 
 	const containerRef = useRef<HTMLDivElement>(null);
 
@@ -72,19 +55,9 @@ export function MyDecksMenu({
 		remove(id);
 	}
 
-	function handleImportCode() {
-		const result = decodeDeckCode(importText);
-		if (!result.ok) {
-			toast.error(
-				result.error === "empty"
-					? "Paste a deck code first."
-					: "That code doesn't look right — check for typos.",
-			);
-			return;
-		}
-		onLoad(decodedDeckAsSavedDeck(result.deck));
-		setImportText("");
-		setOpen(false);
+	function handleDeleteRecent(e: MouseEvent, id: string) {
+		e.stopPropagation();
+		removeRecent(id);
 	}
 
 	return (
@@ -93,12 +66,14 @@ export function MyDecksMenu({
 				type="button"
 				disabled={disabled}
 				onClick={() => setOpen((v) => !v)}
-				title="Save this draft, load a saved one, or use a deck code"
+				title="Save this draft, or load a saved or recent one"
 				className={cn(
-					"flex items-center gap-1.5 px-2 py-1 rounded-md text-[10px] font-black tracking-widest uppercase transition-colors",
+					"flex items-center gap-1.5 px-2.5 py-1 rounded-md border text-[10px] font-black tracking-widest uppercase transition-colors",
 					disabled
-						? "text-white/20 cursor-not-allowed"
-						: "text-white/40 hover:text-white/80 cursor-pointer",
+						? "border-white/10 text-white/20 cursor-not-allowed"
+						: open
+							? "border-white/30 bg-white/10 text-white cursor-pointer"
+							: "border-white/15 bg-white/5 text-white/60 hover:bg-white/10 hover:text-white cursor-pointer",
 				)}
 			>
 				<svg
@@ -123,89 +98,137 @@ export function MyDecksMenu({
 			</button>
 
 			{open && (
-				<div className="absolute z-20 top-full left-0 mt-1 w-64 rounded-lg border ft-draft-panel shadow-xl overflow-hidden">
-					<div className="max-h-56 overflow-y-auto">
-						{decks.length === 0 ? (
-							<p className="px-3 py-4 text-[11px] text-white/35 text-center leading-relaxed">
-								No saved decks yet. Build a draft, then save it here to reuse
-								next time.
-							</p>
-						) : (
-							decks.map((deck) => (
-								<div
-									key={deck.id}
-									className="flex items-center border-b border-white/5 last:border-b-0"
+				<div className="absolute z-30 top-full left-0 mt-1 w-64 rounded-lg border ft-draft-panel shadow-xl overflow-hidden">
+					{recentDecks.length > 0 && (
+						<div className="border-b border-white/10">
+							<p className="px-3 pt-2.5 pb-1 text-[9px] font-black uppercase tracking-widest text-white/30 flex items-center gap-1.5">
+								<svg
+									viewBox="0 0 24 24"
+									className="w-2.5 h-2.5"
+									fill="none"
+									stroke="currentColor"
+									strokeWidth={3}
 								>
-									<button
-										type="button"
-										onClick={() => {
-											onLoad(deck);
-											setOpen(false);
-										}}
-										className="flex-1 min-w-0 flex items-center gap-2 px-3 py-2 hover:bg-white/10 text-left transition-colors cursor-pointer"
+									<circle cx={12} cy={12} r={9} />
+									<path
+										d="M12 7v5l3.5 2"
+										strokeLinecap="round"
+										strokeLinejoin="round"
+									/>
+								</svg>
+								Recently used · auto-saved
+							</p>
+							<div className="max-h-40 overflow-y-auto">
+								{recentDecks.map((deck) => (
+									<div
+										key={deck.id}
+										className="flex items-center border-b border-white/5 last:border-b-0"
 									>
-										<span className="min-w-0">
-											<span className="block text-xs font-bold text-white/90 truncate">
-												{deck.name}
-											</span>
-											<span className="block text-[10px] text-white/35">
-												{deck.bossId ? 1 : 0} boss · {deck.crewIds.length} crew
-												· {deck.moveIds.length} moves
-											</span>
-										</span>
-									</button>
-									<button
-										type="button"
-										onClick={(e) => handleDelete(e, deck.id)}
-										title="Delete this saved deck"
-										className="shrink-0 p-2 mr-1 rounded text-white/25 hover:text-red-400 hover:bg-white/10 transition-colors cursor-pointer"
-									>
-										<svg
-											viewBox="0 0 24 24"
-											className="w-3.5 h-3.5"
-											fill="none"
-											stroke="currentColor"
-											strokeWidth={2}
+										<button
+											type="button"
+											onClick={() => {
+												onLoad(deck);
+												setOpen(false);
+											}}
+											className="flex-1 min-w-0 flex items-center gap-2 px-3 py-2 hover:bg-white/10 text-left transition-colors cursor-pointer"
 										>
-											<path
-												d="M3 6h18M8 6V4a2 2 0 012-2h4a2 2 0 012 2v2m3 0-1 14a2 2 0 01-2 2H7a2 2 0 01-2-2L4 6h16z"
-												strokeLinecap="round"
-												strokeLinejoin="round"
-											/>
-										</svg>
-									</button>
-								</div>
-							))
-						)}
-					</div>
+											<span className="min-w-0">
+												<span className="block text-xs font-bold text-white/90 truncate">
+													{deck.name}
+												</span>
+												<span className="block text-[10px] text-white/35">
+													{deck.bossId ? 1 : 0} boss · {deck.crewIds.length}{" "}
+													crew · {deck.moveIds.length} moves
+												</span>
+											</span>
+										</button>
+										<button
+											type="button"
+											onClick={(e) => handleDeleteRecent(e, deck.id)}
+											title="Remove from recently used"
+											className="shrink-0 p-2 mr-1 rounded text-white/25 hover:text-red-400 hover:bg-white/10 transition-colors cursor-pointer"
+										>
+											<svg
+												viewBox="0 0 24 24"
+												className="w-3.5 h-3.5"
+												fill="none"
+												stroke="currentColor"
+												strokeWidth={2}
+											>
+												<path
+													d="M3 6h18M8 6V4a2 2 0 012-2h4a2 2 0 012 2v2m3 0-1 14a2 2 0 01-2 2H7a2 2 0 01-2-2L4 6h16z"
+													strokeLinecap="round"
+													strokeLinejoin="round"
+												/>
+											</svg>
+										</button>
+									</div>
+								))}
+							</div>
+						</div>
+					)}
 
-					<div className="border-t border-white/10 p-2">
-						<div className="flex items-center gap-1.5">
-							<input
-								value={importText}
-								onChange={(e) => {
-									setImportText(e.target.value);
-								}}
-								onKeyDown={(e) => {
-									if (e.key === "Enter") handleImportCode();
-									if (e.key === "Escape") setImportText("");
-								}}
-								placeholder="Paste a deck code…"
-								spellCheck={false}
-								className="flex-1 min-w-0 px-2 py-1.5 rounded bg-black/40 border border-white/15 text-xs text-white/90 placeholder:text-white/30 outline-none focus:border-white/40 font-mono"
-							/>
-							<button
-								type="button"
-								onClick={handleImportCode}
-								disabled={!importText.trim()}
-								className="shrink-0 px-2.5 py-1.5 rounded bg-emerald-500/80 hover:bg-emerald-500 disabled:bg-white/10 disabled:text-white/30 text-black text-[10px] font-black uppercase tracking-wider transition-colors cursor-pointer disabled:cursor-not-allowed"
-							>
-								Load
-							</button>
+					<div className="border-b border-white/10">
+						<p className="px-3 pt-2.5 pb-1 text-[9px] font-black uppercase tracking-widest text-white/30">
+							Saved decks
+						</p>
+						<div className="max-h-56 overflow-y-auto">
+							{decks.length === 0 ? (
+								<p className="px-3 pb-3 text-[11px] text-white/35 leading-relaxed">
+									No saved decks yet. Build a draft, then save it below to reuse
+									next time.
+								</p>
+							) : (
+								decks.map((deck) => (
+									<div
+										key={deck.id}
+										className="flex items-center border-b border-white/5 last:border-b-0"
+									>
+										<button
+											type="button"
+											onClick={() => {
+												onLoad(deck);
+												setOpen(false);
+											}}
+											className="flex-1 min-w-0 flex items-center gap-2 px-3 py-2 hover:bg-white/10 text-left transition-colors cursor-pointer"
+										>
+											<span className="min-w-0">
+												<span className="block text-xs font-bold text-white/90 truncate">
+													{deck.name}
+												</span>
+												<span className="block text-[10px] text-white/35">
+													{deck.bossId ? 1 : 0} boss · {deck.crewIds.length}{" "}
+													crew · {deck.moveIds.length} moves
+												</span>
+											</span>
+										</button>
+										<button
+											type="button"
+											onClick={(e) => handleDelete(e, deck.id)}
+											title="Delete this saved deck"
+											className="shrink-0 p-2 mr-1 rounded text-white/25 hover:text-red-400 hover:bg-white/10 transition-colors cursor-pointer"
+										>
+											<svg
+												viewBox="0 0 24 24"
+												className="w-3.5 h-3.5"
+												fill="none"
+												stroke="currentColor"
+												strokeWidth={2}
+											>
+												<path
+													d="M3 6h18M8 6V4a2 2 0 012-2h4a2 2 0 012 2v2m3 0-1 14a2 2 0 01-2 2H7a2 2 0 01-2-2L4 6h16z"
+													strokeLinecap="round"
+													strokeLinejoin="round"
+												/>
+											</svg>
+										</button>
+									</div>
+								))
+							)}
 						</div>
 					</div>
 
-					<div className="border-t border-white/10 p-2">
+					<div className="p-2">
 						{naming ? (
 							<div className="flex flex-col gap-1.5">
 								<div className="flex items-center gap-1.5">

@@ -11,7 +11,10 @@ import {
 } from "@shared/games/face-turn/card-display";
 import type { CrewClass, MoveType } from "@shared/games/face-turn/types";
 import { FACETURN_CONSTANTS } from "@shared/games/face-turn/constants";
-import { encodeDeckCode } from "@shared/games/face-turn/deck-code";
+import {
+	encodeDeckCode,
+	decodeDeckCode,
+} from "@shared/games/face-turn/deck-code";
 import { sendFaceturnAction } from "../actions";
 import { useFaceturnState } from "../hooks/useFaceturnState";
 import { useActionLock } from "../../../hooks/network/useActionLock";
@@ -22,8 +25,9 @@ import {
 	bossToCard,
 	crewToCard,
 	moveToCard,
+	MOVE_TAG_LABEL,
 } from "../components/card/cardAdapters";
-import { SidebarRow, type PickedEntry } from "./drafting/SidebarRow";
+import { PickedSidebarSections, type PickedEntry } from "./drafting/SidebarRow";
 import { MyDecksMenu } from "./drafting/MyDecksMenu";
 import { DraftFooter } from "./drafting/DraftFooter";
 import { PicksDrawer } from "./drafting/PicksDrawer";
@@ -35,12 +39,37 @@ import {
 } from "./drafting/DraftInspectPanel";
 import {
 	DESKTOP_GRID,
+	DESKTOP_GRID_COMPACT,
 	MOBILE_GRID,
 	useDesktopCardSize,
 	useMobileCardSize,
 	useIsDraftMobile,
 } from "./drafting/useResponsiveCardSize";
-import type { SavedDeck } from "../savedDecks";
+import { recordRecentDeck, type SavedDeck } from "../savedDecks";
+
+// sidebar width toggle — collapsed shows compact rows, expanded shows full
+// cards (and the browse grid drops to DESKTOP_GRID_COMPACT's column count
+// to make room). Remembered per device, same pattern as the saved decks.
+const SIDEBAR_EXPANDED_KEY = "huddle_faceturn_sidebar_expanded:v1";
+const SIDEBAR_WIDTH_COMPACT = 288;
+const SIDEBAR_WIDTH_EXPANDED = 340;
+const EXPANDED_CARD_SIZE = 260;
+
+function readSidebarExpanded(): boolean {
+	try {
+		return localStorage.getItem(SIDEBAR_EXPANDED_KEY) === "1";
+	} catch {
+		return false;
+	}
+}
+
+function writeSidebarExpanded(value: boolean): void {
+	try {
+		localStorage.setItem(SIDEBAR_EXPANDED_KEY, value ? "1" : "0");
+	} catch {
+		// best-effort — losing the preference isn't worth surfacing an error
+	}
+}
 
 const CREW_SLOTS = FACETURN_CONSTANTS.CREW_SLOTS;
 const MOVES_PER_DECK = FACETURN_CONSTANTS.MOVES_PER_DECK;
@@ -118,20 +147,42 @@ function buildHaystack(name: string, ...effectParts: (string | undefined)[]) {
 	return [name, ...effectParts.filter(Boolean)].join(" ").toLowerCase();
 }
 
+// search also matches ability-type keywords ("command", "revealed",
+// "ongoing"/"active", "burst", "slow", crew class names) so a query like
+// "reveal" or "ongoi" surfaces every card with that kind of ability, not
+// just cards whose flavor/effect text happens to contain the word
 const BOSS_SEARCH_TEXT = new Map(
 	BOSS_DISPLAY.map((b) => [
 		b.id,
-		buildHaystack(b.name, b.effectText.command, b.effectText.passive),
+		buildHaystack(
+			b.name,
+			b.effectText.command,
+			b.effectText.passive,
+			"command",
+			"passive",
+			"boss",
+		),
 	]),
 );
 const CREW_SEARCH_TEXT = new Map(
 	CREW_DISPLAY.map((c) => [
 		c.id,
-		buildHaystack(c.name, c.effectText.revealed, c.effectText.passive),
+		buildHaystack(
+			c.name,
+			c.effectText.revealed,
+			c.effectText.passive,
+			c.effectText.revealed ? "revealed" : undefined,
+			c.effectText.passive ? "passive" : undefined,
+			c.class,
+			CARD_VARIANT_THEME[c.class].label,
+		),
 	]),
 );
 const MOVE_SEARCH_TEXT = new Map(
-	MOVE_DISPLAY.map((m) => [m.id, buildHaystack(m.name, m.effectText)]),
+	MOVE_DISPLAY.map((m) => [
+		m.id,
+		buildHaystack(m.name, m.effectText, m.moveType, MOVE_TAG_LABEL[m.moveType]),
+	]),
 );
 
 function CountBadge({ current, max }: { current: number; max: number }) {
@@ -279,7 +330,7 @@ function ToolbarPopover({
 			{open && !disabled && (
 				<div
 					className={cn(
-						"absolute z-20 top-full right-0 mt-1 rounded-lg border ft-draft-panel shadow-xl overflow-hidden",
+						"absolute z-30 top-full right-0 mt-1 rounded-lg border ft-draft-panel shadow-xl overflow-hidden",
 						panelClassName ?? "w-64",
 					)}
 				>
@@ -554,6 +605,171 @@ function ClearPopover({
 	);
 }
 
+// share the current draft as a pasteable code — code shown in a readonly
+// field (not just an invisible clipboard write) so it still works if the
+// browser blocks clipboard access, and separate from Import for a clear
+// mental model: Export always reads the live draft, Import always replaces it
+function ExportPanel({
+	disabled,
+	code,
+	onCopy,
+}: {
+	disabled: boolean;
+	code: string;
+	onCopy: () => void;
+}) {
+	const [open, setOpen] = useState(false);
+	const inputRef = useRef<HTMLInputElement>(null);
+
+	return (
+		<ToolbarPopover
+			label="Export"
+			active={false}
+			open={open}
+			disabled={disabled}
+			onToggle={() => setOpen((v) => !v)}
+			panelClassName="w-72"
+			icon={
+				<svg
+					viewBox="0 0 24 24"
+					className="w-3.5 h-3.5"
+					fill="none"
+					stroke="currentColor"
+					strokeWidth={2}
+				>
+					<path
+						d="M9 9h10a1 1 0 011 1v10a1 1 0 01-1 1H9a1 1 0 01-1-1V10a1 1 0 011-1z"
+						strokeLinecap="round"
+						strokeLinejoin="round"
+					/>
+					<path
+						d="M5 15H4a1 1 0 01-1-1V4a1 1 0 011-1h10a1 1 0 011 1v1"
+						strokeLinecap="round"
+						strokeLinejoin="round"
+					/>
+				</svg>
+			}
+		>
+			<div className="p-3 flex flex-col gap-2">
+				<p className="text-[10px] text-white/40 leading-relaxed">
+					Share this code so someone else can load your exact draft.
+				</p>
+				<input
+					ref={inputRef}
+					readOnly
+					value={code}
+					onFocus={(e) => e.currentTarget.select()}
+					spellCheck={false}
+					className="w-full px-2 py-1.5 rounded bg-black/40 border border-white/15 text-xs text-white/90 outline-none font-mono"
+				/>
+				<button
+					type="button"
+					onClick={() => {
+						inputRef.current?.select();
+						onCopy();
+					}}
+					className="px-2.5 py-1.5 rounded bg-emerald-500/80 hover:bg-emerald-500 text-black text-[10px] font-black uppercase tracking-wider transition-colors cursor-pointer"
+				>
+					Copy
+				</button>
+			</div>
+		</ToolbarPopover>
+	);
+}
+
+// paste a code from someone else and load it — mirror of ExportPanel,
+// always replaces the current draft (confirmation happens upstream)
+function ImportPanel({
+	disabled,
+	onImport,
+}: {
+	disabled: boolean;
+	onImport: (deck: {
+		bossId: string | null;
+		crewIds: string[];
+		moveIds: string[];
+	}) => void;
+}) {
+	const [open, setOpen] = useState(false);
+	const [text, setText] = useState("");
+
+	function handleLoad() {
+		const result = decodeDeckCode(text);
+		if (!result.ok) {
+			toast.error(
+				result.error === "empty"
+					? "Paste a deck code first."
+					: "That code doesn't look right — check for typos.",
+			);
+			return;
+		}
+		onImport(result.deck);
+		setText("");
+		setOpen(false);
+	}
+
+	return (
+		<ToolbarPopover
+			label="Import"
+			active={false}
+			open={open}
+			disabled={disabled}
+			onToggle={() => {
+				setOpen((v) => !v);
+				setText("");
+			}}
+			panelClassName="w-72"
+			icon={
+				<svg
+					viewBox="0 0 24 24"
+					className="w-3.5 h-3.5"
+					fill="none"
+					stroke="currentColor"
+					strokeWidth={2}
+				>
+					<path
+						d="M12 3v12m0 0l-4-4m4 4l4-4"
+						strokeLinecap="round"
+						strokeLinejoin="round"
+					/>
+					<path
+						d="M4 17v2a2 2 0 002 2h12a2 2 0 002-2v-2"
+						strokeLinecap="round"
+						strokeLinejoin="round"
+					/>
+				</svg>
+			}
+		>
+			<div className="p-3 flex flex-col gap-2">
+				<p className="text-[10px] text-white/40 leading-relaxed">
+					Paste a deck code to load it — this replaces your current picks.
+				</p>
+				<input
+					autoFocus
+					value={text}
+					onChange={(e) => {
+						setText(e.target.value);
+					}}
+					onKeyDown={(e) => {
+						if (e.key === "Enter") handleLoad();
+					}}
+					placeholder="Paste a deck code…"
+					spellCheck={false}
+					className="w-full px-2 py-1.5 rounded bg-black/40 border border-white/15 text-xs text-white/90 placeholder:text-white/30 outline-none focus:border-white/40 font-mono"
+				/>
+				<button
+					type="button"
+					onClick={handleLoad}
+					disabled={!text.trim()}
+					className="px-2.5 py-1.5 rounded bg-emerald-500/80 hover:bg-emerald-500 disabled:bg-white/10 disabled:text-white/30 text-black text-[10px] font-black uppercase tracking-wider transition-colors cursor-pointer disabled:cursor-not-allowed"
+				>
+					Load
+				</button>
+			</div>
+		</ToolbarPopover>
+	);
+}
+
 function FilterSection({
 	label,
 	children,
@@ -660,14 +876,57 @@ export function DraftingPhase() {
 	}
 	const [query, setQuery] = useState("");
 	const [picksOpen, setPicksOpen] = useState(false);
-	const desktopGrid = useDesktopCardSize();
+	// desktop-only: compact rows vs full cards in the "Your draft" rail.
+	// Harmless to compute on mobile too — just unused there.
+	const [sidebarExpanded, setSidebarExpanded] = useState(readSidebarExpanded);
+	function toggleSidebarExpanded() {
+		setSidebarExpanded((prev) => {
+			const next = !prev;
+			writeSidebarExpanded(next);
+			return next;
+		});
+	}
+	const desktopGrid = useDesktopCardSize(
+		sidebarExpanded ? DESKTOP_GRID_COMPACT : DESKTOP_GRID,
+	);
 	const mobileGrid = useMobileCardSize();
 	const { containerRef, cardSize } = isMobile ? mobileGrid : desktopGrid;
-	const gridMetrics = isMobile ? MOBILE_GRID : DESKTOP_GRID;
+	const gridMetrics = isMobile
+		? MOBILE_GRID
+		: sidebarExpanded
+			? DESKTOP_GRID_COMPACT
+			: DESKTOP_GRID;
 
 	const myDraft = ft?.draft?.[playerId];
 	const { locked, runLocked } = useActionLock(myDraft?.isDraftLocked);
 	const { inspect, modal: inspectModal } = useCardInspect();
+
+	// auto-save the in-progress draft to a rotating "recently used" slot
+	// (max 3), debounced, so it isn't lost if the player forgets to hit
+	// "Save current draft". Separate from the named manual saves.
+	const autoSaveBossId = secret?.draftSelections?.bossId ?? null;
+	const autoSaveCrewIds = secret?.draftSelections?.crewIds ?? [];
+	const autoSaveMoveIds = secret?.draftSelections?.moveIds ?? [];
+	const autoSaveCrewKey = autoSaveCrewIds.join(",");
+	const autoSaveMoveKey = autoSaveMoveIds.join(",");
+	useEffect(() => {
+		if (
+			!autoSaveBossId &&
+			autoSaveCrewIds.length === 0 &&
+			autoSaveMoveIds.length === 0
+		) {
+			return;
+		}
+		const timeout = setTimeout(() => {
+			recordRecentDeck({
+				bossId: autoSaveBossId,
+				crewIds: autoSaveCrewIds,
+				moveIds: autoSaveMoveIds,
+			});
+		}, 1500);
+		return () => clearTimeout(timeout);
+		// eslint-disable-next-line react-hooks/exhaustive-deps
+	}, [autoSaveBossId, autoSaveCrewKey, autoSaveMoveKey]);
 
 	// desktop drafting gets the richer side-by-side panel; mobile keeps the
 	// swipeable full-screen modal above since there's no room for a rail
@@ -776,34 +1035,76 @@ export function DraftingPhase() {
 		return true;
 	});
 
-	// pick order: boss first, crew, then moves
+	// pick order: boss first, crew, then moves. pickedInspectTargets/
+	// pickedCardProps are built in lockstep with pickedEntries (same
+	// indices) so a right-click on any picked row can open the inspect
+	// panel and cycle through the rest of the picks
 	const pickedEntries: PickedEntry[] = [];
+	const pickedInspectTargets: DraftInspectTarget[] = [];
 	if (sel.bossId) {
 		const boss = BOSS_DISPLAY.find((b) => b.id === sel.bossId);
-		if (boss)
-			pickedEntries.push({ kind: "boss", id: boss.id, name: boss.name });
+		if (boss) {
+			pickedEntries.push({
+				kind: "boss",
+				id: boss.id,
+				name: boss.name,
+				artSrc: boss.artSrc,
+			});
+			pickedInspectTargets.push({ kind: "boss", display: boss });
+		}
 	}
 	for (const crewId of sel.crewIds) {
 		const crew = DRAFTABLE_CREW.find((c) => c.id === crewId);
-		if (crew)
+		if (crew) {
 			pickedEntries.push({
 				kind: "crew",
 				id: crew.id,
 				name: crew.name,
 				crewClass: crew.class,
 				isReserve: crew.id === reserveCrewId,
+				artSrc: crew.artSrc,
 			});
+			pickedInspectTargets.push({ kind: "crew", display: crew });
+		}
 	}
 	for (const moveId of sel.moveIds) {
 		const move = MOVE_DISPLAY.find((m) => m.id === moveId);
-		if (move)
+		if (move) {
 			pickedEntries.push({
 				kind: "move",
 				id: move.id,
 				name: move.name,
 				baseCost: move.baseCost,
 				moveType: move.moveType,
+				artSrc: move.artSrc,
 			});
+			pickedInspectTargets.push({ kind: "move", display: move });
+		}
+	}
+	const pickedCardProps: CardProps[] = pickedInspectTargets.map((t) => {
+		if (t.kind === "boss") return bossToCard(t.display);
+		if (t.kind === "crew") return crewToCard(t.display);
+		return moveToCard(t.display);
+	});
+	// same alignment as pickedCardProps, just keyed for the expanded sidebar
+	// to look full CardProps up by entry without changing PickedEntry's shape
+	const pickedCardPropsByKey = new Map<string, CardProps>(
+		pickedEntries.map((e, i) => [`${e.kind}-${e.id}`, pickedCardProps[i]]),
+	);
+
+	// right-click handler for the sidebar/drawer rows, wired through to the
+	// same triggerInspect used by the browse grid
+	function inspectPickedEntry(entry: PickedEntry) {
+		const index = pickedEntries.findIndex(
+			(e) => e.kind === entry.kind && e.id === entry.id,
+		);
+		if (index === -1) return;
+		triggerInspect(
+			pickedCardProps[index],
+			pickedCardProps,
+			pickedInspectTargets,
+			index,
+		);
 	}
 
 	// select_boss toggles server side, so deselect is re-sending same id
@@ -817,11 +1118,16 @@ export function DraftingPhase() {
 		}
 	}
 
-	// load overwrites, confirm first if picks exist
-	async function loadSavedDeck(deck: SavedDeck) {
+	// load overwrites, confirm first if picks exist. Shared by "My decks"
+	// (named saves/recents) and the Import popover (raw deck codes) —
+	// callers just supply a confirm title appropriate to what's loading
+	async function loadDraftSelections(
+		deck: { bossId: string | null; crewIds: string[]; moveIds: string[] },
+		confirmTitle: string,
+	) {
 		if (pickedEntries.length > 0) {
 			const ok = await modal.confirm({
-				title: `Load "${deck.name}"?`,
+				title: confirmTitle,
 				body: "This replaces everything you've picked so far.",
 				confirmLabel: "Load deck",
 			});
@@ -835,7 +1141,25 @@ export function DraftingPhase() {
 		});
 	}
 
+	function loadSavedDeck(deck: SavedDeck) {
+		return loadDraftSelections(deck, `Load "${deck.name}"?`);
+	}
+
+	function loadImportedDeck(deck: {
+		bossId: string | null;
+		crewIds: string[];
+		moveIds: string[];
+	}) {
+		return loadDraftSelections(deck, "Load imported deck?");
+	}
+
 	function handleDone() {
+		// record immediately on lock-in rather than waiting on the debounce
+		recordRecentDeck({
+			bossId: sel.bossId,
+			crewIds: sel.crewIds,
+			moveIds: sel.moveIds,
+		});
 		runLocked(() => {
 			sendFaceturnAction({ type: "lock_draft" });
 		});
@@ -846,14 +1170,15 @@ export function DraftingPhase() {
 		sendFaceturnAction({ type: "randomize_draft" });
 	}
 
+	const deckCode = encodeDeckCode({
+		bossId: sel.bossId,
+		crewIds: [...sel.crewIds],
+		moveIds: [...sel.moveIds],
+	});
+
 	async function handleCopyCode() {
-		const code = encodeDeckCode({
-			bossId: sel.bossId,
-			crewIds: [...sel.crewIds],
-			moveIds: [...sel.moveIds],
-		});
 		try {
-			await navigator.clipboard.writeText(code);
+			await navigator.clipboard.writeText(deckCode);
 			toast.success("Deck code copied!", { duration: 2000 });
 		} catch {
 			toast.error("Couldn't copy — your browser blocked clipboard access.");
@@ -1283,7 +1608,10 @@ export function DraftingPhase() {
 						setPicksOpen(false);
 					}}
 					entries={pickedEntries}
+					crewMax={crewMax}
+					moveMax={MOVES_PER_DECK}
 					onDeselect={deselect}
+					onInspect={inspectPickedEntry}
 				/>
 
 				{inspectModal}
@@ -1293,7 +1621,14 @@ export function DraftingPhase() {
 
 	return (
 		<div className="flex h-full min-h-0 ft-draft-bg">
-			<div className="w-72 shrink-0 flex flex-col min-h-0 border-r border-white/10">
+			<div
+				className="relative shrink-0 flex flex-col min-h-0 border-r border-white/10 transition-[width] duration-300 ease-out"
+				style={{
+					width: sidebarExpanded
+						? SIDEBAR_WIDTH_EXPANDED
+						: SIDEBAR_WIDTH_COMPACT,
+				}}
+			>
 				<div className="px-4 py-3 border-b border-white/10 flex items-center justify-between shrink-0">
 					<p className="text-[10px] font-black tracking-widest uppercase text-white/40">
 						Your draft
@@ -1307,21 +1642,16 @@ export function DraftingPhase() {
 				</div>
 
 				<div className="flex-1 min-h-0 overflow-y-auto ft-scroll">
-					{pickedEntries.length === 0 ? (
-						<p className="px-4 py-6 text-xs text-white/30 text-center">
-							Nothing drafted yet — pick a boss, crew, and moves on the right.
-						</p>
-					) : (
-						pickedEntries.map((entry) => (
-							<SidebarRow
-								key={`${entry.kind}-${entry.id}`}
-								entry={entry}
-								onDeselect={() => {
-									deselect(entry);
-								}}
-							/>
-						))
-					)}
+					<PickedSidebarSections
+						entries={pickedEntries}
+						crewMax={crewMax}
+						moveMax={MOVES_PER_DECK}
+						onDeselect={deselect}
+						onInspect={inspectPickedEntry}
+						variant={sidebarExpanded ? "expanded" : "compact"}
+						cardPropsByKey={pickedCardPropsByKey}
+						cardSize={EXPANDED_CARD_SIZE}
+					/>
 				</div>
 
 				<DraftFooter
@@ -1334,7 +1664,46 @@ export function DraftingPhase() {
 					locked={locked}
 					pickedCount={pickedEntries.length}
 					onDone={handleDone}
+					showStats={false}
 				/>
+
+				<button
+					type="button"
+					onClick={toggleSidebarExpanded}
+					title={
+						sidebarExpanded
+							? "Collapse to compact list"
+							: "Expand to full cards"
+					}
+					aria-label={
+						sidebarExpanded
+							? "Collapse deck panel"
+							: "Expand deck panel to full cards"
+					}
+					className="absolute top-1/2 -translate-y-1/2 -right-3.5 z-20 w-7 h-14 rounded-md border border-white/15 bg-black/70 hover:bg-black/90 hover:border-white/30 flex items-center justify-center text-white/50 hover:text-white transition-colors cursor-pointer"
+				>
+					<svg
+						viewBox="0 0 24 24"
+						className="w-3.5 h-3.5"
+						fill="none"
+						stroke="currentColor"
+						strokeWidth={2.5}
+					>
+						{sidebarExpanded ? (
+							<path
+								d="M15 6l-6 6 6 6"
+								strokeLinecap="round"
+								strokeLinejoin="round"
+							/>
+						) : (
+							<path
+								d="M9 6l6 6-6 6"
+								strokeLinecap="round"
+								strokeLinejoin="round"
+							/>
+						)}
+					</svg>
+				</button>
 			</div>
 
 			<div className="flex flex-col flex-1 min-h-0">
@@ -1437,42 +1806,15 @@ export function DraftingPhase() {
 					/>
 
 					<div className="flex items-center gap-2 shrink-0 ml-auto">
-						<button
-							type="button"
+						<ImportPanel
+							disabled={locked}
+							onImport={(deck) => void loadImportedDeck(deck)}
+						/>
+						<ExportPanel
 							disabled={pickedEntries.length === 0}
-							onClick={() => void handleCopyCode()}
-							title={
-								pickedEntries.length > 0
-									? "Copy your current draft as a shareable code"
-									: "Pick something first"
-							}
-							className={cn(
-								"flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-xs font-bold uppercase tracking-widest transition-all shrink-0",
-								pickedEntries.length > 0
-									? "border-white/15 bg-white/5 text-white/60 hover:bg-white/10 hover:text-white cursor-pointer"
-									: "border-white/10 text-white/20 cursor-not-allowed",
-							)}
-						>
-							<svg
-								viewBox="0 0 24 24"
-								className="w-3.5 h-3.5"
-								fill="none"
-								stroke="currentColor"
-								strokeWidth={2}
-							>
-								<path
-									d="M9 9h10a1 1 0 011 1v10a1 1 0 01-1 1H9a1 1 0 01-1-1V10a1 1 0 011-1z"
-									strokeLinecap="round"
-									strokeLinejoin="round"
-								/>
-								<path
-									d="M5 15H4a1 1 0 01-1-1V4a1 1 0 011-1h10a1 1 0 011 1v1"
-									strokeLinecap="round"
-									strokeLinejoin="round"
-								/>
-							</svg>
-							Copy code
-						</button>
+							code={deckCode}
+							onCopy={() => void handleCopyCode()}
+						/>
 
 						<button
 							type="button"

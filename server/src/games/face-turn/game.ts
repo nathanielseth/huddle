@@ -243,7 +243,8 @@ export function loadDraftSelections(
 	const seenMoveIds = new Set<string>();
 	for (const id of proposed.moveIds) {
 		if (moveIds.length >= C.MOVES_PER_DECK) break;
-		if (!MOVE_MAP.has(id) || seenMoveIds.has(id)) continue;
+		const moveDef = MOVE_MAP.get(id);
+		if (!moveDef || !isDraftable(moveDef) || seenMoveIds.has(id)) continue;
 		moveIds.push(id);
 		seenMoveIds.add(id);
 	}
@@ -339,7 +340,9 @@ export function randomizeDraftSelections(
 		draft.crewIds.push(pick.id);
 	}
 
-	const availableMoves = MOVES.filter((s) => !draft.moveIds.includes(s.id));
+	const availableMoves = MOVES.filter(
+		(s) => isDraftable(s) && !draft.moveIds.includes(s.id),
+	);
 	while (draft.moveIds.length < maxMoves && availableMoves.length) {
 		const idx = Math.floor(rng() * availableMoves.length);
 		const pick = availableMoves.splice(idx, 1)[0]!;
@@ -382,7 +385,9 @@ function fillRemainingIgnoringDeadPicks(
 	}
 	if (draft.moveIds.length < maxMoves) {
 		const rest = shuffle(
-			MOVES.flatMap((s) => (!draft.moveIds.includes(s.id) ? [s.id] : [])),
+			MOVES.flatMap((s) =>
+				isDraftable(s) && !draft.moveIds.includes(s.id) ? [s.id] : [],
+			),
 			rng,
 		);
 		for (const id of rest) {

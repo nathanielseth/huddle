@@ -1,6 +1,7 @@
 import type { FaceturnServerState, FaceturnServerPlayer } from "../types";
 import type { EffectPrimitive } from "../cards";
 import { CARD_IDS } from "../cards";
+import { FACETURN_CONSTANTS as C } from "../types";
 import { recomputePassives } from "../derived";
 import type { EffectContext, Handler } from "./shared";
 import { getEnemies, resolveTarget } from "./shared";
@@ -67,6 +68,26 @@ function maybeTriggerMonkeyManCashSteal(
 	sourceActor.cash += stolen;
 }
 
+// the razor: adds a copy of Stab to the actor's hand, if under the hand limit.
+// used both when this player strikes and when they deal damage with a move
+// other than Stab itself.
+export function maybeTriggerRazorStabGrant(actor: FaceturnServerPlayer): void {
+	if (!actor.derived.hasRazorStabPassive) return;
+	if (actor.hand.length >= C.HAND_LIMIT) return;
+	actor.hand.push(CARD_IDS.MOVE.STAB);
+}
+
+// razor's passive fires on damage dealt by any move other than Stab
+function maybeTriggerRazorStabOnDamage(
+	sourceActor: FaceturnServerPlayer,
+	dmgDealt: number,
+	moveId: string | undefined,
+): void {
+	if (dmgDealt <= 0) return;
+	if (moveId === CARD_IDS.MOVE.STAB) return;
+	maybeTriggerRazorStabGrant(sourceActor);
+}
+
 // applies life insurance, hp clamp, and on-damage triggers after damage resolved
 function applyResolvedDamageToBoss(
 	state: FaceturnServerState,
@@ -91,6 +112,7 @@ function applyResolvedDamageToBoss(
 		consumeLifeInsuranceProtecting(state, target);
 		maybeTriggerBastionCashBonus(target);
 		maybeTriggerMonkeyManCashSteal(target, sourceActor, dmg);
+		maybeTriggerRazorStabOnDamage(sourceActor, dmg, moveId);
 		return rawAmount;
 	}
 
@@ -100,6 +122,7 @@ function applyResolvedDamageToBoss(
 	target.bossHp = clampHp(target.bossHp - dmg, target.bossMaxHp);
 	maybeTriggerBastionCashBonus(target);
 	maybeTriggerMonkeyManCashSteal(target, sourceActor, dmg);
+	maybeTriggerRazorStabOnDamage(sourceActor, dmg, moveId);
 	return dmg;
 }
 

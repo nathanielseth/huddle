@@ -1,3 +1,5 @@
+import { BOSS_DISPLAY_MAP } from "@shared/games/face-turn/card-display";
+
 // client only draft presets, localStorage backed, server validates card ids on load
 export interface SavedDeck {
 	id: string;
@@ -8,8 +10,19 @@ export interface SavedDeck {
 	savedAt: number;
 }
 
+type Selections = {
+	bossId: string | null;
+	crewIds: readonly string[];
+	moveIds: readonly string[];
+};
+
 const STORAGE_KEY = "huddle_faceturn_decks:v1";
 const MAX_SAVED_DECKS = 20;
+
+// separate, auto-populated tier — no name, no explicit save step. Exists so
+// a draft isn't lost just because the player never hit "Save current draft".
+const RECENT_STORAGE_KEY = "huddle_faceturn_recent_decks:v1";
+const MAX_RECENT_DECKS = 3;
 
 type Listener = () => void;
 const listeners = new Set<Listener>();
@@ -33,7 +46,7 @@ export function subscribe(listener: Listener): () => void {
 }
 
 function handleStorageEvent(e: StorageEvent): void {
-	if (e.key === STORAGE_KEY) notify();
+	if (e.key === STORAGE_KEY || e.key === RECENT_STORAGE_KEY) notify();
 }
 
 function isSavedDeck(v: unknown): v is SavedDeck {
@@ -49,9 +62,9 @@ function isSavedDeck(v: unknown): v is SavedDeck {
 	);
 }
 
-function readAll(): SavedDeck[] {
+function readFrom(key: string): SavedDeck[] {
 	try {
-		const raw = localStorage.getItem(STORAGE_KEY);
+		const raw = localStorage.getItem(key);
 		if (!raw) return [];
 		const parsed: unknown = JSON.parse(raw);
 		if (!Array.isArray(parsed)) return [];
@@ -62,15 +75,18 @@ function readAll(): SavedDeck[] {
 }
 
 // returns false on quota/storage errors so callers can show a message
-function writeAll(decks: SavedDeck[]): boolean {
+function writeTo(key: string, decks: SavedDeck[]): boolean {
 	try {
-		localStorage.setItem(STORAGE_KEY, JSON.stringify(decks));
+		localStorage.setItem(key, JSON.stringify(decks));
 		notify();
 		return true;
 	} catch {
 		return false;
 	}
 }
+
+const readAll = () => readFrom(STORAGE_KEY);
+const writeAll = (decks: SavedDeck[]) => writeTo(STORAGE_KEY, decks);
 
 export function listSavedDecks(): SavedDeck[] {
 	// newest first, most recently saved is most likely wanted
@@ -79,11 +95,7 @@ export function listSavedDecks(): SavedDeck[] {
 
 export function saveDeck(
 	name: string,
-	selections: {
-		bossId: string | null;
-		crewIds: readonly string[];
-		moveIds: readonly string[];
-	},
+	selections: Selections,
 ): SavedDeck | null {
 	const decks = readAll();
 	const entry: SavedDeck = {
@@ -103,4 +115,72 @@ export function saveDeck(
 
 export function deleteSavedDeck(id: string): boolean {
 	return writeAll(readAll().filter((d) => d.id !== id));
+}
+
+// --- recently used (auto-saved) ---------------------------------------
+
+function sameSelections(a: SavedDeck, b: Selections): boolean {
+	if (a.bossId !== b.bossId) return false;
+	if (a.crewIds.length !== b.crewIds.length) return false;
+	if (a.moveIds.length !== b.moveIds.length) return false;
+	const crewA = [...a.crewIds].sort();
+	const crewB = [...b.crewIds].sort();
+	const moveA = [...a.moveIds].sort();
+	const moveB = [...b.moveIds].sort();
+	return (
+		crewA.every((id, i) => id === crewB[i]) &&
+		moveA.every((id, i) => id === moveB[i])
+	);
+}
+
+function autoDeckName(selections: Selections): string {
+	if (selections.bossId) {
+		const boss = BOSS_DISPLAY_MAP.get(selections.bossId);
+		if (boss) return boss.name;
+	}
+	return "Untitled draft";
+}
+
+export function listRecentDecks(): SavedDeck[] {
+	return readFrom(RECENT_STORAGE_KEY).sort((a, b) => b.savedAt - a.savedAt);
+}
+
+// call as the draft changes (debounced by the caller) — dedupes against the
+// most recent entry so mid-edit churn doesn't spam the list, and silently
+// no-ops on an empty draft since there's nothing worth remembering yet
+export function recordRecentDeck(selections: Selections): void {
+	if (
+		!selections.bossId &&
+		selections.crewIds.length === 0 &&
+		selections.moveIds.length === 0
+	) {
+		return;
+	}
+	const decks = readFrom(RECENT_STORAGE_KEY).sort(
+		(a, b) => b.savedAt - a.savedAt,
+	);
+	const [mostRecent] = decks;
+	if (mostRecent && sameSelections(mostRecent, selections)) {
+		mostRecent.savedAt = Date.now();
+		writeTo(RECENT_STORAGE_KEY, decks);
+		return;
+	}
+	const entry: SavedDeck = {
+		id: `recent-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+		name: autoDeckName(selections),
+		bossId: selections.bossId,
+		crewIds: [...selections.crewIds],
+		moveIds: [...selections.moveIds],
+		savedAt: Date.now(),
+	};
+	decks.unshift(entry);
+	while (decks.length > MAX_RECENT_DECKS) decks.pop();
+	writeTo(RECENT_STORAGE_KEY, decks);
+}
+
+export function deleteRecentDeck(id: string): boolean {
+	return writeTo(
+		RECENT_STORAGE_KEY,
+		readFrom(RECENT_STORAGE_KEY).filter((d) => d.id !== id),
+	);
 }

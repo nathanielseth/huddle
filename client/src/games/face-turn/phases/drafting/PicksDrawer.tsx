@@ -1,18 +1,24 @@
 import { AnimatePresence } from "motion/react";
 import * as m from "motion/react-m";
 import { useReducedMotion } from "../../../../hooks/a11y/useReducedMotion";
-import { SidebarRow, type PickedEntry } from "./SidebarRow";
+import { PickedSidebarSections, type PickedEntry } from "./SidebarRow";
 
 export function PicksDrawer({
 	open,
 	onClose,
 	entries,
+	crewMax,
+	moveMax,
 	onDeselect,
+	onInspect,
 }: {
 	open: boolean;
 	onClose: () => void;
 	entries: readonly PickedEntry[];
+	crewMax: number;
+	moveMax: number;
 	onDeselect: (entry: PickedEntry) => void;
+	onInspect?: (entry: PickedEntry) => void;
 }) {
 	const reducedMotion = useReducedMotion();
 
@@ -72,21 +78,13 @@ export function PicksDrawer({
 							className="flex-1 min-h-0 overflow-y-auto overscroll-contain"
 							style={{ touchAction: "pan-y" }}
 						>
-							{entries.length === 0 ? (
-								<p className="px-4 py-8 text-xs text-white/30 text-center">
-									Nothing drafted yet — pick a boss, crew, and moves below.
-								</p>
-							) : (
-								entries.map((entry) => (
-									<SidebarRow
-										key={`${entry.kind}-${entry.id}`}
-										entry={entry}
-										onDeselect={() => {
-											onDeselect(entry);
-										}}
-									/>
-								))
-							)}
+							<PickedSidebarSections
+								entries={entries}
+								crewMax={crewMax}
+								moveMax={moveMax}
+								onDeselect={onDeselect}
+								onInspect={onInspect}
+							/>
 						</div>
 					</m.div>
 				</>
