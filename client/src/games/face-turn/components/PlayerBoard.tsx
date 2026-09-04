@@ -17,6 +17,7 @@ import { useFaceturnState } from "../hooks/useFaceturnState";
 import { useFaceturnInteraction } from "../hooks/useFaceturnInteraction";
 import { useBossCommandPopoverStore } from "../hooks/bossCommandPopoverStore";
 import { useClassActionPopoverStore } from "../hooks/classActionPopoverStore";
+import { useReserveSwapPopoverStore } from "../hooks/reserveSwapPopoverStore";
 import { useArmedMove, useArmedMoveStore } from "../hooks/useArmedMove";
 import {
 	useTargetPickerSession,
@@ -27,7 +28,6 @@ import {
 import { isValidSecondaryTarget } from "../lib/postPlacementLegality";
 import { isPlayerExposed } from "../lib/challengeEligibility";
 import { useIsLegalDropTarget } from "../lib/moveTargetLegality";
-import { useDraggedMoveId } from "../hooks/draggedMoveStore";
 import { useIsActiveMoveDragging } from "../hooks/activeMoveDragStore";
 import type { CrewSlotView } from "@shared/games/face-turn/types";
 
@@ -39,17 +39,13 @@ const DISCARD_PILE_PX = 44;
 function DiscardPile({
 	playerId,
 	discardSize,
-	sellable,
 }: {
 	playerId: string;
 	discardSize: number;
-	sellable: boolean;
 }) {
 	const ref = useBoardTarget({ kind: "discard", playerId });
-	const draggedMoveId = useDraggedMoveId();
 	const activeMoveDragging = useIsActiveMoveDragging();
-	const highlighted =
-		(sellable && draggedMoveId !== null) || activeMoveDragging;
+	const highlighted = activeMoveDragging;
 
 	return (
 		<div
@@ -147,10 +143,17 @@ function CrewSlotCell({
 			: null;
 	const armed = useArmedMove();
 	const pickSecondaryTarget = useArmedMoveStore((s) => s.pickSecondaryTarget);
-	const { ft, playerId, isMyTurn, myPlayer } = useFaceturnState();
+	const { ft, playerId, isMyTurn, myPlayer, secret } = useFaceturnState();
 	const { locked: interactionLocked } = useFaceturnInteraction();
 	const toggleClassActionPopover = useClassActionPopoverStore((s) => s.toggle);
 	const classActionPopoverOpen = useClassActionPopoverStore(
+		(s) =>
+			crewTarget !== null &&
+			crewTarget.playerId === playerId &&
+			s.openForSlotIndex === crewTarget.slotIndex,
+	);
+	const toggleReserveSwapPopover = useReserveSwapPopoverStore((s) => s.toggle);
+	const reserveSwapPopoverOpen = useReserveSwapPopoverStore(
 		(s) =>
 			crewTarget !== null &&
 			crewTarget.playerId === playerId &&
@@ -198,8 +201,27 @@ function CrewSlotCell({
 		!pickerSession;
 	const canOpenClassAction = isOwnFaceDownActionable || classActionPopoverOpen;
 
-	const clickable = isArmedTarget || isPickerTarget || canOpenClassAction;
-	const isPulsing = isArmedTarget || isPickerTarget || classActionPopoverOpen;
+	const hasAnyReserve = Boolean(secret?.reserveCrewIds.some((id) => id !== null));
+	const isOwnFaceUpActionable =
+		crewTarget !== null &&
+		crewTarget.playerId === playerId &&
+		slot.status === "face_up" &&
+		isMyTurn &&
+		Boolean(myPlayer) &&
+		hasAnyReserve &&
+		!armed &&
+		!pickerSession &&
+		!isArmedTarget &&
+		!isPickerTarget;
+	const canOpenReserveSwap = isOwnFaceUpActionable || reserveSwapPopoverOpen;
+
+	const clickable =
+		isArmedTarget || isPickerTarget || canOpenClassAction || canOpenReserveSwap;
+	const isPulsing =
+		isArmedTarget ||
+		isPickerTarget ||
+		classActionPopoverOpen ||
+		reserveSwapPopoverOpen;
 
 	return (
 		<div
@@ -222,6 +244,9 @@ function CrewSlotCell({
 									pickTarget({ kind: "crew", ...crewTarget });
 								if (canOpenClassAction && crewTarget && anchorEl) {
 									toggleClassActionPopover(crewTarget.slotIndex, anchorEl);
+								}
+								if (canOpenReserveSwap && crewTarget && anchorEl) {
+									toggleReserveSwapPopover(crewTarget.slotIndex, anchorEl);
 								}
 							}
 						: undefined
@@ -486,7 +511,6 @@ function BoardFooter({
 				<DiscardPile
 					playerId={player.playerId}
 					discardSize={player.discardSize}
-					sellable={player.hasSellCards}
 				/>
 			) : (
 				<span className="inline-flex items-center gap-1">

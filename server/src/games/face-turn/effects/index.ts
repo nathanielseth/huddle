@@ -117,7 +117,6 @@ export {
 	drawCards,
 	discardFromHand,
 	checkRatQueenDrawTrigger,
-	sellMoveFromHand,
 } from "./draw-discard";
 export {
 	applySupplyDropOnCollect,

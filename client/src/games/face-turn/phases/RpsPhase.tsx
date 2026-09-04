@@ -11,6 +11,7 @@ import { RpsCard } from "./rps/RpsCard";
 import { RpsOutcomeLabel } from "./rps/RpsOutcomeLabel";
 import { RPS_LABEL } from "./rps/rpsLabels";
 import { rpsTeamColorForIndex, type RpsTeamColor } from "./rps/rpsTeamColors";
+import { cn } from "../../../lib/utils/cn";
 
 const CHOICES: RpsChoice[] = ["rock", "paper", "scissors"];
 const OPTION_SIZE = 92;
@@ -22,6 +23,51 @@ const REVEAL_HOLD_MS = 350;
 
 // Who-goes-first suspense lives on the order-choice screen now
 // (RpsOrderChoicePhase.tsx), not here — this phase just picks and reveals.
+
+// tie-only suspense: alternates the displayed "goes first" name a few times
+// before settling on the server's real answer. Pure show — the outcome is
+// already decided server-side by the time this plays, so nothing here can
+// change or "choose" it.
+const FLICKER_STEPS = 8;
+const FLICKER_STEP_MS = 160;
+
+function useTieFlicker(active: boolean, reducedMotion: boolean) {
+	const [flickering, setFlickering] = useState(active);
+	const [favorsRepA, setFavorsRepA] = useState(true);
+	const timersRef = useRef<ReturnType<typeof setTimeout>[]>([]);
+
+	const start = useEffectEvent((shouldFlicker: boolean, noMotion: boolean) => {
+		for (const t of timersRef.current) clearTimeout(t);
+		timersRef.current = [];
+
+		if (!shouldFlicker || noMotion) {
+			timersRef.current.push(setTimeout(() => setFlickering(false), 0));
+			return;
+		}
+
+		timersRef.current.push(setTimeout(() => setFlickering(true), 0));
+		for (let i = 0; i < FLICKER_STEPS; i++) {
+			timersRef.current.push(
+				setTimeout(
+					() => setFavorsRepA((prev) => !prev),
+					i * FLICKER_STEP_MS,
+				),
+			);
+		}
+		timersRef.current.push(
+			setTimeout(() => setFlickering(false), FLICKER_STEPS * FLICKER_STEP_MS),
+		);
+	});
+
+	useEffect(() => {
+		start(active, reducedMotion);
+		return () => {
+			for (const t of timersRef.current) clearTimeout(t);
+		};
+	}, [active, reducedMotion]);
+
+	return { flickering, favorsRepA };
+}
 
 // true once the hold beat has passed and both cards should show their face
 function useShowFaces(resolved: boolean, reducedMotion: boolean) {
@@ -94,6 +140,18 @@ export function RpsPhase() {
 	const resolved = Boolean(ft?.rps && ft.rps.result !== null);
 	const showFaces = useShowFaces(resolved, reducedMotion);
 
+	const settled = resolved && showFaces;
+
+	const wasTie = Boolean(
+		ft?.rps &&
+			ft.rps.player1Choice !== null &&
+			ft.rps.player1Choice === ft.rps.player2Choice,
+	);
+	const { flickering, favorsRepA } = useTieFlicker(
+		resolved && wasTie && showFaces,
+		reducedMotion,
+	);
+
 	// fresh round (rps object identity/choices both cleared server-side):
 	// drop any stale pending choice from a previous round
 	const handleFreshRound = useEffectEvent((rps: RpsState | null) => {
@@ -127,18 +185,25 @@ export function RpsPhase() {
 			ft.rps.player1Choice !== null && ft.rps.player2Choice !== null;
 		return (
 			<div className="ft-panel-ink flex flex-col items-center gap-4 rounded-2xl border border-white/15 px-6 py-7">
-				<p className="ft-eyebrow text-xs text-white/40">
+				<p
+					className={cn(
+						"ft-eyebrow text-xs text-white/40",
+						flickering && "rps-status-flicker",
+					)}
+				>
 					{resolved
-						? p1Won
-							? `${playerMap[repA]?.name ?? repA} goes first`
-							: `${playerMap[repB]?.name ?? repB} goes first`
+						? flickering
+							? `${playerMap[favorsRepA ? repA : repB]?.name ?? "?"} goes first`
+							: p1Won
+								? `${playerMap[repA]?.name ?? repA} goes first`
+								: `${playerMap[repB]?.name ?? repB} goes first`
 						: "Rock Paper Scissors"}
 				</p>
 				<AnimatePresence mode="wait" initial={false}>
 					{bothPicked ? (
 						<m.div
 							key="revealing"
-							className="rps-vs-row flex items-end gap-8"
+							className="rps-vs-row flex items-end justify-center"
 							initial={reducedMotion ? undefined : { opacity: 0 }}
 							animate={{ opacity: 1 }}
 							transition={{ duration: reducedMotion ? 0 : 0.2 }}
@@ -150,8 +215,16 @@ export function RpsPhase() {
 								settled={resolved}
 								teamColor={repATeamColor}
 								outcome={resolved ? (p1Won ? "win" : "lose") : null}
+								className={cn(settled && !p1Won && "rps-plate-loser-exiting")}
 							/>
-							<p className="ft-eyebrow text-sm text-white/30 pb-9">vs</p>
+							<p
+								className={cn(
+									"rps-vs-divider ft-eyebrow text-sm text-white/30 pb-9",
+									settled && "rps-vs-divider-hidden",
+								)}
+							>
+								vs
+							</p>
 							<SpectatorSide
 								name={playerMap[repB]?.name ?? repB}
 								choice={ft.rps.player2Choice}
@@ -159,6 +232,7 @@ export function RpsPhase() {
 								settled={resolved}
 								teamColor={repBTeamColor}
 								outcome={resolved ? (!p1Won ? "win" : "lose") : null}
+								className={cn(settled && p1Won && "rps-plate-loser-exiting")}
 							/>
 						</m.div>
 					) : (
@@ -180,11 +254,20 @@ export function RpsPhase() {
 
 	return (
 		<div className="ft-panel-ink flex flex-col items-center gap-5 rounded-2xl border border-amber-400/40 px-6 py-7">
-			<p className="ft-eyebrow text-xs text-amber-300/80">
+			<p
+				className={cn(
+					"ft-eyebrow text-xs text-amber-300/80",
+					flickering && "rps-status-flicker",
+				)}
+			>
 				{resolved
-					? iWon
-						? "You go first"
-						: "Opponent goes first"
+					? flickering
+						? (favorsRepA ? repA : repB) === playerId
+							? "You go first"
+							: "Opponent goes first"
+						: iWon
+							? "You go first"
+							: "Opponent goes first"
 					: displayChoice
 						? "Waiting for opponent…"
 						: "Choose — winner goes first"}
@@ -235,7 +318,7 @@ export function RpsPhase() {
 				) : (
 					<m.div
 						key="revealing"
-						className="rps-vs-row flex items-end gap-8"
+						className="rps-vs-row flex items-end justify-center"
 						initial={reducedMotion ? undefined : { opacity: 0 }}
 						animate={{ opacity: 1 }}
 						transition={{ duration: reducedMotion ? 0 : 0.2 }}
@@ -253,9 +336,17 @@ export function RpsPhase() {
 								/>
 							}
 							outcome={resolved ? (iWon ? "lose" : "win") : null}
+							className={cn(settled && iWon && "rps-plate-loser-exiting")}
 						/>
 
-						<p className="ft-eyebrow text-sm text-white/30 pb-12">vs</p>
+						<p
+							className={cn(
+								"rps-vs-divider ft-eyebrow text-sm text-white/30 pb-12",
+								settled && "rps-vs-divider-hidden",
+							)}
+						>
+							vs
+						</p>
 
 						{/* your plate: mounts face-down once you've picked, only
 						    after the picker row has fully faded out (mode="wait"
@@ -272,6 +363,7 @@ export function RpsPhase() {
 								/>
 							}
 							outcome={resolved ? (iWon ? "win" : "lose") : null}
+							className={cn(settled && !iWon && "rps-plate-loser-exiting")}
 						/>
 					</m.div>
 				)}
@@ -284,13 +376,15 @@ function RepSlot({
 	label,
 	card,
 	outcome,
+	className,
 }: {
 	label: string;
 	card: React.ReactNode;
 	outcome: "win" | "lose" | null;
+	className?: string;
 }) {
 	return (
-		<div className="flex flex-col items-center gap-2.5">
+		<div className={cn("rps-plate flex flex-col items-center gap-2.5", className)}>
 			<span className="ft-eyebrow text-xs text-white/40">{label}</span>
 			{card}
 			<div className="h-6 flex items-center">
@@ -307,6 +401,7 @@ function SpectatorSide({
 	settled,
 	teamColor,
 	outcome,
+	className,
 }: {
 	name: string;
 	choice: RpsChoice | null;
@@ -314,11 +409,13 @@ function SpectatorSide({
 	settled: boolean;
 	teamColor: RpsTeamColor;
 	outcome: "win" | "lose" | null;
+	className?: string;
 }) {
 	return (
 		<RepSlot
 			label={name}
 			outcome={outcome}
+			className={className}
 			card={
 				<RpsCard
 					choice={choice ?? undefined}

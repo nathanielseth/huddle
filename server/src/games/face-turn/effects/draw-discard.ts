@@ -75,26 +75,6 @@ export function checkRatQueenDrawTrigger(
 	drawCards(player, amount);
 }
 
-export function sellMoveFromHand(
-	state: FaceturnServerState,
-	actor: FaceturnServerPlayer,
-	moveId: string,
-): boolean {
-	if (!actor.derived.hasSellCards) return false;
-	const handIndex = actor.hand.indexOf(moveId);
-	if (handIndex === -1) return false;
-
-	actor.hand.splice(handIndex, 1);
-	actor.discardPile.push(moveId);
-	actor.totalCardsDiscarded++;
-	actor.costOverrides.delete(moveId);
-	actor.cash += actor.derived.sellCardCashAmount;
-
-	maybeTriggerDoctorNorman(actor, 1);
-	checkRatQueenDrawTrigger(actor, state);
-	return true;
-}
-
 export const drawDiscardHandlers = {
 	draw_cards(effect, ctx) {
 		if (effect.type !== "draw_cards") return;

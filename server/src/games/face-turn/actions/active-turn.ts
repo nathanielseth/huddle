@@ -22,7 +22,6 @@ import {
 	firstTurnedSlot,
 	firstUnturnedSlot,
 	turnCrewAtSlot,
-	sellMoveFromHand,
 	resolveStrikeOrExecute,
 	isStrikeDefendedByTerminal,
 	getLivingPlayers,
@@ -302,41 +301,6 @@ export const activeTurnAction: PhaseActionHandler = (
 				return afterAction(state);
 			}
 
-			if (boss.hasCustomCommandLogic && boss.id === "the-dealer") {
-				if (player.reserveCrewId === null) return noOp();
-
-				const foundSlot =
-					action.targetAllySlot !== undefined
-						? (action.targetAllySlot as 0 | 1)
-						: (([0, 1] as const).find(
-								(i) => player.crewIds[i] !== null && player.crewTurned[i],
-							) ?? null);
-
-				if (foundSlot === null) return noOp();
-				const targetSlot = foundSlot;
-				if (!player.crewIds[targetSlot] || !player.crewTurned[targetSlot])
-					return noOp();
-
-				player.bossCommandUsed = true;
-				player.crewIds[targetSlot] = player.reserveCrewId;
-				player.crewTurned[targetSlot] = false;
-				player.derived.crewClassOverrides.delete(targetSlot);
-				player.disabledPassiveSlots.delete(targetSlot);
-				player.reserveCrewId = null;
-				recomputePassives(player, state);
-
-				pushLog(state, {
-					kind: "boss_command_used",
-					actorId: playerId,
-					bossId: boss.id,
-					targetPlayerId: null,
-					succeeded: null,
-				});
-
-				// reserveCrewId is secret-only; resync needed to prevent stale view
-				return afterAction(state);
-			}
-
 			if (boss.hasCustomCommandLogic) {
 				throw new Error(
 					`[face-turn] boss "${boss.id}" declares hasCustomCommandLogic ` +
@@ -369,6 +333,37 @@ export const activeTurnAction: PhaseActionHandler = (
 			});
 
 			// boss commandEffects may mutate secret fields; always resync to avoid stale view
+			return afterAction(state);
+		}
+
+		// standard reserve mechanic: swap a face-up crew for a reserve, which
+		// enters face-down. free, unlimited (each reserve is one-time use by
+		// nature of being consumed), available to every player.
+		case "swap_in_reserve_crew": {
+			const targetSlot = action.targetAllySlot as 0 | 1;
+			if (!player.crewIds[targetSlot] || !player.crewTurned[targetSlot])
+				return noOp();
+
+			const reserveSlot =
+				action.reserveSlot ??
+				player.reserveCrewIds.findIndex((id) => id !== null);
+			const reserveCrewId = player.reserveCrewIds[reserveSlot];
+			if (reserveSlot < 0 || !reserveCrewId) return noOp();
+
+			player.crewIds[targetSlot] = reserveCrewId;
+			player.crewTurned[targetSlot] = false;
+			player.derived.crewClassOverrides.delete(targetSlot);
+			player.disabledPassiveSlots.delete(targetSlot);
+			player.reserveCrewIds[reserveSlot] = null;
+			recomputePassives(player, state);
+
+			pushLog(state, {
+				kind: "crew_reserve_swapped",
+				actorId: playerId,
+				targetSlot,
+			});
+
+			// reserveCrewIds is secret-only; resync needed to prevent stale view
 			return afterAction(state);
 		}
 
@@ -435,13 +430,6 @@ export const activeTurnAction: PhaseActionHandler = (
 					if (p.playerId !== player.playerId) recomputePassives(p, state);
 				}
 			}
-			return makeResult(state, ctx.room.timer?.duration ?? null);
-		}
-
-		case "sell_move": {
-			if (!player.derived.hasSellCards) return noOp();
-			const sold = sellMoveFromHand(state, player, action.moveId);
-			if (!sold) return noOp();
 			return makeResult(state, ctx.room.timer?.duration ?? null);
 		}
 

@@ -21,6 +21,8 @@ import { BossCommandControl } from "./BossCommandControl";
 import { useBossCommandPopoverStore } from "../../hooks/bossCommandPopoverStore";
 import { ClassActionPopover } from "./ClassActionPopover";
 import { useClassActionPopoverStore } from "../../hooks/classActionPopoverStore";
+import { ReserveSwapPopover } from "./ReserveSwapPopover";
+import { useReserveSwapPopoverStore } from "../../hooks/reserveSwapPopoverStore";
 
 export function TurnActionBar() {
 	const { ft, secret, myPlayer, playerId, isMyTurn } = useFaceturnState();
@@ -28,6 +30,7 @@ export function TurnActionBar() {
 	const disarm = useArmedMoveStore((s) => s.disarm);
 	const closeBossCommandPopover = useBossCommandPopoverStore((s) => s.close);
 	const closeClassActionPopover = useClassActionPopoverStore((s) => s.close);
+	const closeReserveSwapPopover = useReserveSwapPopoverStore((s) => s.close);
 
 	// one armed board-click pick at a time, opened via a popover confirm
 	const [armedAction, setArmedAction] = useState<
@@ -38,6 +41,7 @@ export function TurnActionBar() {
 	useEffect(() => disarm, [disarm]);
 	useEffect(() => closeBossCommandPopover, [closeBossCommandPopover]);
 	useEffect(() => closeClassActionPopover, [closeClassActionPopover]);
+	useEffect(() => closeReserveSwapPopover, [closeReserveSwapPopover]);
 
 	// clear armed pick when turn number changes, even if component stays mounted
 	const lastSeenTurnNumber = useRef(ft?.turn?.turnNumber);
@@ -47,6 +51,7 @@ export function TurnActionBar() {
 		setArmedAction(null);
 		closeBossCommandPopover();
 		closeClassActionPopover();
+		closeReserveSwapPopover();
 	}
 
 	// lock keyed on turn number, cash, hand size; clears stale picks on rejection
@@ -61,6 +66,7 @@ export function TurnActionBar() {
 			disarm();
 			closeBossCommandPopover();
 			closeClassActionPopover();
+			closeReserveSwapPopover();
 		},
 		true,
 	);
@@ -205,23 +211,14 @@ export function TurnActionBar() {
 		});
 	}
 
-	// sell drop: dealer passive
-	function sellMoveFromDrop(moveId: string) {
-		runLocked(() => {
-			sendFaceturnAction({ type: "sell_move", moveId });
-		});
-	}
-
 	return (
 		<>
 			<PlayMoveSection
 				getPlayable={(id) => secret?.playableMoveIds.includes(id) ?? false}
 				locked={locked}
-				hasSellCards={myPlayer.hasSellCards}
 				state={ft}
 				playerId={playerId}
 				onDropPlay={playMoveFromDrop}
-				onDropSell={sellMoveFromDrop}
 				onArm={() => setArmedAction(null)}
 			/>
 			<ClassActionPopover
@@ -233,6 +230,11 @@ export function TurnActionBar() {
 					closeBossCommandPopover();
 					setArmedAction(action);
 				}}
+			/>
+			<ReserveSwapPopover
+				armedElsewhere={armed !== null || armedAction !== null}
+				locked={locked}
+				runLocked={runLocked}
 			/>
 			<BossCommandControl
 				armedElsewhere={armed !== null || armedAction !== null}

@@ -139,7 +139,8 @@ export function makeResult(
 	// what caused the original bug (Sucker Punch staying visible in hand
 	// after being played) and, on audit, several more instances of the same
 	// pattern elsewhere in this file (declare_class_action's challenge
-	// window, the card-strike defend window, move-chain windows, sell_move).
+	// window, the card-strike defend window, move-chain windows,
+	// swap_in_reserve_crew).
 	// buildPrivatePayloads is cheap (small array/object copies over a
 	// handful of players), and GameRunner only emits player_secret to
 	// sockets that are already connected, so a redundant identical payload

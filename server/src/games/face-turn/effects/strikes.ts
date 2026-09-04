@@ -116,10 +116,12 @@ function killCrewAtSlot(
 	owner.crewTurned[slot] = false;
 
 	let refilledFromReserve = false;
-	if (owner.reserveCrewId !== null) {
-		owner.crewIds[slot] = owner.reserveCrewId;
+	const reserveIdx = owner.reserveCrewIds.findIndex((id) => id !== null);
+	if (reserveIdx !== -1) {
+		const reserveCrewId = owner.reserveCrewIds[reserveIdx]!;
+		owner.crewIds[slot] = reserveCrewId;
 		owner.crewTurned[slot] = false;
-		owner.reserveCrewId = null;
+		owner.reserveCrewIds[reserveIdx] = null;
 		refilledFromReserve = true;
 	}
 

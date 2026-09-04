@@ -1,3 +1,9 @@
+import {
+	useState,
+	type CSSProperties,
+	type DragEvent,
+	type ReactNode,
+} from "react";
 import { CARD_VARIANT_THEME } from "../../components/card/cardVariants";
 import { CARD_VARIANT_ICON } from "../../components/card/cardIconRegistry";
 import { MOVE_TAG_LABEL } from "../../components/card/cardAdapters";
@@ -24,22 +30,46 @@ export type PickedEntry =
 			artSrc?: string;
 	  };
 
+// drag payload shared with the browse grid
+export const DRAG_MIME_TYPE = "application/x-faceturn-card";
+
+function readDragPayload(
+	e: DragEvent<HTMLElement>,
+): { kind: PickedEntry["kind"]; id: string } | null {
+	try {
+		const raw = e.dataTransfer.getData(DRAG_MIME_TYPE);
+		if (!raw) return null;
+		const parsed: unknown = JSON.parse(raw);
+		if (
+			parsed &&
+			typeof parsed === "object" &&
+			"kind" in parsed &&
+			"id" in parsed &&
+			typeof (parsed as { kind: unknown }).kind === "string" &&
+			typeof (parsed as { id: unknown }).id === "string"
+		) {
+			return parsed as { kind: PickedEntry["kind"]; id: string };
+		}
+		return null;
+	} catch {
+		return null;
+	}
+}
+
 function entryVariant(entry: PickedEntry) {
 	if (entry.kind === "boss") return "boss" as const;
 	if (entry.kind === "crew") return entry.crewClass;
 	return entry.moveType;
 }
 
-// used in the row's title tooltip and to pick which theme tints the row —
-// there's no separate icon/label displaying it anymore
+// used for tooltip and row tint, no separate icon or label
 function entryVariantLabel(entry: PickedEntry): string {
 	if (entry.kind === "boss") return "Boss";
 	if (entry.kind === "crew") return CARD_VARIANT_THEME[entry.crewClass].label;
 	return MOVE_TAG_LABEL[entry.moveType];
 }
 
-// plain art thumbnail, nothing overlaid on top of it — the row's own
-// background already carries the type color, art stays clean
+// row background carries type color, art stays clean
 function ArtThumb({ entry }: { entry: PickedEntry }) {
 	return (
 		<span className="shrink-0 w-10 h-10 rounded-lg overflow-hidden bg-black/30 border border-white/10">
@@ -58,10 +88,7 @@ function ArtThumb({ entry }: { entry: PickedEntry }) {
 	);
 }
 
-// cash cost badge for moves, icon badge for boss/crew — moves already carry
-// their icon-equivalent info (cost) so an icon there would be redundant
-// clutter; boss/crew get the crown/sword/shield/etc icon back, in a circle
-// tinted with the row's own theme color
+// cost badge for moves, icon for boss/crew; icon on move would be redundant
 function TrailingBadge({ entry }: { entry: PickedEntry }) {
 	const variant = entryVariant(entry);
 	const theme = CARD_VARIANT_THEME[variant];
@@ -92,10 +119,7 @@ function TrailingBadge({ entry }: { entry: PickedEntry }) {
 	);
 }
 
-// all three kinds clickable to deselect, right-clickable to inspect; boss
-// reuses select_boss action, no display-only carve-out. The row background
-// itself carries the type color (a quiet tint of the theme accent) instead
-// of a separate badge/icon/dot — title carries the type name for a11y
+// all clickable to deselect, right-click inspect; row bg tint carries type, title has type name
 export function SidebarRow({
 	entry,
 	onDeselect,
@@ -142,10 +166,7 @@ export function SidebarRow({
 	);
 }
 
-// full-card rendering for the expanded sidebar — same Card component the
-// browse grid uses, so it's pixel-identical to what you drafted it from.
-// Click removes it (matches the grid's own click-to-toggle), right-click
-// inspects, same as the compact row.
+// same Card as browse grid for pixel-identical draft preview
 function ExpandedPickedCard({
 	entry,
 	cardProps,
@@ -162,7 +183,7 @@ function ExpandedPickedCard({
 	if (!cardProps) return null;
 	return (
 		<div
-			className="relative flex justify-center px-4 py-3"
+			className="relative min-w-0"
 			onContextMenu={(e) => {
 				if (!onInspect) return;
 				e.preventDefault();
@@ -170,7 +191,7 @@ function ExpandedPickedCard({
 			}}
 		>
 			{entry.kind === "crew" && entry.isReserve && (
-				<span className="absolute top-4 left-6 z-1 px-1.5 py-0.5 rounded text-[9px] font-black uppercase tracking-widest border border-amber-400/50 bg-amber-400/15 text-amber-300 shadow-sm">
+				<span className="absolute top-1 left-1 z-1 px-1 py-px rounded text-[7px] font-black uppercase tracking-wide border border-amber-400/50 bg-amber-400/15 text-amber-300 shadow-sm">
 					Reserve
 				</span>
 			)}
@@ -179,9 +200,85 @@ function ExpandedPickedCard({
 	);
 }
 
-// section header used inside the grouped sidebar list — name, live count,
-// and a colored rule so boss / crew / moves read as clearly separate zones
-// rather than one undifferentiated scroll of rows
+// neutral not tinted, one per section, expanded aspect matches cards
+function DropSlot({
+	kind,
+	label,
+	compact,
+	onDropCard,
+}: {
+	kind: PickedEntry["kind"];
+	label: string;
+	compact: boolean;
+	onDropCard: (kind: PickedEntry["kind"], id: string) => void;
+}) {
+	const [dragOver, setDragOver] = useState(false);
+
+	return (
+		<div
+			onDragOver={(e) => {
+				e.preventDefault();
+				e.dataTransfer.dropEffect = "copy";
+			}}
+			onDragEnter={(e) => {
+				e.preventDefault();
+				setDragOver(true);
+			}}
+			onDragLeave={() => {
+				setDragOver(false);
+			}}
+			onDrop={(e) => {
+				e.preventDefault();
+				setDragOver(false);
+				const payload = readDragPayload(e);
+				if (!payload || payload.kind !== kind) return;
+				onDropCard(payload.kind, payload.id);
+			}}
+			className={cn(
+				"flex items-center justify-center rounded-lg border-2 border-dashed text-center transition-colors",
+				compact
+					? "mx-4 my-2 h-14 px-3 text-[10px] font-black uppercase tracking-widest"
+					: "aspect-63/88 text-[9px] font-black uppercase tracking-wide leading-tight px-1",
+				dragOver
+					? "border-white/50 bg-white/12 text-white"
+					: "border-white/15 bg-black/35 text-white/40",
+			)}
+		>
+			{compact ? `Drag ${label.toLowerCase()} here` : `Drag ${label}`}
+		</div>
+	);
+}
+
+const EXPANDED_GRID_COLUMNS = 3;
+const EXPANDED_GRID_GAP = 8;
+const EXPANDED_GRID_PADDING_X = 14;
+
+function ExpandedGrid({
+	cardSize,
+	children,
+}: {
+	cardSize: number;
+	children: ReactNode;
+}) {
+	return (
+		<div
+			className="grid"
+			style={
+				{
+					gridTemplateColumns: `repeat(${EXPANDED_GRID_COLUMNS}, ${cardSize}px)`,
+					gap: `${EXPANDED_GRID_GAP}px`,
+					padding: `${EXPANDED_GRID_GAP}px ${EXPANDED_GRID_PADDING_X}px`,
+					// set var to pin exact card size, clamp alone won't hold to track
+					"--card-vw-share": `${cardSize}px`,
+				} as CSSProperties
+			}
+		>
+			{children}
+		</div>
+	);
+}
+
+// colored rule separates zones
 function SectionHeader({
 	label,
 	current,
@@ -214,19 +311,14 @@ function SectionHeader({
 	);
 }
 
-// groups the flat pick list into clearly separated Boss / Crew / Moves
-// sections — closer to how physical deckbuilders (and games like LoR) keep
-// each card category visually distinct instead of one undifferentiated
-// list. Always renders all three sections, even on a totally empty draft —
-// the type separation itself is the useful information, not a "start here"
-// message. variant="expanded" swaps the compact rows for full Card
-// renders (desktop only — needs cardPropsByKey + cardSize to do so)
+// grouped sections; expanded variant uses full cards, onDropCard enables drag from browse
 export function PickedSidebarSections({
 	entries,
 	crewMax,
 	moveMax,
 	onDeselect,
 	onInspect,
+	onDropCard,
 	variant = "compact",
 	cardPropsByKey,
 	cardSize,
@@ -236,6 +328,7 @@ export function PickedSidebarSections({
 	moveMax: number;
 	onDeselect: (entry: PickedEntry) => void;
 	onInspect?: (entry: PickedEntry) => void;
+	onDropCard?: (kind: PickedEntry["kind"], id: string) => void;
 	variant?: "compact" | "expanded";
 	cardPropsByKey?: ReadonlyMap<string, CardProps>;
 	cardSize?: number;
@@ -243,9 +336,10 @@ export function PickedSidebarSections({
 	const boss = entries.find((e) => e.kind === "boss");
 	const crew = entries.filter((e) => e.kind === "crew");
 	const moves = entries.filter((e) => e.kind === "move");
+	const expanded = variant === "expanded" && cardPropsByKey && cardSize;
 
 	function renderEntry(entry: PickedEntry) {
-		if (variant === "expanded" && cardPropsByKey && cardSize) {
+		if (expanded) {
 			return (
 				<ExpandedPickedCard
 					key={`${entry.kind}-${entry.id}`}
@@ -267,6 +361,37 @@ export function PickedSidebarSections({
 		);
 	}
 
+	function renderSection(
+		label: string,
+		kind: PickedEntry["kind"],
+		items: PickedEntry[],
+		max: number,
+	) {
+		const dropSlot =
+			onDropCard && items.length < max ? (
+				<DropSlot
+					key={`drop-${kind}`}
+					kind={kind}
+					label={label}
+					compact={!expanded}
+					onDropCard={onDropCard}
+				/>
+			) : null;
+
+		if (items.length === 0 && !dropSlot) {
+			return (
+				<p className="px-4 py-3 text-[11px] text-white/25">Not picked yet</p>
+			);
+		}
+
+		const rendered = [...items.map(renderEntry), dropSlot];
+		return expanded ? (
+			<ExpandedGrid cardSize={cardSize}>{rendered}</ExpandedGrid>
+		) : (
+			rendered
+		);
+	}
+
 	return (
 		<div>
 			<div>
@@ -276,11 +401,7 @@ export function PickedSidebarSections({
 					max={1}
 					accent={CARD_VARIANT_THEME.boss.accent}
 				/>
-				{boss ? (
-					renderEntry(boss)
-				) : (
-					<p className="px-4 py-3 text-[11px] text-white/25">Not picked yet</p>
-				)}
+				{renderSection("Boss", "boss", boss ? [boss] : [], 1)}
 			</div>
 
 			<div>
@@ -290,11 +411,7 @@ export function PickedSidebarSections({
 					max={crewMax}
 					accent={CARD_VARIANT_THEME.striker.accent}
 				/>
-				{crew.length === 0 ? (
-					<p className="px-4 py-3 text-[11px] text-white/25">Not picked yet</p>
-				) : (
-					crew.map(renderEntry)
-				)}
+				{renderSection("Crew", "crew", crew, crewMax)}
 			</div>
 
 			<div>
@@ -304,11 +421,7 @@ export function PickedSidebarSections({
 					max={moveMax}
 					accent={CARD_VARIANT_THEME.burst.accent}
 				/>
-				{moves.length === 0 ? (
-					<p className="px-4 py-3 text-[11px] text-white/25">Not picked yet</p>
-				) : (
-					moves.map(renderEntry)
-				)}
+				{renderSection("Moves", "move", moves, moveMax)}
 			</div>
 		</div>
 	);

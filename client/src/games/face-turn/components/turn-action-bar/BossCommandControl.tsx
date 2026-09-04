@@ -8,10 +8,7 @@ import { useBossCommandPopoverStore } from "../../hooks/bossCommandPopoverStore"
 import { TargetPicker } from "./TargetPicker";
 import { PopoverShell } from "./PopoverShell";
 import { useTargetPickerSite } from "../../hooks/useTargetPickerSite";
-import {
-	razorTargets,
-	dealerTargets,
-} from "../../hooks/crewSlotPickerAdapters";
+import { razorTargets } from "../../hooks/crewSlotPickerAdapters";
 import { BOSS_FACE_TURN_COST } from "../../lib/cost";
 
 type BossCommandFormState = {
@@ -55,7 +52,7 @@ export function BossCommandControl({
 	// arms the shared enemy-target picker (crew or exposed boss) for Face Turn
 	onArmFaceTurn: () => void;
 }) {
-	const { myPlayer, players, playerId, secret } = useFaceturnState();
+	const { myPlayer, players, playerId } = useFaceturnState();
 	const openForPlayerId = useBossCommandPopoverStore((s) => s.openForPlayerId);
 	const anchorEl = useBossCommandPopoverStore((s) => s.anchorEl);
 	const closePopover = useBossCommandPopoverStore((s) => s.close);
@@ -101,16 +98,6 @@ export function BossCommandControl({
 		if (!confirmed) closePopover();
 	}
 
-	type SlotWithIndex = NonNullable<typeof myPlayer>["crewSlots"][number] & {
-		i: number;
-	};
-	const dealerFaceUpSlots: SlotWithIndex[] = myPlayer
-		? myPlayer.crewSlots.reduce<SlotWithIndex[]>((acc, s, i) => {
-				if (s.status === "face_up") acc.push({ ...s, i });
-				return acc;
-			}, [])
-		: [];
-
 	// server has no precomputed eligibleSlots for boss commands, session opens
 	// only after the popover is confirmed and (for razor) a target is chosen
 	useTargetPickerSite(
@@ -140,32 +127,6 @@ export function BossCommandControl({
 					targetPlayerId: target.playerId,
 					targetCrewSlot: target.slotIndex,
 					guessClass,
-				});
-			});
-		},
-	);
-
-	useTargetPickerSite(
-		bossId === "the-dealer" &&
-			confirmed &&
-			!commandDisabled &&
-			!armedElsewhere &&
-			dealerFaceUpSlots.length > 0
-			? {
-					mode: "single",
-					eligible: dealerTargets(
-						dealerFaceUpSlots.map((s) => s.i),
-						playerId,
-					),
-				}
-			: null,
-		(result) => {
-			if (!result.target || result.target.kind !== "crew") return;
-			const { target } = result;
-			runLocked(() => {
-				sendFaceturnAction({
-					type: "use_boss_command",
-					targetAllySlot: target.slotIndex,
 				});
 			});
 		},
@@ -245,44 +206,6 @@ export function BossCommandControl({
 					{targetId
 						? "Then click one of their Crew, then choose a class."
 						: "Pick an enemy target first."}
-				</p>
-				<div className="h-px bg-white/10" />
-				{faceTurnButton}
-			</PopoverShell>
-		);
-	}
-
-	if (bossId === "the-dealer") {
-		const hasReserve = Boolean(secret && secret.reserveCrewId !== null);
-		const hasSwapTarget = dealerFaceUpSlots.length > 0;
-		const dealerDisabled = commandDisabled || !hasReserve || !hasSwapTarget;
-		return (
-			<PopoverShell anchorEl={anchorEl} onDismiss={dismiss}>
-				<span className="text-[10px] uppercase tracking-widest text-white/30">
-					{bossDisplay.name} command
-				</span>
-				<p className="text-xs text-white/60">
-					{bossDisplay.effectText.command}
-				</p>
-				<button
-					type="button"
-					disabled={dealerDisabled}
-					onClick={confirm}
-					className={cn(
-						"px-3 py-1.5 rounded-lg border text-sm font-bold transition-all",
-						dealerDisabled
-							? "border-white/10 text-white/20 cursor-not-allowed"
-							: "border-violet-400/60 text-violet-200 cursor-pointer shadow-[inset_0_0_0_1px_rgba(167,139,250,0.25)]",
-					)}
-				>
-					Use command
-				</button>
-				<p className="text-[11px] text-white/40">
-					{!hasReserve
-						? "You have no reserved Crew to swap in."
-						: !hasSwapTarget
-							? "You need a face-up Crew on your board to swap out."
-							: "Then click a face-up Crew on your board to swap with your reserve."}
 				</p>
 				<div className="h-px bg-white/10" />
 				{faceTurnButton}

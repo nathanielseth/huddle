@@ -76,6 +76,12 @@ export type LogEntry =
 	  }
 	| {
 			readonly seq: number;
+			readonly kind: "crew_reserve_swapped";
+			readonly actorId: string;
+			readonly targetSlot: 0 | 1;
+	  }
+	| {
+			readonly seq: number;
 			readonly kind: "challenge_declared";
 			readonly challengerId: string;
 			readonly actorId: string;

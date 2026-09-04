@@ -115,10 +115,6 @@ export interface FaceturnsPlayerView {
 	readonly isEliminated: boolean;
 	readonly teamIndex: number;
 	readonly mulliganDecided: boolean;
-
-	// the-dealer passive: discard a move from hand for cash on own turn
-	readonly hasSellCards: boolean;
-	readonly sellCardCashAmount: number;
 }
 
 export type PendingActionType =
@@ -423,7 +419,8 @@ export interface FaceturnsSecret {
 	// slot index to crew id; hidden until face-up
 	readonly crewAssignments: Readonly<Record<number, string>>;
 
-	readonly reserveCrewId: string | null;
+	// reserve slots, in draft order; standard players have 1, the Dealer has 2
+	readonly reserveCrewIds: readonly (string | null)[];
 
 	// temporary per-turn cost overrides from discount effects
 	readonly costOverrides: Readonly<Record<string, number>>;

@@ -1,4 +1,11 @@
-import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import {
+	useEffect,
+	useMemo,
+	useRef,
+	useState,
+	type DragEvent,
+	type ReactNode,
+} from "react";
 import "../board.css";
 import { cn } from "../../../lib/utils/cn";
 import { modal } from "../../../lib/utils/modal";
@@ -27,7 +34,11 @@ import {
 	moveToCard,
 	MOVE_TAG_LABEL,
 } from "../components/card/cardAdapters";
-import { PickedSidebarSections, type PickedEntry } from "./drafting/SidebarRow";
+import {
+	PickedSidebarSections,
+	DRAG_MIME_TYPE,
+	type PickedEntry,
+} from "./drafting/SidebarRow";
 import { MyDecksMenu } from "./drafting/MyDecksMenu";
 import { DraftFooter } from "./drafting/DraftFooter";
 import { PicksDrawer } from "./drafting/PicksDrawer";
@@ -51,9 +62,13 @@ import { recordRecentDeck, type SavedDeck } from "../savedDecks";
 // cards (and the browse grid drops to DESKTOP_GRID_COMPACT's column count
 // to make room). Remembered per device, same pattern as the saved decks.
 const SIDEBAR_EXPANDED_KEY = "huddle_faceturn_sidebar_expanded:v1";
-const SIDEBAR_WIDTH_COMPACT = 288;
-const SIDEBAR_WIDTH_EXPANDED = 340;
-const EXPANDED_CARD_SIZE = 260;
+// widened per feedback — the compact rail felt cramped even before the
+// expanded-cards mode existed
+const SIDEBAR_WIDTH_COMPACT = 340;
+// wide enough for a legible 3-across mini grid: 3 × 130px cards + gaps +
+// padding = 434px, so 440 leaves a little slack for the scrollbar
+const SIDEBAR_WIDTH_EXPANDED = 440;
+const EXPANDED_CARD_SIZE = 130;
 
 function readSidebarExpanded(): boolean {
 	try {
@@ -72,7 +87,14 @@ function writeSidebarExpanded(value: boolean): void {
 }
 
 const CREW_SLOTS = FACETURN_CONSTANTS.CREW_SLOTS;
+const RESERVE_CREW_SLOTS = FACETURN_CONSTANTS.RESERVE_CREW_SLOTS;
 const MOVES_PER_DECK = FACETURN_CONSTANTS.MOVES_PER_DECK;
+
+// reserve crew is standard for every boss; the Dealer gets one extra
+// reserve slot via passive_extra_reserve_crew (mirrors game.ts server-side)
+function reserveSlotCountFor(bossId: string | null): number {
+	return bossId === "the-dealer" ? RESERVE_CREW_SLOTS + 1 : RESERVE_CREW_SLOTS;
+}
 
 const DRAFTABLE_CREW = CREW_DISPLAY.filter(isDraftable);
 
@@ -200,7 +222,7 @@ function CountBadge({ current, max }: { current: number; max: number }) {
 	);
 }
 
-// overlay stamp for dealer reserve crew card, pointer events none so it doesn't block selection
+// overlay stamp for a reserve crew card, pointer events none so it doesn't block selection
 function ReserveStamp() {
 	return (
 		<div className="pointer-events-none absolute inset-0 z-10 flex items-center justify-center">
@@ -997,8 +1019,7 @@ export function DraftingPhase() {
 	if (!ft || ft.phase !== "drafting" || !secret?.draftSelections) return null;
 
 	const sel = secret.draftSelections;
-	const isDealer = sel.bossId === "the-dealer";
-	const crewMax = isDealer ? CREW_SLOTS + 1 : CREW_SLOTS;
+	const crewMax = CREW_SLOTS + reserveSlotCountFor(sel.bossId);
 
 	const bossDone = sel.bossId !== null;
 	const crewDone = sel.crewIds.length === crewMax;
@@ -1007,11 +1028,9 @@ export function DraftingPhase() {
 	const crewFull = sel.crewIds.length >= crewMax;
 	const movesFull = sel.moveIds.length >= MOVES_PER_DECK;
 
-	// dealer reserve crew index mirrors server assignment
-	const reserveCrewId =
-		isDealer && sel.crewIds.length > CREW_SLOTS
-			? sel.crewIds[CREW_SLOTS]
-			: null;
+	// reserve crew ids mirror server assignment: everything from CREW_SLOTS
+	// onward is a reserve slot (standard 1, or 2 for the Dealer)
+	const reserveCrewIds = new Set(sel.crewIds.slice(CREW_SLOTS));
 
 	// status ("picked"/"unpicked") filter applies consistently on every tab,
 	// same as variant filtering which already happened above
@@ -1061,7 +1080,7 @@ export function DraftingPhase() {
 				id: crew.id,
 				name: crew.name,
 				crewClass: crew.class,
-				isReserve: crew.id === reserveCrewId,
+				isReserve: reserveCrewIds.has(crew.id),
 				artSrc: crew.artSrc,
 			});
 			pickedInspectTargets.push({ kind: "crew", display: crew });
@@ -1116,6 +1135,73 @@ export function DraftingPhase() {
 		} else if (entry.kind === "move") {
 			sendFaceturnAction({ type: "deselect_move", moveId: entry.id });
 		}
+	}
+
+	// drag source for every browse-grid card — payload just carries enough
+	// to route the drop, the actual add logic (and its guards) live in
+	// handleDropCard below so drag/drop can't add a card the corresponding
+	// click handler wouldn't have allowed.
+	//
+	// Without a custom drag image, the browser's default ghost is a
+	// full-size, full-opacity snapshot of the source card — huge next to
+	// the small sidebar. First attempt swapped in a small <img> of the
+	// card's art, but that loads asynchronously and setDragImage has to be
+	// called synchronously inside dragstart — so the browser was
+	// snapshotting the image before (or without) my size/opacity styling
+	// ever applied, landing back at something big and fully opaque. A
+	// small text+color chip has no load race: it's plain DOM/CSS, ready
+	// the instant it's created, so the size and opacity always apply.
+	function handleCardDragStart(
+		e: DragEvent<HTMLElement>,
+		kind: PickedEntry["kind"],
+		id: string,
+		cardProps: CardProps,
+	) {
+		e.dataTransfer.setData(DRAG_MIME_TYPE, JSON.stringify({ kind, id }));
+		e.dataTransfer.effectAllowed = "copy";
+
+		const accent = CARD_VARIANT_THEME[cardProps.variant].accent;
+		const preview = document.createElement("div");
+		preview.textContent = cardProps.title;
+		Object.assign(preview.style, {
+			position: "fixed",
+			top: "-1000px",
+			left: "-1000px",
+			maxWidth: "140px",
+			padding: "6px 10px",
+			borderRadius: "8px",
+			background: accent,
+			color: "#000",
+			font: "800 11px system-ui, sans-serif",
+			textTransform: "uppercase",
+			letterSpacing: "0.03em",
+			whiteSpace: "nowrap",
+			overflow: "hidden",
+			textOverflow: "ellipsis",
+			opacity: "0.9",
+			pointerEvents: "none",
+		});
+		document.body.appendChild(preview);
+		e.dataTransfer.setDragImage(preview, 16, 16);
+		requestAnimationFrame(() => {
+			preview.remove();
+		});
+	}
+
+	// drop target handler for the sidebar's DropSlots — same guards as the
+	// grid's own click-to-add (already selected / section full = no-op)
+	function handleDropCard(kind: PickedEntry["kind"], id: string) {
+		if (kind === "boss") {
+			sendFaceturnAction({ type: "select_boss", bossId: id });
+			return;
+		}
+		if (kind === "crew") {
+			if (sel.crewIds.includes(id) || crewFull) return;
+			sendFaceturnAction({ type: "select_crew", crewId: id });
+			return;
+		}
+		if (sel.moveIds.includes(id) || movesFull) return;
+		sendFaceturnAction({ type: "select_move", moveId: id });
 	}
 
 	// load overwrites, confirm first if picks exist. Shared by "My decks"
@@ -1227,6 +1313,8 @@ export function DraftingPhase() {
 						const selected = sel.bossId === boss.id;
 						return {
 							key: `boss:${boss.id}`,
+							kind: "boss" as const,
+							id: boss.id,
 							cardProps: bossToCard(boss),
 							selected,
 							isReserve: false,
@@ -1239,9 +1327,11 @@ export function DraftingPhase() {
 						const selected = sel.crewIds.includes(crew.id);
 						return {
 							key: `crew:${crew.id}`,
+							kind: "crew" as const,
+							id: crew.id,
 							cardProps: crewToCard(crew),
 							selected,
-							isReserve: crew.id === reserveCrewId,
+							isReserve: reserveCrewIds.has(crew.id),
 							onClick: () => {
 								if (selected) {
 									sendFaceturnAction({
@@ -1259,6 +1349,8 @@ export function DraftingPhase() {
 						const selected = sel.moveIds.includes(move.id);
 						return {
 							key: `move:${move.id}`,
+							kind: "move" as const,
+							id: move.id,
 							cardProps: moveToCard(move),
 							selected,
 							isReserve: false,
@@ -1333,6 +1425,10 @@ export function DraftingPhase() {
 					{allEntries.map((entry, i) => (
 						<div
 							key={entry.key}
+							draggable
+							onDragStart={(e) =>
+								handleCardDragStart(e, entry.kind, entry.id, entry.cardProps)
+							}
 							className={cn(
 								"relative group transition-opacity",
 								entry.selected && "opacity-45",
@@ -1383,6 +1479,10 @@ export function DraftingPhase() {
 						return (
 							<div
 								key={boss.id}
+								draggable
+								onDragStart={(e) =>
+									handleCardDragStart(e, "boss", boss.id, cardProps)
+								}
 								className={cn(
 									"relative group transition-opacity",
 									selected && "opacity-45",
@@ -1435,10 +1535,14 @@ export function DraftingPhase() {
 					{allFilteredCrew.map((crew, i) => {
 						const selected = sel.crewIds.includes(crew.id);
 						const cardProps = crewCycleItems[i];
-						const isReserve = crew.id === reserveCrewId;
+						const isReserve = reserveCrewIds.has(crew.id);
 						return (
 							<div
 								key={crew.id}
+								draggable
+								onDragStart={(e) =>
+									handleCardDragStart(e, "crew", crew.id, cardProps)
+								}
 								className={cn(
 									"relative group transition-opacity",
 									selected && "opacity-45",
@@ -1503,6 +1607,10 @@ export function DraftingPhase() {
 						return (
 							<div
 								key={move.id}
+								draggable
+								onDragStart={(e) =>
+									handleCardDragStart(e, "move", move.id, cardProps)
+								}
 								className={cn(
 									"relative group transition-opacity",
 									selected && "opacity-45",
@@ -1648,6 +1756,7 @@ export function DraftingPhase() {
 						moveMax={MOVES_PER_DECK}
 						onDeselect={deselect}
 						onInspect={inspectPickedEntry}
+						onDropCard={handleDropCard}
 						variant={sidebarExpanded ? "expanded" : "compact"}
 						cardPropsByKey={pickedCardPropsByKey}
 						cardSize={EXPANDED_CARD_SIZE}
@@ -1680,11 +1789,11 @@ export function DraftingPhase() {
 							? "Collapse deck panel"
 							: "Expand deck panel to full cards"
 					}
-					className="absolute top-1/2 -translate-y-1/2 -right-3.5 z-20 w-7 h-14 rounded-md border border-white/15 bg-black/70 hover:bg-black/90 hover:border-white/30 flex items-center justify-center text-white/50 hover:text-white transition-colors cursor-pointer"
+					className="absolute top-1/2 -translate-y-1/2 -right-3 z-20 w-6 h-11 rounded-full border border-white/15 bg-white/8 backdrop-blur-sm shadow-md flex items-center justify-center text-white/50 hover:text-white hover:bg-white/15 hover:border-white/30 transition-colors cursor-pointer"
 				>
 					<svg
 						viewBox="0 0 24 24"
-						className="w-3.5 h-3.5"
+						className="w-3 h-3"
 						fill="none"
 						stroke="currentColor"
 						strokeWidth={2.5}

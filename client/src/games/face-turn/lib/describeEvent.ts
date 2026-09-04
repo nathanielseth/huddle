@@ -241,6 +241,8 @@ export function describeLogEntry(
 						: " — wrong.";
 			return `${name(entry.actorId)} used ${boss}'s Boss Command${target}${result}`;
 		}
+		case "crew_reserve_swapped":
+			return `${name(entry.actorId)} swapped in a reserve crew`;
 		case "challenge_declared":
 			return `${name(entry.challengerId)} is challenging ${name(entry.actorId)}`;
 		case "challenge_resolved":

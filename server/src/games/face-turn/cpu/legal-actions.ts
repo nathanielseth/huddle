@@ -213,12 +213,18 @@ function legalActiveTurnActions(
 		}
 	}
 
-	if (player.derived.hasSellCards) {
-		const seenSellIds = new Set<string>();
-		for (const moveId of player.hand) {
-			if (seenSellIds.has(moveId)) continue;
-			seenSellIds.add(moveId);
-			actions.push({ type: "sell_move", moveId });
+	// standard reserve mechanic: swap a face-up crew for any available reserve
+	for (let i = 0; i < player.reserveCrewIds.length; i++) {
+		if (player.reserveCrewIds[i] === null) continue;
+		for (let slotIdx = 0; slotIdx < 2; slotIdx++) {
+			const slot = slotIdx as 0 | 1;
+			if (player.crewIds[slot] && player.crewTurned[slot]) {
+				actions.push({
+					type: "swap_in_reserve_crew",
+					targetAllySlot: slot,
+					reserveSlot: i,
+				});
+			}
 		}
 	}
 
@@ -447,17 +453,6 @@ function legalBossCommandActions(
 		return actions;
 	}
 
-	if (boss.id === CARD_IDS.BOSS.THE_DEALER) {
-		if (player.reserveCrewId === null) return [];
-		for (let i = 0; i < 2; i++) {
-			const slot = i as 0 | 1;
-			if (player.crewIds[slot] && player.crewTurned[slot]) {
-				actions.push({ type: "use_boss_command", targetAllySlot: slot });
-			}
-		}
-		return actions;
-	}
-
 	actions.push({ type: "use_boss_command" });
 	for (const enemy of getEnemies(state, player.playerId)) {
 		actions.push({ type: "use_boss_command", targetPlayerId: enemy.playerId });
@@ -473,8 +468,6 @@ function legalFaceTurnActions(
 	const actions: FaceturnsAction[] = [];
 
 	for (const enemy of getEnemies(state, player.playerId)) {
-		if (isStrikeDefendedByTerminal(enemy)) continue;
-
 		const faceDownSlots = eligibleFaceDownSlots(enemy);
 		const faceUpSlots = eligibleFaceUpSlots(enemy);
 
@@ -794,26 +787,6 @@ function legalInteractionActions(
 			return interaction.eligibleTargetIds.map((targetPlayerId) => ({
 				type: "resolve_bear_bones_steal_pick" as const,
 				targetPlayerId,
-			}));
-
-		case "watcher_hide_offer": {
-			const actions: FaceturnsAction[] = [
-				{ type: "resolve_watcher_hide_offer" },
-			];
-			for (const target of interaction.eligibleTargets) {
-				actions.push({
-					type: "resolve_watcher_hide_offer",
-					targetPlayerId: target.playerId,
-					slot: target.slot,
-				});
-			}
-			return actions;
-		}
-
-		case "watcher_steal_pick":
-			return [...new Set(interaction.revealedCards)].map((cardId) => ({
-				type: "resolve_watcher_steal_pick" as const,
-				cardId,
 			}));
 
 		case "bear_bones_bonus_strike": {

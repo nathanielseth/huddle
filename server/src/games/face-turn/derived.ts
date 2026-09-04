@@ -63,10 +63,6 @@ export interface FaceturnDerivedPlayerStats {
 	// failed challenge discards the false flag active move instead of turning crew
 	hasFalseFlag: boolean;
 
-	// dealer passive may sell a Move from hand
-	hasSellCards: boolean;
-	sellCardCashAmount: number;
-
 	// void legs choice at turn start
 	hasVoidLegsChoice: boolean;
 	voidLegsDiscardCost: number;
@@ -108,8 +104,6 @@ export function makeEmptyDerivedStats(): FaceturnDerivedPlayerStats {
 		supplyDropCashAmount: 0,
 		hasLifeInsurance: false,
 		hasFalseFlag: false,
-		hasSellCards: false,
-		sellCardCashAmount: 0,
 		hasVoidLegsChoice: false,
 		voidLegsDiscardCost: 0,
 		voidLegsDamage: 0,
@@ -304,9 +298,9 @@ function recomputePassiveSwitch(
 		case "passive_false_flag":
 			stats.hasFalseFlag = true;
 			break;
-		case "passive_sell_moves_for_cash":
-			stats.hasSellCards = true;
-			stats.sellCardCashAmount += effect.cashAmount;
+		case "passive_extra_reserve_crew":
+			// draft-time only (see getReserveCrewSlotCount in game.ts); no
+			// live/recomputed stat needed here
 			break;
 		case "passive_optional_discard_for_damage_per_turn":
 			stats.hasVoidLegsChoice = true;

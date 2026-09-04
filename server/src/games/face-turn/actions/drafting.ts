@@ -1,13 +1,14 @@
 import type { PhaseActionHandler } from "./types";
 import { noOpResult } from "./types";
 import { FACETURN_CONSTANTS as C } from "../types";
-import { CARD_IDS, BOSS_MAP, CREW_MAP, MOVE_MAP, isDraftable } from "../cards";
+import { BOSS_MAP, CREW_MAP, MOVE_MAP, isDraftable } from "../cards";
 import {
 	randomizeEmptyDraftSlots,
 	loadDraftSelections,
 	isDraftValid,
 	finalizeDraft,
 	dealOpeningHand,
+	getRequiredCrewCount,
 } from "../game";
 import { makeResult } from "../action-results";
 
@@ -29,11 +30,8 @@ export const draftingAction: PhaseActionHandler = (
 			// re-clicking same boss deselects
 			draft.bossId = draft.bossId === action.bossId ? null : action.bossId;
 
-			// switching from dealer reduces crew cap, trim extra from end
-			const newCrewCap =
-				draft.bossId === CARD_IDS.BOSS.THE_DEALER
-					? C.CREW_SLOTS + 1
-					: C.CREW_SLOTS;
+			// switching bosses may change the reserve crew count, trim extra from end
+			const newCrewCap = getRequiredCrewCount(draft.bossId);
 			if (draft.crewIds.length > newCrewCap) {
 				draft.crewIds = draft.crewIds.slice(0, newCrewCap);
 			}
@@ -47,10 +45,7 @@ export const draftingAction: PhaseActionHandler = (
 				draft.crewIds.includes(action.crewId)
 			)
 				return noOp();
-			const crewCap =
-				draft.bossId === CARD_IDS.BOSS.THE_DEALER
-					? C.CREW_SLOTS + 1
-					: C.CREW_SLOTS;
+			const crewCap = getRequiredCrewCount(draft.bossId);
 			if (draft.crewIds.length >= crewCap) return noOp();
 			draft.crewIds.push(action.crewId);
 			break;

@@ -175,7 +175,8 @@ export type EffectPrimitive =
 			type: "command_guess_crew_class_turn_if_correct";
 	  }
 	| {
-			type: "command_replace_crew_from_reserve";
+			type: "command_discard_hand_for_cash";
+			cashPerCard: number;
 	  }
 	// damages enemy boss equal to actor's armor, then empties actor's armor
 	| {
@@ -209,8 +210,7 @@ export type EffectPrimitive =
 			damage: number;
 	  }
 	| {
-			type: "passive_sell_moves_for_cash";
-			cashAmount: number;
+			type: "passive_extra_reserve_crew";
 	  }
 	| {
 			type: "passive_watcher_hide_on_challenge_win";
@@ -491,7 +491,7 @@ const EFFECT_TARGETING_TABLE = {
 	passive_damage_random_enemy_on_move_played: { scope: "none" },
 	passive_armor_per_turn: { scope: "self" },
 	passive_optional_discard_for_damage_per_turn: { scope: "self" },
-	passive_sell_moves_for_cash: { scope: "self" },
+	passive_extra_reserve_crew: { scope: "self" },
 	passive_watcher_hide_on_challenge_win: { scope: "self" },
 	passive_armor_on_ally_crew_turn: { scope: "self" },
 	passive_negate_damage_percent: { scope: "self" },
@@ -528,7 +528,7 @@ const EFFECT_TARGETING_TABLE = {
 	passive_self_damage_and_cash_per_turn: { scope: "self" },
 
 	command_guess_crew_class_turn_if_correct: { scope: "none" },
-	command_replace_crew_from_reserve: { scope: "none" },
+	command_discard_hand_for_cash: { scope: "self" },
 } satisfies Record<EffectPrimitive["type"], EffectTargeting>;
 
 export const EFFECT_TARGETING: Readonly<
@@ -609,8 +609,8 @@ const BOSS_MECHANICS: Record<
 		passiveEffects: [{ type: "passive_watcher_hide_on_challenge_win" }],
 	},
 	"the-dealer": {
-		commandEffects: [{ type: "command_replace_crew_from_reserve" }],
-		passiveEffects: [{ type: "passive_sell_moves_for_cash", cashAmount: 1 }],
+		commandEffects: [{ type: "command_discard_hand_for_cash", cashPerCard: 1 }],
+		passiveEffects: [{ type: "passive_extra_reserve_crew" }],
 	},
 	"the-razor": {
 		commandEffects: [{ type: "command_guess_crew_class_turn_if_correct" }],

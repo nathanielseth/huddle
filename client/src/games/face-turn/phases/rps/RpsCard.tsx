@@ -20,13 +20,6 @@ export interface RpsCardProps {
 	layoutId?: string;
 }
 
-const TONE_RING: Record<NonNullable<RpsCardProps["tone"]>, string> = {
-	neutral: "border-white/15",
-	selected: "border-amber-400",
-	win: "border-sky-400",
-	lose: "border-rose-500",
-};
-
 const TONE_GLOW: Record<NonNullable<RpsCardProps["tone"]>, string> = {
 	neutral: "",
 	selected: "shadow-[0_0_18px_rgba(251,191,36,0.35)]",
@@ -63,8 +56,7 @@ export function RpsCard({
 				{/* back: face-down, always the "unrevealed" state — same card back art as everywhere else */}
 				<div
 					className={cn(
-						"rps-face-back border-2 transition-colors overflow-hidden",
-						TONE_RING[tone],
+						"rps-face-back overflow-hidden",
 						TONE_GLOW[tone],
 					)}
 				>
@@ -81,8 +73,7 @@ export function RpsCard({
 				    "art" area holds the revealed hand-sign */}
 				<div
 					className={cn(
-						"rps-face-front rps-art-face border-2 transition-colors",
-						TONE_RING[tone],
+						"rps-face-front rps-art-face",
 						TONE_GLOW[tone],
 					)}
 					style={

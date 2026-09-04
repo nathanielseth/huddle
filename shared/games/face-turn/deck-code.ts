@@ -3,7 +3,7 @@ import { FACETURN_CONSTANTS } from "./constants";
 
 // deck codes: fixed width indices into display tables, crc8 checksum, base32; append only, bump version on reorder
 const NONE_INDEX = 0xff;
-const CREW_SLOT_COUNT = 3; // max crew slots across all bosses
+const CREW_SLOT_COUNT = 4; // max crew slots across all bosses (2 face-up + up to 2 reserve, the Dealer's cap)
 const MOVE_SLOT_COUNT = FACETURN_CONSTANTS.MOVES_PER_DECK;
 
 interface CodeTable {

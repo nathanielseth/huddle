@@ -200,8 +200,6 @@ function buildPlayerView(
 		isEliminated: state.eliminatedPlayers.has(player.playerId),
 		teamIndex: player.teamIndex,
 		mulliganDecided: player.mulliganDecided,
-		hasSellCards: player.derived.hasSellCards,
-		sellCardCashAmount: player.derived.sellCardCashAmount,
 	};
 }
 
@@ -381,7 +379,7 @@ export function buildSecretForPlayer(
 				.map((id, i): [number, string | null] => [i, id])
 				.filter((entry): entry is [number, string] => entry[1] !== null),
 		),
-		reserveCrewId: player.reserveCrewId,
+		reserveCrewIds: [...player.reserveCrewIds],
 		costOverrides: Object.fromEntries(player.costOverrides),
 		draftSelections: player.draftSelections
 			? {

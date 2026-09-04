@@ -212,7 +212,9 @@ function redealFaceDownCrew(
 				visible.add(player.crewIds[slot]);
 			}
 		}
-		if (player.reserveCrewId) visible.add(player.reserveCrewId);
+		for (const id of player.reserveCrewIds) {
+			if (id) visible.add(id);
+		}
 	}
 
 	const observer = state.players.get(observerSeat);
@@ -221,7 +223,9 @@ function redealFaceDownCrew(
 			const slot = i as 0 | 1;
 			if (observer.crewIds[slot]) visible.add(observer.crewIds[slot]);
 		}
-		if (observer.reserveCrewId) visible.add(observer.reserveCrewId);
+		for (const id of observer.reserveCrewIds) {
+			if (id) visible.add(id);
+		}
 	}
 
 	const pool = shuffle(
@@ -243,9 +247,12 @@ function redealFaceDownCrew(
 			// fallback: if pool is exhausted, keep the original hidden id
 		}
 
-		if (player.reserveCrewId && !visible.has(player.reserveCrewId)) {
-			const drawn = pool.pop();
-			if (drawn) player.reserveCrewId = drawn;
+		for (let i = 0; i < player.reserveCrewIds.length; i++) {
+			const id = player.reserveCrewIds[i];
+			if (id && !visible.has(id)) {
+				const drawn = pool.pop();
+				if (drawn) player.reserveCrewIds[i] = drawn;
+			}
 		}
 	}
 }

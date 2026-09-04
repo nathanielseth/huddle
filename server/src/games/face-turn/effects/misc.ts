@@ -192,10 +192,19 @@ export const miscHandlers = {
 	become_also_hider() {},
 	become_also_defender() {},
 	command_guess_crew_class_turn_if_correct() {},
-	command_replace_crew_from_reserve() {},
+	// dealer command: discard the whole hand, gain cashPerCard per card
+	// discarded. routed through discardFromHand so it triggers the same
+	// discard-synergy effects (doctor norman, rat queen) as any other discard.
+	command_discard_hand_for_cash(effect, ctx) {
+		if (effect.type !== "command_discard_hand_for_cash") return;
+		const handSize = ctx.actor.hand.length;
+		const discarded = discardFromHand(ctx.actor, handSize, ctx.state);
+		ctx.actor.cash += discarded.length * effect.cashPerCard;
+	},
 	passive_all_damage_is_piercing() {},
 	passive_armor_on_ally_crew_turn() {},
 	passive_disable_all_enemy_crew_passives() {},
+	passive_extra_reserve_crew() {},
 	passive_reduce_class_action_costs() {},
 	passive_steal_cash_on_damage_dealt() {},
 	passive_razor_stab_on_strike_or_damage() {},
@@ -207,7 +216,6 @@ export const miscHandlers = {
 	passive_heal_on_move_played() {},
 	passive_damage_random_enemy_on_move_played() {},
 	passive_armor_per_turn() {},
-	passive_sell_moves_for_cash() {},
 	passive_optional_discard_for_damage_per_turn() {},
 	passive_negate_damage_percent() {},
 	passive_reduce_all_move_costs() {},

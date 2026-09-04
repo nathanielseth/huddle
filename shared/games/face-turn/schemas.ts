@@ -106,6 +106,16 @@ const UseBossCommandSchema = z.object({
 	targetPlayerId: z.string().optional(),
 });
 
+// standard reserve mechanic: swap a face-up (turned) crew for a reserve,
+// which enters face-down. free, available to every player, not a boss command.
+// reserveSlot picks which reserve to bring in when a player has more than one
+// (currently only the Dealer, via passive_extra_reserve_crew).
+const SwapInReserveCrewSchema = z.object({
+	type: z.literal("swap_in_reserve_crew"),
+	targetAllySlot: z.number().int().min(0).max(1),
+	reserveSlot: z.number().int().min(0).optional(),
+});
+
 const UseFaceTurnSchema = z.object({
 	type: z.literal("use_face_turn"),
 	targetPlayerId: z.string(),
@@ -229,11 +239,6 @@ const ResolveBearBonesStealPickSchema = z.object({
 	targetPlayerId: z.string(),
 });
 
-const SellMoveSchema = z.object({
-	type: z.literal("sell_move"),
-	moveId: z.string(),
-});
-
 // void legs: at start of turn, may discard 1 card for 5 damage
 const ResolveVoidLegsChoiceSchema = z.object({
 	type: z.literal("resolve_void_legs_choice"),
@@ -317,6 +322,7 @@ export const FaceturnsActionSchema = z.discriminatedUnion("type", [
 	PlayMoveSchema,
 	DeclareClassActionSchema,
 	UseBossCommandSchema,
+	SwapInReserveCrewSchema,
 	UseFaceTurnSchema,
 	EndTurnSchema,
 	ChallengeSchema,
@@ -339,7 +345,6 @@ export const FaceturnsActionSchema = z.discriminatedUnion("type", [
 	ResolveTacticalSupportHideOfferSchema,
 	ResolveBearBonesBonusStrikeSchema,
 	ResolveBearBonesStealPickSchema,
-	SellMoveSchema,
 	ResolveVoidLegsChoiceSchema,
 	ResolveBackgroundCheckGuessSchema,
 	ResolveWatcherHideOfferSchema,

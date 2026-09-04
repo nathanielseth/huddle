@@ -17,18 +17,14 @@ export function PlayMoveSection({
 	playerId,
 	state,
 	locked,
-	hasSellCards,
 	onDropPlay,
-	onDropSell,
 	onArm,
 }: {
 	getPlayable: (moveId: string) => boolean;
 	playerId: string;
 	state: FaceturnsState;
 	locked: boolean;
-	hasSellCards: boolean;
 	onDropPlay: (moveId: string, primaryTarget: BoardTarget) => void;
-	onDropSell: (moveId: string) => void;
 	onArm: () => void;
 }) {
 	const arm = useArmedMoveStore((s) => s.arm);
@@ -55,22 +51,16 @@ export function PlayMoveSection({
 
 	const isValidTarget = useCallback(
 		(target: BoardTarget, moveId: string): boolean => {
-			// sell is unconditional on card playability, gated only on hasSellCards
-			if (target.kind === "discard") return hasSellCards;
 			return isValidMoveTarget(moveId, target, {
 				state,
 				selfPlayerId: playerId,
 			});
 		},
-		[hasSellCards, state, playerId],
+		[state, playerId],
 	);
 
 	const handleDrop = useCallback(
 		(moveId: string, target: BoardTarget) => {
-			if (target.kind === "discard") {
-				onDropSell(moveId);
-				return;
-			}
 			if (getMovePostPlacementTarget(moveId) !== null) {
 				// needs a secondary pick, arm instead of completing
 				arm(moveId, target);
@@ -79,7 +69,7 @@ export function PlayMoveSection({
 			}
 			onDropPlay(moveId, target);
 		},
-		[onDropSell, arm, onArm, onDropPlay],
+		[arm, onArm, onDropPlay],
 	);
 
 	// register hand controller and slots together; disable drag while armed to prevent overlap

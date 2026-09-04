@@ -55,7 +55,9 @@ export interface FaceturnServerPlayer {
 	crewIds: [string | null, string | null];
 	crewTurned: [boolean, boolean];
 
-	reserveCrewId: string | null;
+	// reserve slots, in draft order; standard players have C.RESERVE_CREW_SLOTS
+	// (1), the Dealer has one extra via passive_extra_reserve_crew
+	reserveCrewIds: (string | null)[];
 
 	hand: string[];
 	deck: string[];

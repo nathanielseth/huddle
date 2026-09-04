@@ -74,7 +74,7 @@ export function makeServerPlayer(
 		lastHpZeroCause: null,
 		crewIds: [null, null],
 		crewTurned: [false, false],
-		reserveCrewId: null,
+		reserveCrewIds: [],
 		hand: [],
 		deck: [],
 		discardPile: [],
@@ -204,6 +204,17 @@ export function setTurnOrderAfterRps(
 	state.turnOrder = turnOrder;
 }
 
+// reserve crew is standard for every boss (C.RESERVE_CREW_SLOTS); the Dealer's
+// passive_extra_reserve_crew grants one additional reserve slot on top of that
+export function getReserveCrewSlotCount(bossId: string | null): number {
+	if (bossId === CARD_IDS.BOSS.THE_DEALER) return C.RESERVE_CREW_SLOTS + 1;
+	return C.RESERVE_CREW_SLOTS;
+}
+
+export function getRequiredCrewCount(bossId: string | null): number {
+	return C.CREW_SLOTS + getReserveCrewSlotCount(bossId);
+}
+
 export function isDraftValid(player: FaceturnServerPlayer): boolean {
 	const draft = player.draftSelections;
 	if (!draft?.bossId) return false;
@@ -211,8 +222,7 @@ export function isDraftValid(player: FaceturnServerPlayer): boolean {
 	const boss = BOSS_MAP.get(draft.bossId);
 	if (!boss) return false;
 
-	const requiredCrewCount =
-		draft.bossId === CARD_IDS.BOSS.THE_DEALER ? C.CREW_SLOTS + 1 : C.CREW_SLOTS;
+	const requiredCrewCount = getRequiredCrewCount(draft.bossId);
 	if (draft.crewIds.length !== requiredCrewCount) return false;
 	if (draft.moveIds.length !== C.MOVES_PER_DECK) return false;
 
@@ -227,8 +237,7 @@ export function loadDraftSelections(
 	const bossId =
 		proposed.bossId && BOSS_MAP.has(proposed.bossId) ? proposed.bossId : null;
 
-	const crewCap =
-		bossId === CARD_IDS.BOSS.THE_DEALER ? C.CREW_SLOTS + 1 : C.CREW_SLOTS;
+	const crewCap = getRequiredCrewCount(bossId);
 	const crewIds: string[] = [];
 	const seenCrewIds = new Set<string>();
 	for (const id of proposed.crewIds) {
@@ -264,13 +273,17 @@ export function finalizeDraft(
 	player.bossMaxHp = boss.maxHp;
 	player.bossArmor = boss.startingArmor ?? 0;
 
-	// dealer drafts 3 crew: 2 in normal slots, 1 in reserve
+	// everyone drafts CREW_SLOTS face-up crew plus reserve crew (standard
+	// count from getReserveCrewSlotCount; the Dealer gets one extra reserve
+	// via passive_extra_reserve_crew)
 	for (let i = 0; i < Math.min(draft.crewIds.length, C.CREW_SLOTS); i++) {
 		player.crewIds[i as 0 | 1] = draft.crewIds[i]!;
 	}
-	if (boss.id === CARD_IDS.BOSS.THE_DEALER) {
-		player.reserveCrewId = draft.crewIds[C.CREW_SLOTS] ?? null;
-	}
+	const reserveSlotCount = getReserveCrewSlotCount(boss.id);
+	player.reserveCrewIds = Array.from(
+		{ length: reserveSlotCount },
+		(_, i) => draft.crewIds[C.CREW_SLOTS + i] ?? null,
+	);
 
 	player.deck = shuffle(draft.moveIds, rng);
 	player.draftSelections = null;
@@ -325,8 +338,7 @@ export function randomizeDraftSelections(
 		draft.bossId = BOSSES[Math.floor(rng() * BOSSES.length)]!.id;
 	}
 
-	const maxCrewes =
-		draft.bossId === CARD_IDS.BOSS.THE_DEALER ? C.CREW_SLOTS + 1 : C.CREW_SLOTS;
+	const maxCrewes = getRequiredCrewCount(draft.bossId);
 	const maxMoves = C.MOVES_PER_DECK;
 
 	// check existing manual picks before filling, so prerequisite cards can still be added later

@@ -91,11 +91,40 @@
 	position: relative;
 }
 
+/* reveal settling into a winner: the loser's plate collapses to zero width
+   (max-width and opacity) so the winner glides into the row's true center
+   instead of just fading in place. The "vs" divider collapses alongside it
+   so no dangling gap is left where the loser used to sit. */
+.rps-plate {
+	overflow: hidden;
+	max-width: 200px;
+	transition:
+		max-width 0.45s cubic-bezier(0.4, 0, 0.2, 1),
+		opacity 0.35s ease;
+}
+
+.rps-plate-loser-exiting {
+	max-width: 0;
+	opacity: 0;
+	pointer-events: none;
+}
+
+.rps-vs-divider {
+	margin: 0 32px;
+	transition:
+		opacity 0.3s ease,
+		margin 0.45s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.rps-vs-divider-hidden {
+	margin: 0;
+	opacity: 0;
+}
+
 /* suspense flicker: rapid background pulse, driven by a class toggle in JS
-   — used on the go-first/go-second status text (RpsPhase spectator view)
-   and, tie-only, on the go-first/second buttons themselves
-   (RpsOrderChoicePhase). Pure CSS, no client-side randomness — just
-   dramatizing an already-decided (or still-freely-choosable) moment. */
+   — used on the tie-only "goes first" label during the rps reveal
+   (RpsPhase). Pure CSS, no client-side randomness — just dramatizing an
+   already-decided moment before it settles on the real answer. */
 .rps-status-flicker {
 	background-color: rgba(251, 191, 36, 0.22);
 	box-shadow: inset 0 0 0 1px rgba(251, 191, 36, 0.5);
