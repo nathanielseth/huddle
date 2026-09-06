@@ -3,7 +3,7 @@ import {
 	useMemo,
 	useRef,
 	useState,
-	type DragEvent,
+	type CSSProperties,
 	type ReactNode,
 } from "react";
 import "../board.css";
@@ -34,12 +34,9 @@ import {
 	moveToCard,
 	MOVE_TAG_LABEL,
 } from "../components/card/cardAdapters";
-import {
-	PickedSidebarSections,
-	DRAG_MIME_TYPE,
-	type PickedEntry,
-} from "./drafting/SidebarRow";
+import { PickedSidebarSections, type PickedEntry } from "./drafting/SidebarRow";
 import { MyDecksMenu } from "./drafting/MyDecksMenu";
+import { SaveDeckControl } from "./drafting/SaveDeckControl";
 import { DraftFooter } from "./drafting/DraftFooter";
 import { PicksDrawer } from "./drafting/PicksDrawer";
 import { MobileBrowseHeader } from "./drafting/MobileBrowseHeader";
@@ -52,23 +49,25 @@ import {
 	DESKTOP_GRID,
 	DESKTOP_GRID_COMPACT,
 	MOBILE_GRID,
-	useDesktopCardSize,
-	useMobileCardSize,
 	useIsDraftMobile,
 } from "./drafting/useResponsiveCardSize";
+import {
+	draftDropTargetRegistry,
+	setDraftDraggedOverTarget,
+	type DraftDropKind,
+} from "./drafting/draftDropTargets";
 import { recordRecentDeck, type SavedDeck } from "../savedDecks";
+import { useCardDrag, type DragPosition } from "../hooks/useCardDrag";
+import {
+	createDragPositionStore,
+	type DragPositionStore,
+} from "../hooks/dragPositionStore";
+import { DragPortal } from "../components/hand/DragPortal";
 
-// sidebar width toggle — collapsed shows compact rows, expanded shows full
-// cards (and the browse grid drops to DESKTOP_GRID_COMPACT's column count
-// to make room). Remembered per device, same pattern as the saved decks.
 const SIDEBAR_EXPANDED_KEY = "huddle_faceturn_sidebar_expanded:v1";
-// widened per feedback — the compact rail felt cramped even before the
-// expanded-cards mode existed
 const SIDEBAR_WIDTH_COMPACT = 340;
-// wide enough for a legible 3-across mini grid: 3 × 130px cards + gaps +
-// padding = 434px, so 440 leaves a little slack for the scrollbar
-const SIDEBAR_WIDTH_EXPANDED = 440;
-const EXPANDED_CARD_SIZE = 130;
+const SIDEBAR_WIDTH_EXPANDED = 720;
+const EXPANDED_CARD_SIZE = 166;
 
 function readSidebarExpanded(): boolean {
 	try {
@@ -82,7 +81,7 @@ function writeSidebarExpanded(value: boolean): void {
 	try {
 		localStorage.setItem(SIDEBAR_EXPANDED_KEY, value ? "1" : "0");
 	} catch {
-		// best-effort — losing the preference isn't worth surfacing an error
+		// best effort
 	}
 }
 
@@ -90,8 +89,6 @@ const CREW_SLOTS = FACETURN_CONSTANTS.CREW_SLOTS;
 const RESERVE_CREW_SLOTS = FACETURN_CONSTANTS.RESERVE_CREW_SLOTS;
 const MOVES_PER_DECK = FACETURN_CONSTANTS.MOVES_PER_DECK;
 
-// reserve crew is standard for every boss; the Dealer gets one extra
-// reserve slot via passive_extra_reserve_crew (mirrors game.ts server-side)
 function reserveSlotCountFor(bossId: string | null): number {
 	return bossId === "the-dealer" ? RESERVE_CREW_SLOTS + 1 : RESERVE_CREW_SLOTS;
 }
@@ -115,18 +112,11 @@ const SORT_DIRECTION_LABEL: Record<SortDirection, string> = {
 	desc: "Descending",
 };
 
-// single consistent sort across every tab. "type" sorts by crew class /
-// move type (bosses have no type, so they fall back to name). "cost" only
-// applies to moves (the only cards with a cash cost) — everything else
-// falls back to name so the option still does something predictable rather
-// than a no-op. direction reverses whatever order was produced, applied last
-// so ties (e.g. same class/type) still land in a sensible order either way.
 function sortBosses(
 	bosses: typeof BOSS_DISPLAY,
 	_sort: SortValue,
 	direction: SortDirection,
 ) {
-	// bosses have no type or cost, so every sort mode falls back to name
 	const arr = [...bosses].sort((a, b) => a.name.localeCompare(b.name));
 	return direction === "desc" ? arr.reverse() : arr;
 }
@@ -164,22 +154,20 @@ function sortMoves(
 	return direction === "desc" ? arr.reverse() : arr;
 }
 
-// search matches name and effect text, precomputed once
 function buildHaystack(name: string, ...effectParts: (string | undefined)[]) {
 	return [name, ...effectParts.filter(Boolean)].join(" ").toLowerCase();
 }
 
-// search also matches ability-type keywords ("command", "revealed",
-// "ongoing"/"active", "burst", "slow", crew class names) so a query like
-// "reveal" or "ongoi" surfaces every card with that kind of ability, not
-// just cards whose flavor/effect text happens to contain the word
+// search also includes ability keywords
 const BOSS_SEARCH_TEXT = new Map(
 	BOSS_DISPLAY.map((b) => [
 		b.id,
 		buildHaystack(
 			b.name,
+			b.effectText.faceTurn,
 			b.effectText.command,
 			b.effectText.passive,
+			"face turn",
 			"command",
 			"passive",
 			"boss",
@@ -222,7 +210,6 @@ function CountBadge({ current, max }: { current: number; max: number }) {
 	);
 }
 
-// overlay stamp for a reserve crew card, pointer events none so it doesn't block selection
 function ReserveStamp() {
 	return (
 		<div className="pointer-events-none absolute inset-0 z-10 flex items-center justify-center">
@@ -233,10 +220,6 @@ function ReserveStamp() {
 	);
 }
 
-// small expand affordance in the corner of every draft grid card — click
-// opens the same inspect view as right-clicking the card. Always visible on
-// mobile (no hover to reveal it there, and no right-click gesture either);
-// fades in on hover on desktop so it doesn't clutter the grid otherwise
 function InspectCornerButton({
 	onInspect,
 	alwaysVisible,
@@ -286,9 +269,6 @@ const CREW_CLASS_OPTIONS: readonly CrewClass[] = [
 ];
 const MOVE_TYPE_OPTIONS: readonly MoveType[] = ["burst", "slow", "active"];
 
-// shared shell for the sort / filter / clear popovers so they all look and
-// behave the same way — anchored dropdown, dark grey panel, outside-click
-// and Escape to dismiss. No modal for any of these.
 function ToolbarPopover({
 	label,
 	icon,
@@ -298,6 +278,7 @@ function ToolbarPopover({
 	children,
 	panelClassName,
 	disabled,
+	iconOnly,
 }: {
 	label: string;
 	icon: ReactNode;
@@ -307,6 +288,7 @@ function ToolbarPopover({
 	children: ReactNode;
 	panelClassName?: string;
 	disabled?: boolean;
+	iconOnly?: boolean;
 }) {
 	const containerRef = useRef<HTMLDivElement>(null);
 
@@ -333,8 +315,11 @@ function ToolbarPopover({
 				type="button"
 				disabled={disabled}
 				onClick={onToggle}
+				title={iconOnly ? label : undefined}
+				aria-label={iconOnly ? label : undefined}
 				className={cn(
-					"flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-xs font-bold uppercase tracking-widest transition-all",
+					"flex items-center justify-center gap-1.5 rounded-lg border text-xs font-bold uppercase tracking-widest transition-all",
+					iconOnly ? "w-8 h-8" : "px-3 py-1.5",
 					disabled
 						? "border-white/10 text-white/20 cursor-not-allowed"
 						: cn(
@@ -346,7 +331,7 @@ function ToolbarPopover({
 				)}
 			>
 				{icon}
-				{label}
+				{!iconOnly && label}
 			</button>
 
 			{open && !disabled && (
@@ -368,11 +353,13 @@ function SortPanel({
 	onChange,
 	direction,
 	onDirectionChange,
+	iconOnly,
 }: {
 	sort: SortValue;
 	onChange: (value: SortValue) => void;
 	direction: SortDirection;
 	onDirectionChange: (value: SortDirection) => void;
+	iconOnly?: boolean;
 }) {
 	const [open, setOpen] = useState(false);
 
@@ -383,6 +370,7 @@ function SortPanel({
 			open={open}
 			onToggle={() => setOpen((v) => !v)}
 			panelClassName="w-44"
+			iconOnly={iconOnly}
 			icon={
 				<svg
 					viewBox="0 0 24 24"
@@ -464,12 +452,14 @@ function FilterPanel({
 	variantFilter,
 	onToggleVariant,
 	onReset,
+	iconOnly,
 }: {
 	pickedFilter: PickedFilterValue;
 	onPickedChange: (value: PickedFilterValue) => void;
 	variantFilter: ReadonlySet<CrewClass | MoveType>;
 	onToggleVariant: (value: CrewClass | MoveType) => void;
 	onReset: () => void;
+	iconOnly?: boolean;
 }) {
 	const [open, setOpen] = useState(false);
 	const activeCount = (pickedFilter !== "all" ? 1 : 0) + variantFilter.size;
@@ -480,6 +470,7 @@ function FilterPanel({
 			active={activeCount > 0}
 			open={open}
 			onToggle={() => setOpen((v) => !v)}
+			iconOnly={iconOnly}
 			icon={
 				<svg
 					viewBox="0 0 24 24"
@@ -565,13 +556,14 @@ function FilterPanel({
 	);
 }
 
-// clear confirmation as a popover, consistent with sort/filter — no modal
 function ClearPopover({
 	disabled,
 	onConfirm,
+	iconOnly,
 }: {
 	disabled: boolean;
 	onConfirm: () => void;
+	iconOnly?: boolean;
 }) {
 	const [open, setOpen] = useState(false);
 
@@ -583,6 +575,7 @@ function ClearPopover({
 			disabled={disabled}
 			onToggle={() => setOpen((v) => !v)}
 			panelClassName="w-56"
+			iconOnly={iconOnly}
 			icon={
 				<svg
 					viewBox="0 0 24 24"
@@ -627,18 +620,16 @@ function ClearPopover({
 	);
 }
 
-// share the current draft as a pasteable code — code shown in a readonly
-// field (not just an invisible clipboard write) so it still works if the
-// browser blocks clipboard access, and separate from Import for a clear
-// mental model: Export always reads the live draft, Import always replaces it
 function ExportPanel({
 	disabled,
 	code,
 	onCopy,
+	iconOnly,
 }: {
 	disabled: boolean;
 	code: string;
 	onCopy: () => void;
+	iconOnly?: boolean;
 }) {
 	const [open, setOpen] = useState(false);
 	const inputRef = useRef<HTMLInputElement>(null);
@@ -651,6 +642,7 @@ function ExportPanel({
 			disabled={disabled}
 			onToggle={() => setOpen((v) => !v)}
 			panelClassName="w-72"
+			iconOnly={iconOnly}
 			icon={
 				<svg
 					viewBox="0 0 24 24"
@@ -699,11 +691,10 @@ function ExportPanel({
 	);
 }
 
-// paste a code from someone else and load it — mirror of ExportPanel,
-// always replaces the current draft (confirmation happens upstream)
 function ImportPanel({
 	disabled,
 	onImport,
+	iconOnly,
 }: {
 	disabled: boolean;
 	onImport: (deck: {
@@ -711,6 +702,7 @@ function ImportPanel({
 		crewIds: string[];
 		moveIds: string[];
 	}) => void;
+	iconOnly?: boolean;
 }) {
 	const [open, setOpen] = useState(false);
 	const [text, setText] = useState("");
@@ -721,7 +713,7 @@ function ImportPanel({
 			toast.error(
 				result.error === "empty"
 					? "Paste a deck code first."
-					: "That code doesn't look right — check for typos.",
+					: "That code doesn't look right - check for typos.",
 			);
 			return;
 		}
@@ -741,6 +733,7 @@ function ImportPanel({
 				setText("");
 			}}
 			panelClassName="w-72"
+			iconOnly={iconOnly}
 			icon={
 				<svg
 					viewBox="0 0 24 24"
@@ -764,7 +757,7 @@ function ImportPanel({
 		>
 			<div className="p-3 flex flex-col gap-2">
 				<p className="text-[10px] text-white/40 leading-relaxed">
-					Paste a deck code to load it — this replaces your current picks.
+					Paste a deck code to load it - this replaces your current picks.
 				</p>
 				<input
 					autoFocus
@@ -775,7 +768,7 @@ function ImportPanel({
 					onKeyDown={(e) => {
 						if (e.key === "Enter") handleLoad();
 					}}
-					placeholder="Paste a deck code…"
+					placeholder="Paste a deck code..."
 					spellCheck={false}
 					className="w-full px-2 py-1.5 rounded bg-black/40 border border-white/15 text-xs text-white/90 placeholder:text-white/30 outline-none focus:border-white/40 font-mono"
 				/>
@@ -841,14 +834,17 @@ function VariantToggle({
 	);
 }
 
+// columns are minmax, browser sizes natively, no resize observer lag
 function CardGrid({
-	cardSize,
+	sizeMin,
+	sizeMax,
 	columns,
 	gap,
 	paddingX,
 	children,
 }: {
-	cardSize: number;
+	sizeMin: number;
+	sizeMax: number;
 	columns: number;
 	gap: number;
 	paddingX: number;
@@ -859,10 +855,10 @@ function CardGrid({
 			<div
 				className="grid mx-auto"
 				style={{
-					gridTemplateColumns: `repeat(${columns}, ${cardSize}px)`,
+					gridTemplateColumns: `repeat(${columns}, minmax(${sizeMin}px, ${sizeMax}px))`,
 					gap: `${gap}px`,
 					padding: `${gap}px ${paddingX}px`,
-					maxWidth: cardSize * columns + gap * (columns - 1) + paddingX * 2,
+					maxWidth: sizeMax * columns + gap * (columns - 1) + paddingX * 2,
 				}}
 			>
 				{children}
@@ -871,9 +867,76 @@ function CardGrid({
 	);
 }
 
+// wraps grid card with pointer drag, disabled on mobile or already selected
+function DraggableGridCard({
+	dragKind,
+	cardProps,
+	sizeMax,
+	selected,
+	isReserve,
+	isMobile,
+	onSelectClick,
+	onInspectClick,
+	positionStore,
+	getTargetAt,
+	onDropSuccess,
+	onDragVisualChange,
+}: {
+	dragKind: DraftDropKind;
+	cardProps: CardProps;
+	sizeMax: number;
+	selected: boolean;
+	isReserve: boolean;
+	isMobile: boolean;
+	onSelectClick: () => void;
+	onInspectClick: () => void;
+	positionStore: DragPositionStore;
+	getTargetAt: (point: DragPosition) => DraftDropKind | null;
+	onDropSuccess: () => void;
+	onDragVisualChange: (cardProps: CardProps | null) => void;
+}) {
+	const { dragHandleProps } = useCardDrag<DraftDropKind>({
+		positionStore,
+		disabled: selected || isMobile,
+		getTargetAt,
+		isValidTarget: (candidate) => candidate === dragKind,
+		onDrop: onDropSuccess,
+		onLongPress: onInspectClick,
+		onDragStateChange: (state) => {
+			onDragVisualChange(state.dragging ? cardProps : null);
+		},
+	});
+
+	return (
+		<div
+			className={cn(
+				"relative group transition-opacity",
+				selected && "opacity-45",
+			)}
+			style={{ "--card-vw-share": "100%" } as CSSProperties}
+			{...dragHandleProps}
+			onContextMenu={(e) => {
+				e.preventDefault();
+				onInspectClick();
+			}}
+		>
+			<Card
+				{...cardProps}
+				size={sizeMax}
+				selected={selected}
+				onClick={onSelectClick}
+			/>
+			<InspectCornerButton
+				alwaysVisible={isMobile}
+				onInspect={onInspectClick}
+			/>
+			{isReserve && <ReserveStamp />}
+		</div>
+	);
+}
+
 export function DraftingPhase() {
 	const { ft, secret, playerId } = useFaceturnState();
-	// width based, not input device, see useIsDraftMobile
 	const isMobile = useIsDraftMobile();
 	const [tab, setTab] = useState<DraftTab>("all");
 	const [sort, setSort] = useState<SortValue>("type");
@@ -898,8 +961,6 @@ export function DraftingPhase() {
 	}
 	const [query, setQuery] = useState("");
 	const [picksOpen, setPicksOpen] = useState(false);
-	// desktop-only: compact rows vs full cards in the "Your draft" rail.
-	// Harmless to compute on mobile too — just unused there.
 	const [sidebarExpanded, setSidebarExpanded] = useState(readSidebarExpanded);
 	function toggleSidebarExpanded() {
 		setSidebarExpanded((prev) => {
@@ -908,11 +969,6 @@ export function DraftingPhase() {
 			return next;
 		});
 	}
-	const desktopGrid = useDesktopCardSize(
-		sidebarExpanded ? DESKTOP_GRID_COMPACT : DESKTOP_GRID,
-	);
-	const mobileGrid = useMobileCardSize();
-	const { containerRef, cardSize } = isMobile ? mobileGrid : desktopGrid;
 	const gridMetrics = isMobile
 		? MOBILE_GRID
 		: sidebarExpanded
@@ -921,11 +977,24 @@ export function DraftingPhase() {
 
 	const myDraft = ft?.draft?.[playerId];
 	const { locked, runLocked } = useActionLock(myDraft?.isDraftLocked);
-	const { inspect, modal: inspectModal } = useCardInspect();
+	const { inspect } = useCardInspect();
 
-	// auto-save the in-progress draft to a rotating "recently used" slot
-	// (max 3), debounced, so it isn't lost if the player forgets to hit
-	// "Save current draft". Separate from the named manual saves.
+	const [dragPositionStore] = useState<DragPositionStore>(() =>
+		createDragPositionStore(),
+	);
+	const [dragVisualCardProps, setDragVisualCardProps] =
+		useState<CardProps | null>(null);
+	useEffect(() => {
+		const clear = () => setDraftDraggedOverTarget(null);
+		window.addEventListener("pointerup", clear);
+		window.addEventListener("pointercancel", clear);
+		return () => {
+			window.removeEventListener("pointerup", clear);
+			window.removeEventListener("pointercancel", clear);
+		};
+	}, []);
+
+	// auto save in progress draft to recent slot, debounced
 	const autoSaveBossId = secret?.draftSelections?.bossId ?? null;
 	const autoSaveCrewIds = secret?.draftSelections?.crewIds ?? [];
 	const autoSaveMoveIds = secret?.draftSelections?.moveIds ?? [];
@@ -950,8 +1019,7 @@ export function DraftingPhase() {
 		// eslint-disable-next-line react-hooks/exhaustive-deps
 	}, [autoSaveBossId, autoSaveCrewKey, autoSaveMoveKey]);
 
-	// desktop drafting gets the richer side-by-side panel; mobile keeps the
-	// swipeable full-screen modal above since there's no room for a rail
+	// desktop side by side panel, mobile swipeable modal
 	const [inspectPanel, setInspectPanel] = useState<DraftInspectCycle | null>(
 		null,
 	);
@@ -970,8 +1038,6 @@ export function DraftingPhase() {
 		});
 	}
 
-	// single entry point for opening a card's inspect view, shared by the
-	// right-click handler and the corner expand button on every grid card
 	function triggerInspect(
 		cardProps: CardProps,
 		cycleItems: readonly CardProps[],
@@ -1028,12 +1094,8 @@ export function DraftingPhase() {
 	const crewFull = sel.crewIds.length >= crewMax;
 	const movesFull = sel.moveIds.length >= MOVES_PER_DECK;
 
-	// reserve crew ids mirror server assignment: everything from CREW_SLOTS
-	// onward is a reserve slot (standard 1, or 2 for the Dealer)
 	const reserveCrewIds = new Set(sel.crewIds.slice(CREW_SLOTS));
 
-	// status ("picked"/"unpicked") filter applies consistently on every tab,
-	// same as variant filtering which already happened above
 	const allFilteredBosses = filteredBosses.filter((b) => {
 		if (pickedFilter === "picked") return sel.bossId === b.id;
 		if (pickedFilter === "unpicked") return sel.bossId !== b.id;
@@ -1054,10 +1116,6 @@ export function DraftingPhase() {
 		return true;
 	});
 
-	// pick order: boss first, crew, then moves. pickedInspectTargets/
-	// pickedCardProps are built in lockstep with pickedEntries (same
-	// indices) so a right-click on any picked row can open the inspect
-	// panel and cycle through the rest of the picks
 	const pickedEntries: PickedEntry[] = [];
 	const pickedInspectTargets: DraftInspectTarget[] = [];
 	if (sel.bossId) {
@@ -1105,14 +1163,10 @@ export function DraftingPhase() {
 		if (t.kind === "crew") return crewToCard(t.display);
 		return moveToCard(t.display);
 	});
-	// same alignment as pickedCardProps, just keyed for the expanded sidebar
-	// to look full CardProps up by entry without changing PickedEntry's shape
 	const pickedCardPropsByKey = new Map<string, CardProps>(
 		pickedEntries.map((e, i) => [`${e.kind}-${e.id}`, pickedCardProps[i]]),
 	);
 
-	// right-click handler for the sidebar/drawer rows, wired through to the
-	// same triggerInspect used by the browse grid
 	function inspectPickedEntry(entry: PickedEntry) {
 		const index = pickedEntries.findIndex(
 			(e) => e.kind === entry.kind && e.id === entry.id,
@@ -1126,7 +1180,6 @@ export function DraftingPhase() {
 		);
 	}
 
-	// select_boss toggles server side, so deselect is re-sending same id
 	function deselect(entry: PickedEntry) {
 		if (entry.kind === "boss") {
 			sendFaceturnAction({ type: "select_boss", bossId: entry.id });
@@ -1137,59 +1190,12 @@ export function DraftingPhase() {
 		}
 	}
 
-	// drag source for every browse-grid card — payload just carries enough
-	// to route the drop, the actual add logic (and its guards) live in
-	// handleDropCard below so drag/drop can't add a card the corresponding
-	// click handler wouldn't have allowed.
-	//
-	// Without a custom drag image, the browser's default ghost is a
-	// full-size, full-opacity snapshot of the source card — huge next to
-	// the small sidebar. First attempt swapped in a small <img> of the
-	// card's art, but that loads asynchronously and setDragImage has to be
-	// called synchronously inside dragstart — so the browser was
-	// snapshotting the image before (or without) my size/opacity styling
-	// ever applied, landing back at something big and fully opaque. A
-	// small text+color chip has no load race: it's plain DOM/CSS, ready
-	// the instant it's created, so the size and opacity always apply.
-	function handleCardDragStart(
-		e: DragEvent<HTMLElement>,
-		kind: PickedEntry["kind"],
-		id: string,
-		cardProps: CardProps,
-	) {
-		e.dataTransfer.setData(DRAG_MIME_TYPE, JSON.stringify({ kind, id }));
-		e.dataTransfer.effectAllowed = "copy";
-
-		const accent = CARD_VARIANT_THEME[cardProps.variant].accent;
-		const preview = document.createElement("div");
-		preview.textContent = cardProps.title;
-		Object.assign(preview.style, {
-			position: "fixed",
-			top: "-1000px",
-			left: "-1000px",
-			maxWidth: "140px",
-			padding: "6px 10px",
-			borderRadius: "8px",
-			background: accent,
-			color: "#000",
-			font: "800 11px system-ui, sans-serif",
-			textTransform: "uppercase",
-			letterSpacing: "0.03em",
-			whiteSpace: "nowrap",
-			overflow: "hidden",
-			textOverflow: "ellipsis",
-			opacity: "0.9",
-			pointerEvents: "none",
-		});
-		document.body.appendChild(preview);
-		e.dataTransfer.setDragImage(preview, 16, 16);
-		requestAnimationFrame(() => {
-			preview.remove();
-		});
+	function getDraftDropTargetAt(point: DragPosition): DraftDropKind | null {
+		const target = draftDropTargetRegistry.getTargetAt(point);
+		setDraftDraggedOverTarget(target);
+		return target;
 	}
 
-	// drop target handler for the sidebar's DropSlots — same guards as the
-	// grid's own click-to-add (already selected / section full = no-op)
 	function handleDropCard(kind: PickedEntry["kind"], id: string) {
 		if (kind === "boss") {
 			sendFaceturnAction({ type: "select_boss", bossId: id });
@@ -1204,9 +1210,6 @@ export function DraftingPhase() {
 		sendFaceturnAction({ type: "select_move", moveId: id });
 	}
 
-	// load overwrites, confirm first if picks exist. Shared by "My decks"
-	// (named saves/recents) and the Import popover (raw deck codes) —
-	// callers just supply a confirm title appropriate to what's loading
 	async function loadDraftSelections(
 		deck: { bossId: string | null; crewIds: string[]; moveIds: string[] },
 		confirmTitle: string,
@@ -1240,7 +1243,6 @@ export function DraftingPhase() {
 	}
 
 	function handleDone() {
-		// record immediately on lock-in rather than waiting on the debounce
 		recordRecentDeck({
 			bossId: sel.bossId,
 			crewIds: sel.crewIds,
@@ -1251,7 +1253,6 @@ export function DraftingPhase() {
 		});
 	}
 
-	// server fills empty picks, never touches existing
 	function handleRandomize() {
 		sendFaceturnAction({ type: "randomize_draft" });
 	}
@@ -1267,12 +1268,10 @@ export function DraftingPhase() {
 			await navigator.clipboard.writeText(deckCode);
 			toast.success("Deck code copied!", { duration: 2000 });
 		} catch {
-			toast.error("Couldn't copy — your browser blocked clipboard access.");
+			toast.error("Couldn't copy - your browser blocked clipboard access.");
 		}
 	}
 
-	// unselect everything via empty load_draft; confirmation happens in the
-	// Clear popover itself, not a modal
 	function handleClear() {
 		if (pickedEntries.length === 0) return;
 		sendFaceturnAction({
@@ -1290,7 +1289,7 @@ export function DraftingPhase() {
 					Locked in
 				</span>
 				<p className="text-sm text-white/40">
-					Waiting for other players to finish drafting…
+					Waiting for other players to finish drafting...
 				</p>
 			</div>
 		);
@@ -1305,7 +1304,6 @@ export function DraftingPhase() {
 		(tab === "crew" && allFilteredCrew.length === 0) ||
 		(tab === "moves" && allFilteredMoves.length === 0);
 
-	// "all" interleaves boss, crew, moves in one grid, each with its own click behavior
 	const allEntries =
 		tab === "all"
 			? [
@@ -1370,14 +1368,11 @@ export function DraftingPhase() {
 				]
 			: [];
 
-	// one cycle list per tab, matching render order
 	const allEntriesCycleItems = allEntries.map((e) => e.cardProps);
 	const bossCycleItems = allFilteredBosses.map((b) => bossToCard(b));
 	const crewCycleItems = allFilteredCrew.map((c) => crewToCard(c));
 	const moveCycleItems = allFilteredMoves.map((m) => moveToCard(m));
 
-	// parallel cycles carrying the raw display data the inspect panel needs
-	// (full effect text, flavor, synergyIds) — CardProps alone doesn't have it
 	const allEntriesInspectItems: DraftInspectTarget[] = [
 		...allFilteredBosses.map(
 			(b): DraftInspectTarget => ({ kind: "boss", display: b }),
@@ -1403,10 +1398,7 @@ export function DraftingPhase() {
 	}));
 
 	const grid = (
-		<div
-			ref={containerRef}
-			className="flex-1 min-h-0 overflow-y-auto ft-scroll"
-		>
+		<div className="flex-1 min-h-0 overflow-y-auto ft-scroll">
 			{noResults && (
 				<p className="px-4 py-10 text-xs text-white/30 text-center">
 					{query.trim()
@@ -1417,58 +1409,43 @@ export function DraftingPhase() {
 
 			{tab === "all" && allEntries.length > 0 && (
 				<CardGrid
-					cardSize={cardSize}
+					sizeMin={gridMetrics.sizeMin}
+					sizeMax={gridMetrics.sizeMax}
 					columns={gridMetrics.columns}
 					gap={gridMetrics.gap}
 					paddingX={gridMetrics.paddingX}
 				>
 					{allEntries.map((entry, i) => (
-						<div
+						<DraggableGridCard
 							key={entry.key}
-							draggable
-							onDragStart={(e) =>
-								handleCardDragStart(e, entry.kind, entry.id, entry.cardProps)
-							}
-							className={cn(
-								"relative group transition-opacity",
-								entry.selected && "opacity-45",
-							)}
-							onContextMenu={(e) => {
-								e.preventDefault();
+							dragKind={entry.kind}
+							cardProps={entry.cardProps}
+							sizeMax={gridMetrics.sizeMax}
+							selected={entry.selected}
+							isReserve={entry.isReserve}
+							isMobile={isMobile}
+							onSelectClick={entry.onClick}
+							onInspectClick={() =>
 								triggerInspect(
 									entry.cardProps,
 									allEntriesCycleItems,
 									allEntriesInspectItems,
 									i,
-								);
-							}}
-						>
-							<Card
-								{...entry.cardProps}
-								size={cardSize}
-								selected={entry.selected}
-								onClick={entry.onClick}
-							/>
-							<InspectCornerButton
-								alwaysVisible={isMobile}
-								onInspect={() =>
-									triggerInspect(
-										entry.cardProps,
-										allEntriesCycleItems,
-										allEntriesInspectItems,
-										i,
-									)
-								}
-							/>
-							{entry.isReserve && <ReserveStamp />}
-						</div>
+								)
+							}
+							positionStore={dragPositionStore}
+							getTargetAt={getDraftDropTargetAt}
+							onDropSuccess={() => handleDropCard(entry.kind, entry.id)}
+							onDragVisualChange={setDragVisualCardProps}
+						/>
 					))}
 				</CardGrid>
 			)}
 
 			{tab === "boss" && allFilteredBosses.length > 0 && (
 				<CardGrid
-					cardSize={cardSize}
+					sizeMin={gridMetrics.sizeMin}
+					sizeMax={gridMetrics.sizeMax}
 					columns={gridMetrics.columns}
 					gap={gridMetrics.gap}
 					paddingX={gridMetrics.paddingX}
@@ -1477,49 +1454,28 @@ export function DraftingPhase() {
 						const selected = sel.bossId === boss.id;
 						const cardProps = bossCycleItems[i];
 						return (
-							<div
+							<DraggableGridCard
 								key={boss.id}
-								draggable
-								onDragStart={(e) =>
-									handleCardDragStart(e, "boss", boss.id, cardProps)
-								}
-								className={cn(
-									"relative group transition-opacity",
-									selected && "opacity-45",
-								)}
-								onContextMenu={(e) => {
-									e.preventDefault();
-									triggerInspect(
-										cardProps,
-										bossCycleItems,
-										bossInspectItems,
-										i,
-									);
+								dragKind="boss"
+								cardProps={cardProps}
+								sizeMax={gridMetrics.sizeMax}
+								selected={selected}
+								isReserve={false}
+								isMobile={isMobile}
+								onSelectClick={() => {
+									sendFaceturnAction({
+										type: "select_boss",
+										bossId: boss.id,
+									});
 								}}
-							>
-								<Card
-									{...cardProps}
-									size={cardSize}
-									selected={selected}
-									onClick={() => {
-										sendFaceturnAction({
-											type: "select_boss",
-											bossId: boss.id,
-										});
-									}}
-								/>
-								<InspectCornerButton
-									alwaysVisible={isMobile}
-									onInspect={() =>
-										triggerInspect(
-											cardProps,
-											bossCycleItems,
-											bossInspectItems,
-											i,
-										)
-									}
-								/>
-							</div>
+								onInspectClick={() =>
+									triggerInspect(cardProps, bossCycleItems, bossInspectItems, i)
+								}
+								positionStore={dragPositionStore}
+								getTargetAt={getDraftDropTargetAt}
+								onDropSuccess={() => handleDropCard("boss", boss.id)}
+								onDragVisualChange={setDragVisualCardProps}
+							/>
 						);
 					})}
 				</CardGrid>
@@ -1527,7 +1483,8 @@ export function DraftingPhase() {
 
 			{tab === "crew" && allFilteredCrew.length > 0 && (
 				<CardGrid
-					cardSize={cardSize}
+					sizeMin={gridMetrics.sizeMin}
+					sizeMax={gridMetrics.sizeMax}
 					columns={gridMetrics.columns}
 					gap={gridMetrics.gap}
 					paddingX={gridMetrics.paddingX}
@@ -1537,58 +1494,36 @@ export function DraftingPhase() {
 						const cardProps = crewCycleItems[i];
 						const isReserve = reserveCrewIds.has(crew.id);
 						return (
-							<div
+							<DraggableGridCard
 								key={crew.id}
-								draggable
-								onDragStart={(e) =>
-									handleCardDragStart(e, "crew", crew.id, cardProps)
-								}
-								className={cn(
-									"relative group transition-opacity",
-									selected && "opacity-45",
-								)}
-								onContextMenu={(e) => {
-									e.preventDefault();
-									triggerInspect(
-										cardProps,
-										crewCycleItems,
-										crewInspectItems,
-										i,
-									);
-								}}
-							>
-								<Card
-									{...cardProps}
-									size={cardSize}
-									selected={selected}
-									onClick={() => {
-										if (selected) {
-											sendFaceturnAction({
-												type: "deselect_crew",
-												crewId: crew.id,
-											});
-											return;
-										}
-										if (crewFull) return;
+								dragKind="crew"
+								cardProps={cardProps}
+								sizeMax={gridMetrics.sizeMax}
+								selected={selected}
+								isReserve={isReserve}
+								isMobile={isMobile}
+								onSelectClick={() => {
+									if (selected) {
 										sendFaceturnAction({
-											type: "select_crew",
+											type: "deselect_crew",
 											crewId: crew.id,
 										});
-									}}
-								/>
-								<InspectCornerButton
-									alwaysVisible={isMobile}
-									onInspect={() =>
-										triggerInspect(
-											cardProps,
-											crewCycleItems,
-											crewInspectItems,
-											i,
-										)
+										return;
 									}
-								/>
-								{isReserve && <ReserveStamp />}
-							</div>
+									if (crewFull) return;
+									sendFaceturnAction({
+										type: "select_crew",
+										crewId: crew.id,
+									});
+								}}
+								onInspectClick={() =>
+									triggerInspect(cardProps, crewCycleItems, crewInspectItems, i)
+								}
+								positionStore={dragPositionStore}
+								getTargetAt={getDraftDropTargetAt}
+								onDropSuccess={() => handleDropCard("crew", crew.id)}
+								onDragVisualChange={setDragVisualCardProps}
+							/>
 						);
 					})}
 				</CardGrid>
@@ -1596,7 +1531,8 @@ export function DraftingPhase() {
 
 			{tab === "moves" && allFilteredMoves.length > 0 && (
 				<CardGrid
-					cardSize={cardSize}
+					sizeMin={gridMetrics.sizeMin}
+					sizeMax={gridMetrics.sizeMax}
 					columns={gridMetrics.columns}
 					gap={gridMetrics.gap}
 					paddingX={gridMetrics.paddingX}
@@ -1605,57 +1541,36 @@ export function DraftingPhase() {
 						const selected = sel.moveIds.includes(move.id);
 						const cardProps = moveCycleItems[i];
 						return (
-							<div
+							<DraggableGridCard
 								key={move.id}
-								draggable
-								onDragStart={(e) =>
-									handleCardDragStart(e, "move", move.id, cardProps)
-								}
-								className={cn(
-									"relative group transition-opacity",
-									selected && "opacity-45",
-								)}
-								onContextMenu={(e) => {
-									e.preventDefault();
-									triggerInspect(
-										cardProps,
-										moveCycleItems,
-										moveInspectItems,
-										i,
-									);
-								}}
-							>
-								<Card
-									{...cardProps}
-									size={cardSize}
-									selected={selected}
-									onClick={() => {
-										if (selected) {
-											sendFaceturnAction({
-												type: "deselect_move",
-												moveId: move.id,
-											});
-											return;
-										}
-										if (movesFull) return;
+								dragKind="move"
+								cardProps={cardProps}
+								sizeMax={gridMetrics.sizeMax}
+								selected={selected}
+								isReserve={false}
+								isMobile={isMobile}
+								onSelectClick={() => {
+									if (selected) {
 										sendFaceturnAction({
-											type: "select_move",
+											type: "deselect_move",
 											moveId: move.id,
 										});
-									}}
-								/>
-								<InspectCornerButton
-									alwaysVisible={isMobile}
-									onInspect={() =>
-										triggerInspect(
-											cardProps,
-											moveCycleItems,
-											moveInspectItems,
-											i,
-										)
+										return;
 									}
-								/>
-							</div>
+									if (movesFull) return;
+									sendFaceturnAction({
+										type: "select_move",
+										moveId: move.id,
+									});
+								}}
+								onInspectClick={() =>
+									triggerInspect(cardProps, moveCycleItems, moveInspectItems, i)
+								}
+								positionStore={dragPositionStore}
+								getTargetAt={getDraftDropTargetAt}
+								onDropSuccess={() => handleDropCard("move", move.id)}
+								onDragVisualChange={setDragVisualCardProps}
+							/>
 						);
 					})}
 				</CardGrid>
@@ -1721,8 +1636,6 @@ export function DraftingPhase() {
 					onDeselect={deselect}
 					onInspect={inspectPickedEntry}
 				/>
-
-				{inspectModal}
 			</div>
 		);
 	}
@@ -1742,8 +1655,6 @@ export function DraftingPhase() {
 						Your draft
 					</p>
 					<MyDecksMenu
-						currentSelections={sel}
-						hasCurrentPicks={pickedEntries.length > 0}
 						disabled={locked}
 						onLoad={(deck) => void loadSavedDeck(deck)}
 					/>
@@ -1756,7 +1667,10 @@ export function DraftingPhase() {
 						moveMax={MOVES_PER_DECK}
 						onDeselect={deselect}
 						onInspect={inspectPickedEntry}
-						onDropCard={handleDropCard}
+						dropEnabled
+						onNavigateToTab={(kind) => {
+							setTab(kind === "move" ? "moves" : kind);
+						}}
 						variant={sidebarExpanded ? "expanded" : "compact"}
 						cardPropsByKey={pickedCardPropsByKey}
 						cardSize={EXPANDED_CARD_SIZE}
@@ -1774,6 +1688,17 @@ export function DraftingPhase() {
 					pickedCount={pickedEntries.length}
 					onDone={handleDone}
 					showStats={false}
+					saveDeckSlot={
+						<SaveDeckControl
+							selections={sel}
+							pickedEntries={pickedEntries}
+							bossName={
+								pickedEntries.find((e) => e.kind === "boss")?.name ?? null
+							}
+							allDone={allDone}
+							disabled={locked}
+						/>
+					}
 				/>
 
 				<button
@@ -1834,7 +1759,7 @@ export function DraftingPhase() {
 							onChange={(e) => {
 								setQuery(e.target.value);
 							}}
-							placeholder="Search cards…"
+							placeholder="Search cards..."
 							className="w-full pl-8 pr-3 py-1.5 rounded-lg bg-white/5 border border-white/10 text-xs font-bold text-white placeholder:text-white/30 outline-none focus:border-white/30 transition-colors"
 						/>
 					</div>
@@ -1905,6 +1830,7 @@ export function DraftingPhase() {
 						onChange={setSort}
 						direction={sortDirection}
 						onDirectionChange={setSortDirection}
+						iconOnly={sidebarExpanded}
 					/>
 					<FilterPanel
 						pickedFilter={pickedFilter}
@@ -1912,26 +1838,35 @@ export function DraftingPhase() {
 						variantFilter={variantFilter}
 						onToggleVariant={toggleVariant}
 						onReset={resetAllFilters}
+						iconOnly={sidebarExpanded}
 					/>
 
 					<div className="flex items-center gap-2 shrink-0 ml-auto">
 						<ImportPanel
 							disabled={locked}
 							onImport={(deck) => void loadImportedDeck(deck)}
+							iconOnly={sidebarExpanded}
 						/>
 						<ExportPanel
 							disabled={pickedEntries.length === 0}
 							code={deckCode}
 							onCopy={() => void handleCopyCode()}
+							iconOnly={sidebarExpanded}
 						/>
 
 						<button
 							type="button"
 							disabled={allDone || locked}
 							onClick={handleRandomize}
-							title="Randomly fill whatever's still empty — doesn't touch what you've already picked"
+							title="Randomly fill whatever's still empty - doesn't touch what you've already picked"
+							aria-label={
+								sidebarExpanded
+									? "Randomly fill whatever's still empty"
+									: undefined
+							}
 							className={cn(
-								"flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-xs font-bold uppercase tracking-widest transition-all shrink-0",
+								"flex items-center justify-center gap-1.5 rounded-lg border text-xs font-bold uppercase tracking-widest transition-all shrink-0",
+								sidebarExpanded ? "w-8 h-8" : "px-3 py-1.5",
 								!allDone && !locked
 									? "border-white/15 bg-white/5 text-white/60 hover:bg-white/10 hover:text-white cursor-pointer"
 									: "border-white/10 text-white/20 cursor-not-allowed",
@@ -1950,12 +1885,13 @@ export function DraftingPhase() {
 									strokeLinejoin="round"
 								/>
 							</svg>
-							Randomize
+							{!sidebarExpanded && "Randomize"}
 						</button>
 
 						<ClearPopover
 							disabled={pickedEntries.length === 0 || locked}
 							onConfirm={handleClear}
+							iconOnly={sidebarExpanded}
 						/>
 					</div>
 				</div>
@@ -1963,7 +1899,6 @@ export function DraftingPhase() {
 				{grid}
 			</div>
 
-			{inspectModal}
 			{inspectPanel && (
 				<DraftInspectPanel
 					cycle={inspectPanel}
@@ -1971,6 +1906,11 @@ export function DraftingPhase() {
 					onStep={stepInspectPanel}
 				/>
 			)}
+			<DragPortal positionStore={dragPositionStore}>
+				{dragVisualCardProps && (
+					<Card {...dragVisualCardProps} size={EXPANDED_CARD_SIZE} />
+				)}
+			</DragPortal>
 		</div>
 	);
 }

@@ -427,10 +427,11 @@ button.flip-container {
 }
 
 .tag {
-  display: inline-block;
+  display: inline-flex;
+  align-items: center;
   font-size: 3.8cqw;
   color: #000;
-  padding: 0 1.323cqw;
+  padding: 0.5cqw 1.323cqw;
   margin-right: 1.3cqw;
   border-radius: 1.14cqw;
   transform: skewX(-14deg);

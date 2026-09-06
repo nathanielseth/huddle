@@ -1,7 +1,8 @@
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useState, type ReactNode } from "react";
 import { cn } from "../../../../lib/utils/cn";
 import type { CrewClass, MoveType } from "@shared/games/face-turn/types";
 import { CARD_VARIANT_THEME } from "../../components/card/cardVariants";
+import { IconToolbarPopover as ToolbarPopover } from "../../components/ui/ToolbarPopover";
 
 type DraftTab = "boss" | "crew" | "moves" | "all";
 
@@ -45,83 +46,6 @@ const CREW_CLASS_OPTIONS: readonly CrewClass[] = [
 	"hider",
 ];
 const MOVE_TYPE_OPTIONS: readonly MoveType[] = ["burst", "slow", "active"];
-
-// shared shell for the sort / filter / clear popovers, mirrors the desktop
-// toolbar so mobile and desktop feel like the same component at different sizes
-function ToolbarPopover({
-	label,
-	icon,
-	active,
-	open,
-	onToggle,
-	children,
-	panelClassName,
-	disabled,
-}: {
-	label: string;
-	icon: ReactNode;
-	active: boolean;
-	open: boolean;
-	onToggle: () => void;
-	children: ReactNode;
-	panelClassName?: string;
-	disabled?: boolean;
-}) {
-	const containerRef = useRef<HTMLDivElement>(null);
-
-	useEffect(() => {
-		if (!open) return;
-		function onClickOutside(e: globalThis.MouseEvent) {
-			if (!containerRef.current?.contains(e.target as Node)) onToggle();
-		}
-		function onKeyDown(e: globalThis.KeyboardEvent) {
-			if (e.key === "Escape") onToggle();
-		}
-		document.addEventListener("mousedown", onClickOutside);
-		document.addEventListener("keydown", onKeyDown);
-		return () => {
-			document.removeEventListener("mousedown", onClickOutside);
-			document.removeEventListener("keydown", onKeyDown);
-		};
-		// eslint-disable-next-line react-hooks/exhaustive-deps
-	}, [open]);
-
-	return (
-		<div ref={containerRef} className="relative shrink-0">
-			<button
-				type="button"
-				disabled={disabled}
-				onClick={onToggle}
-				className={cn(
-					"flex items-center justify-center w-9 h-9 shrink-0 rounded-lg border transition-all",
-					disabled
-						? "border-white/10 text-white/20 cursor-not-allowed"
-						: cn(
-								"active:scale-95 cursor-pointer",
-								active || open
-									? "border-white/30 bg-white/10 text-white"
-									: "border-white/15 bg-white/5 text-white/60",
-							),
-				)}
-				aria-label={label}
-				title={label}
-			>
-				{icon}
-			</button>
-
-			{open && !disabled && (
-				<div
-					className={cn(
-						"absolute z-30 top-full right-0 mt-1 rounded-lg border ft-draft-panel shadow-xl overflow-hidden",
-						panelClassName ?? "w-72",
-					)}
-				>
-					{children}
-				</div>
-			)}
-		</div>
-	);
-}
 
 function SortPanel({
 	sort,

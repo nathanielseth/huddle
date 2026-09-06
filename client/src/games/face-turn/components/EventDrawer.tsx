@@ -53,6 +53,47 @@ export function LogRow({
 	);
 }
 
+export function LogFeed({
+	log,
+	playerMap,
+	className,
+	style,
+}: {
+	log: readonly LogEntry[];
+	playerMap: Record<
+		string,
+		{ name: string; bossId?: string; bossName?: string }
+	>;
+	className?: string;
+	style?: React.CSSProperties;
+}) {
+	return (
+		<div
+			className={cn(
+				"flex flex-col gap-1 overflow-y-auto ft-scroll pr-1",
+				className,
+			)}
+			style={{ touchAction: "pan-y", ...style }}
+		>
+			{log.length === 0 ? (
+				<p className="text-xs text-white/25 italic">Nothing yet.</p>
+			) : (
+				[...log]
+					.reverse()
+					.map((entry, i) => (
+						<LogRow
+							key={entry.seq}
+							entry={entry}
+							playerMap={playerMap}
+							dim={i !== 0}
+							showBreakdown={true}
+						/>
+					))
+			)}
+		</div>
+	);
+}
+
 // cap expanded list length
 const EXPANDED_COUNT = 40;
 

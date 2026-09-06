@@ -7,9 +7,9 @@ import {
 	CrewSlotBadge,
 	ActiveMoveSlots,
 	CashChip,
-	CREW_SLOT_CARD_SIZE,
 	OpponentHandStrip,
 } from "./BoardPrimitives";
+import { useBoardCardSize } from "../hooks/boardCardSizeStore";
 import { HandIcon, DeckIcon, DiscardIcon, PoisonIcon } from "./card/CardIcons";
 import { CrewClassGuessPopover } from "./interaction-prompts/CrewClassGuessPopover";
 import { useBoardTarget, type BoardTarget } from "../hooks/boardTargetRegistry";
@@ -33,7 +33,7 @@ import type { CrewSlotView } from "@shared/games/face-turn/types";
 
 const HAND_LIMIT = FACETURN_CONSTANTS.HAND_LIMIT;
 
-// discard pile scaled to footer row, not crew grid, echoes sm active slot size
+// discard pile scaled to footer row, not crew grid
 const DISCARD_PILE_PX = 44;
 
 function DiscardPile({
@@ -99,7 +99,6 @@ function BossCell({
 	);
 	const armedMove = useArmedMove();
 	const disarmMove = useArmedMoveStore((s) => s.disarm);
-	// own boss, my turn, command not yet spent: clicking opens the command popover
 	const canOpenCommand =
 		isMe && isMyTurn && Boolean(boss.id) && myPlayer
 			? !myPlayer.boss.commandUsed
@@ -186,11 +185,9 @@ function CrewSlotCell({
 		pendingClassGuessTarget.slotIndex === crewTarget.slotIndex;
 	const [anchorEl, setAnchorEl] = useState<HTMLElement | null>(null);
 
-	// drag-legal highlight separate from armed/picker, same gold visual
+	// drag-legal highlight separate from armed/picker
 	const isDragLegalTarget = useIsLegalDropTarget(target);
 
-	// own face-down crew, my turn, nothing else already being resolved:
-	// clicking opens the Collect/Strike/Hide popover for that card
 	const isOwnFaceDownActionable =
 		crewTarget !== null &&
 		crewTarget.playerId === playerId &&
@@ -201,7 +198,10 @@ function CrewSlotCell({
 		!pickerSession;
 	const canOpenClassAction = isOwnFaceDownActionable || classActionPopoverOpen;
 
-	const hasAnyReserve = Boolean(secret?.reserveCrewIds.some((id) => id !== null));
+	// own face-up crew with reserve available opens swap popover
+	const hasAnyReserve = Boolean(
+		secret?.reserveCrewIds.some((id) => id !== null),
+	);
 	const isOwnFaceUpActionable =
 		crewTarget !== null &&
 		crewTarget.playerId === playerId &&
@@ -239,7 +239,6 @@ function CrewSlotCell({
 					clickable
 						? () => {
 								if (isArmedTarget) pickSecondaryTarget(slot.slotIndex);
-								// resolve both systems if both eligible, avoid stranding a prompt
 								if (isPickerTarget && crewTarget)
 									pickTarget({ kind: "crew", ...crewTarget });
 								if (canOpenClassAction && crewTarget && anchorEl) {
@@ -284,6 +283,7 @@ export function PlayerBoard({
 
 	const { isMyTurn } = useFaceturnState();
 	const activeMoveDiscardEnabled = Boolean(isMe && isMyTurn);
+	const cardPx = useBoardCardSize();
 
 	const ownBoardAreaRef = useBoardTarget({
 		kind: "own_board_area",
@@ -313,7 +313,7 @@ export function PlayerBoard({
 				)}
 				style={
 					{
-						"--card-vw-share": `${CREW_SLOT_CARD_SIZE}px`,
+						"--card-vw-share": `${cardPx}px`,
 					} as React.CSSProperties
 				}
 			>
@@ -396,9 +396,7 @@ export function PlayerBoard({
 				player.isEliminated && "opacity-30 grayscale",
 				ownBoardAreaHighlighted && "ft-drop-zone-legal",
 			)}
-			style={
-				{ "--card-vw-share": `${CREW_SLOT_CARD_SIZE}px` } as React.CSSProperties
-			}
+			style={{ "--card-vw-share": `${cardPx}px` } as React.CSSProperties}
 		>
 			<div className="flex items-center justify-between gap-2">
 				<div className="flex items-center gap-2 min-w-0">
@@ -430,11 +428,11 @@ export function PlayerBoard({
 				/>
 			)}
 
-			{/* grid: boss plus crew, equal fixed tracks sized to crew card */}
+			{/* grid: boss plus crew, equal fixed tracks */}
 			<div
 				className="grid gap-2.5"
 				style={{
-					gridTemplateColumns: `repeat(${player.crewSlots.length + 1}, minmax(0, ${CREW_SLOT_CARD_SIZE}px))`,
+					gridTemplateColumns: `repeat(${player.crewSlots.length + 1}, minmax(0, ${cardPx}px))`,
 				}}
 			>
 				<div className="flex justify-center">

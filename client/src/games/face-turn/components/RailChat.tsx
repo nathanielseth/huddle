@@ -63,14 +63,21 @@ function ChatRow({ message }: { message: ChatMessage }) {
 	);
 }
 
-export function RailChat() {
+// shared by desktop rail and mobile sheet
+export function ChatFeed({
+	listClassName,
+	listHeightPx,
+}: {
+	listClassName?: string;
+	listHeightPx?: number;
+}) {
 	const chatMessages = useGameStore((s) => s.chatMessages);
 	const sendChatMessage = useGameStore((s) => s.sendChatMessage);
 	const status = useGameStore((s) => s.status);
 	const [draft, setDraft] = useState("");
 	const scrollRef = useRef<HTMLDivElement>(null);
 
-	// stick to bottom on new messages, same as any live chat feed
+	// stick to bottom on new messages
 	useEffect(() => {
 		const el = scrollRef.current;
 		if (!el) return;
@@ -86,13 +93,18 @@ export function RailChat() {
 	}
 
 	return (
-		<div className="shrink-0 flex flex-col gap-1.5 px-4 pb-4 pt-1 border-t border-white/10">
-			<SectionTitle>Chat</SectionTitle>
-
+		<>
 			<div
 				ref={scrollRef}
-				className="flex flex-col gap-2 overflow-y-auto ft-scroll pr-1"
-				style={{ height: CHAT_HEIGHT_PX, touchAction: "pan-y" }}
+				className={cn(
+					"flex flex-col gap-2 overflow-y-auto ft-scroll pr-1",
+					listClassName,
+				)}
+				style={{
+					height: listHeightPx,
+					flex: listHeightPx ? undefined : "1 1 auto",
+					touchAction: "pan-y",
+				}}
 			>
 				{chatMessages.length === 0 ? (
 					<p className="text-xs text-white/25 italic">No messages yet.</p>
@@ -101,7 +113,10 @@ export function RailChat() {
 				)}
 			</div>
 
-			<form onSubmit={handleSubmit} className="flex items-center gap-2 pt-1 shrink-0">
+			<form
+				onSubmit={handleSubmit}
+				className="flex items-center gap-2 pt-2 shrink-0"
+			>
 				<input
 					type="text"
 					value={draft}
@@ -131,6 +146,18 @@ export function RailChat() {
 					Send
 				</button>
 			</form>
+		</>
+	);
+}
+
+// desktop rail chat, hidden on mobile
+export function RailChat() {
+	return (
+		<div className="hidden lg:flex shrink-0 flex-col gap-1.5 px-4 pb-4 pt-1 border-t border-white/10">
+			<SectionTitle>Chat</SectionTitle>
+			<div className="flex flex-col gap-1.5 mt-1">
+				<ChatFeed listHeightPx={CHAT_HEIGHT_PX} />
+			</div>
 		</div>
 	);
 }

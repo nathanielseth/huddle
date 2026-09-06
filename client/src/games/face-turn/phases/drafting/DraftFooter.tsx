@@ -1,8 +1,7 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { cn } from "../../../../lib/utils/cn";
 
-// below this width the stats group and done button no longer comfortably
-// share one row at their natural sizes
+// below this width stats and done button no longer fit one row
 const STACK_THRESHOLD_PX = 360;
 
 export function DraftFooter({
@@ -15,10 +14,11 @@ export function DraftFooter({
 	locked,
 	pickedCount,
 	onDone,
+	// mobile only, pick list isn't always visible
 	onReviewPicks,
-	// desktop passes false: the sidebar's section headers already show
-	// live Boss/Crew/Moves counts, so repeating them here is redundant.
-	// Mobile keeps stats since the pick list isn't always on screen.
+	// desktop save control, mobile has no save flow yet
+	saveDeckSlot,
+	// desktop hides stats, sidebar already shows them
 	showStats = true,
 }: {
 	bossDone: boolean;
@@ -30,8 +30,8 @@ export function DraftFooter({
 	locked: boolean;
 	pickedCount: number;
 	onDone: () => void;
-	// present only on layouts (mobile) where the pick list isn't already visible
 	onReviewPicks?: () => void;
+	saveDeckSlot?: ReactNode;
 	showStats?: boolean;
 }) {
 	const containerRef = useRef<HTMLDivElement>(null);
@@ -76,7 +76,7 @@ export function DraftFooter({
 						!stacked && "ml-auto",
 					)}
 				>
-					{pickedCount > 0 ? `${pickedCount} picked` : "Review"}
+					{pickedCount > 0 ? `${pickedCount} picked` : "Deck"}
 					<svg
 						viewBox="0 0 24 24"
 						className="w-3 h-3"
@@ -95,7 +95,8 @@ export function DraftFooter({
 		</div>
 	);
 
-	const fullWidthButton = stacked || !showStats;
+	// full width only when nothing else shares the row, with save control done fills remaining space
+	const fullWidthButton = (stacked || !showStats) && !saveDeckSlot;
 
 	const doneButton = (
 		<button
@@ -105,6 +106,7 @@ export function DraftFooter({
 			className={cn(
 				"shrink-0 px-6 py-2.5 rounded-lg border text-xs font-bold uppercase tracking-widest transition-all min-w-26",
 				fullWidthButton && "w-full",
+				saveDeckSlot && "flex-1",
 				allDone && !locked
 					? "border-amber-400/60 bg-amber-400/10 text-amber-200 cursor-pointer active:scale-95"
 					: "border-white/10 text-white/20 cursor-not-allowed",
@@ -121,16 +123,23 @@ export function DraftFooter({
 			style={{ paddingBottom: "env(safe-area-inset-bottom)" }}
 		>
 			{!showStats ? (
-				<div className="px-4 py-2.5">{doneButton}</div>
+				<div className="px-4 py-2.5 flex items-center gap-2">
+					{doneButton}
+					{saveDeckSlot}
+				</div>
 			) : stacked ? (
 				<div className="flex flex-col gap-2 px-4 py-2.5">
 					{stats}
-					{doneButton}
+					<div className="flex items-center gap-2">
+						{doneButton}
+						{saveDeckSlot}
+					</div>
 				</div>
 			) : (
 				<div className="flex items-center gap-3 px-4 py-2.5">
 					<div className="flex-1 min-w-0">{stats}</div>
 					{doneButton}
+					{saveDeckSlot}
 				</div>
 			)}
 		</div>

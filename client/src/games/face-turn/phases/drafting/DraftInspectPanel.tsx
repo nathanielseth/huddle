@@ -9,6 +9,8 @@ import {
 	type CrewCardDisplay,
 	type MoveCardDisplay,
 } from "@shared/games/face-turn/card-display";
+import { FACETURN_CONSTANTS } from "@shared/games/face-turn/constants";
+import type { CrewClass, MoveType } from "@shared/games/face-turn/types";
 import { Card, type CardProps } from "../../components/card/Card";
 import {
 	cardIdToCard,
@@ -18,18 +20,15 @@ import {
 } from "../../components/card/cardAdapters";
 import { CARD_VARIANT_THEME } from "../../components/card/cardVariants";
 
-// above the draft UI, below app-level modals (matches AppCardInspect's tier)
+// above draft ui, below app modals
 const PANEL_Z = 1200;
 
 const CARD_COLUMN_SIZE = 400;
-const SYNERGY_RENDER_SIZE = 120; // real Card render size, then scaled down visually
-const SYNERGY_DISPLAY_SIZE = 76; // the footprint it should occupy in the rail
+const SYNERGY_RENDER_SIZE = 120;
+const SYNERGY_DISPLAY_SIZE = 76;
 const SYNERGY_SCALE = SYNERGY_DISPLAY_SIZE / SYNERGY_RENDER_SIZE;
 
-// fixed heights for each details section so the rail's overall height stays
-// constant while cycling through cards, regardless of how much text or how
-// many synergies a given card has — each section scrolls internally instead
-// of resizing the layout
+// fixed heights keep panel stable while cycling cards
 const EFFECTS_SECTION_HEIGHT = 200;
 const FLAVOR_SECTION_HEIGHT = 22;
 const SYNERGY_SECTION_HEIGHT = SYNERGY_DISPLAY_SIZE * 1.4 + 8;
@@ -50,9 +49,7 @@ function targetToCard(target: DraftInspectTarget): CardProps {
 	return moveToCard(target.display);
 }
 
-// resolves a synergyId back to a full inspect target (raw display data,
-// not just CardProps) so clicking a synergy tile can show its own effects
-// and its own synergies, exactly like any other card in the panel
+// resolves synergy id to raw display so clicking it can drill deeper
 function targetFromId(id: string): DraftInspectTarget | undefined {
 	const boss = BOSS_DISPLAY_MAP.get(id);
 	if (boss) return { kind: "boss", display: boss };
@@ -63,19 +60,22 @@ function targetFromId(id: string): DraftInspectTarget | undefined {
 	return undefined;
 }
 
-function targetTypeLabel(target: DraftInspectTarget): string {
-	if (target.kind === "boss") return "Boss";
-	if (target.kind === "crew")
-		return CARD_VARIANT_THEME[target.display.class].label;
-	return CARD_VARIANT_THEME[target.display.moveType].label;
-}
+// class action rules for claiming each crew class; any player can claim any class
+const CLASS_ACTION_TEXT: Record<CrewClass, string> = {
+	striker: `Pay ${FACETURN_CONSTANTS.STRIKE_CASH_COST} Cash. Strike a unit.`,
+	defender: "Block an incoming Strike.",
+	collector: `Gain ${FACETURN_CONSTANTS.COLLECT_CASH_GAIN} Cash.`,
+	hider: `Pay ${FACETURN_CONSTANTS.HIDE_CASH_COST} Cash. Turn a face-up Crew face-down.`,
+};
+const CLASS_ACTION_NOTE = "(Truthful when face-down.)";
+const FACE_TURN_TEXT = `Pay ${FACETURN_CONSTANTS.BOSS_FACE_TURN_COST} Cash. Perform an Unstoppable Strike.`;
 
-function targetAccent(target: DraftInspectTarget): string {
-	if (target.kind === "boss") return CARD_VARIANT_THEME.boss.accent;
-	if (target.kind === "crew")
-		return CARD_VARIANT_THEME[target.display.class].accent;
-	return CARD_VARIANT_THEME[target.display.moveType].accent;
-}
+// how each move type resolves, shown instead of plain type badge
+const MOVE_TYPE_TEXT: Record<MoveType, string> = {
+	burst: "Plays and resolves immediately.",
+	active: "Remains in play and continues to apply its effect.",
+	slow: "The opponent may respond with a Slow move before this resolves.",
+};
 
 const TAG_BG: Record<"command" | "passive" | "revealed" | "primary", string> = {
 	command: "#f5c542",
@@ -84,9 +84,7 @@ const TAG_BG: Record<"command" | "passive" | "revealed" | "primary", string> = {
 	primary: "#d9d9d9",
 };
 
-// scoped once via a real class name (not a shared/ambient one) so the
-// hover-lift can't collide with anything else in the app, and can't
-// silently fail to load the way a separate .css file previously did
+// scoped class to avoid collision and missing stylesheet load
 const SYNERGY_HOVER_STYLE = `
 .ft-inspect-synergy-thumb:hover {
 	transform: translateY(-4px);
@@ -113,10 +111,14 @@ function SectionLabel({ children }: { children: string }) {
 function EffectRow({
 	label,
 	tone,
+	labelColor,
+	note,
 	text,
 }: {
 	label: string;
 	tone: "primary" | "revealed" | "passive" | "command";
+	labelColor?: string;
+	note?: string;
 	text: string;
 }) {
 	return (
@@ -132,21 +134,40 @@ function EffectRow({
 			}}
 		>
 			{label && (
-				<span
+				<div
 					style={{
-						alignSelf: "flex-start",
-						padding: "2px 8px",
-						borderRadius: 4,
-						fontSize: 10,
-						fontWeight: 800,
-						textTransform: "uppercase",
-						letterSpacing: "0.08em",
-						color: "#000",
-						background: TAG_BG[tone],
+						display: "flex",
+						alignItems: "baseline",
+						gap: 6,
 					}}
 				>
-					{label}
-				</span>
+					<span
+						style={{
+							alignSelf: "flex-start",
+							padding: "2px 8px",
+							borderRadius: 4,
+							fontSize: 10,
+							fontWeight: 800,
+							textTransform: "uppercase",
+							letterSpacing: "0.08em",
+							color: "#000",
+							background: labelColor ?? TAG_BG[tone],
+						}}
+					>
+						{label}
+					</span>
+					{note && (
+						<span
+							style={{
+								fontSize: 11,
+								fontStyle: "italic",
+								color: "rgba(255,255,255,0.4)",
+							}}
+						>
+							{note}
+						</span>
+					)}
+				</div>
 			)}
 			<p
 				style={{
@@ -160,6 +181,45 @@ function EffectRow({
 			</p>
 		</div>
 	);
+}
+
+// variant for a class-action row color
+function targetVariant(target: DraftInspectTarget) {
+	if (target.kind === "boss") return "boss" as const;
+	if (target.kind === "crew") return target.display.class;
+	return target.display.moveType;
+}
+
+function ClassActionSection({ target }: { target: DraftInspectTarget }) {
+	const variant = targetVariant(target);
+	const label =
+		target.kind === "boss" ? "Face Turn" : CARD_VARIANT_THEME[variant].label;
+
+	const text =
+		target.kind === "boss"
+			? FACE_TURN_TEXT
+			: target.kind === "crew"
+				? CLASS_ACTION_TEXT[target.display.class]
+				: MOVE_TYPE_TEXT[target.display.moveType];
+
+	return (
+		<div>
+			<SectionLabel>Class Actions</SectionLabel>
+			<EffectRow
+				label={label}
+				tone="command"
+				labelColor={CARD_VARIANT_THEME[variant].accent}
+				note={target.kind === "crew" ? CLASS_ACTION_NOTE : undefined}
+				text={text}
+			/>
+		</div>
+	);
+}
+
+function targetKindLabel(target: DraftInspectTarget): string {
+	if (target.kind === "boss") return "Boss";
+	if (target.kind === "crew") return "Crew";
+	return "Move";
 }
 
 function EffectRows({ target }: { target: DraftInspectTarget }) {
@@ -191,17 +251,11 @@ function EffectRows({ target }: { target: DraftInspectTarget }) {
 		);
 	}
 	return (
-		<EffectRow
-			label={targetTypeLabel(target)}
-			tone="primary"
-			text={target.display.effectText}
-		/>
+		<EffectRow label="Effect" tone="primary" text={target.display.effectText} />
 	);
 }
 
-// real Card, rendered at a normal size then scaled down visually via CSS
-// transform — this sidesteps Card's internal 88px minimum width floor,
-// which a literal small pixel size (e.g. 56px) would get clamped up past
+// scale rather than small size avoids card's 88px min clamp
 function SynergyThumb({
 	card,
 	onSelect,
@@ -275,8 +329,6 @@ function SynergyRail({
 					flexWrap: "wrap",
 					alignContent: "flex-start",
 					gap: 8,
-					// headroom so the hover-lift (translateY + scale) on a tile
-					// isn't clipped by this container's own scroll edge
 					paddingTop: 8,
 					marginTop: -8,
 				}}
@@ -310,11 +362,6 @@ export function DraftInspectPanel({
 	onClose: () => void;
 	onStep: (delta: 1 | -1) => void;
 }) {
-	// clicking a synergy tile drills into that card's own inspect view,
-	// pushed onto a local stack so "back" can return to where you came
-	// from — this never touches the parent's cycle/tab state. Reset when
-	// the parent hands us a different root cycle (adjusting state during
-	// render, per React's recommended pattern, rather than in an effect)
 	const [drillStack, setDrillStack] = useState<DraftInspectTarget[]>([]);
 	const [lastCycle, setLastCycle] = useState(cycle);
 	if (cycle !== lastCycle) {
@@ -353,7 +400,7 @@ export function DraftInspectPanel({
 	if (!target) return null;
 
 	const cardProps = targetToCard(target);
-	const accent = targetAccent(target);
+	const accent = CARD_VARIANT_THEME[targetVariant(target)].accent;
 
 	return createPortal(
 		<div
@@ -397,9 +444,6 @@ export function DraftInspectPanel({
 						alignItems: "center",
 						gap: 10,
 						flexShrink: 0,
-						// this is the only override Card's internal sizing clamp needs;
-						// it's set inline here, not in an external stylesheet, so it
-						// can never fail to load or be out of sync
 						// @ts-expect-error -- custom CSS var
 						"--card-vw-share": `${CARD_COLUMN_SIZE}px`,
 					}}
@@ -495,7 +539,7 @@ export function DraftInspectPanel({
 							color: accent,
 						}}
 					>
-						{targetTypeLabel(target)}
+						{targetKindLabel(target)}
 					</span>
 					<h2
 						style={{
@@ -530,6 +574,8 @@ export function DraftInspectPanel({
 							</p>
 						</div>
 					</div>
+
+					<ClassActionSection target={target} />
 
 					<div>
 						<SectionLabel>Effects</SectionLabel>

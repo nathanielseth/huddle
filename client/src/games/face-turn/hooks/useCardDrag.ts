@@ -23,8 +23,7 @@ export interface UseCardDragOptions<T> {
 	onDrop: (target: T) => void;
 	onLongPress?: () => void;
 	disabled?: boolean;
-	// called synchronously wherever dragState actually changes, so callers
-	// can react to drag start/end without watching dragState in an effect
+	// synchronous callback for drag state changes
 	onDragStateChange?: (state: CardDragState<T>) => void;
 }
 
@@ -60,8 +59,7 @@ export function useCardDrag<T>({
 	const startPointRef = useRef<DragPosition | null>(null);
 	const longPressTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 	const resolvedRef = useRef<"none" | "drag" | "inspect">("none");
-	const elementRef = useRef<HTMLElement | null>(null);
-	// live mirror of dragState.currentTarget for drop time use
+	// live mirror of currentTarget for drop time
 	const currentTargetRef = useRef<T | null>(null);
 
 	const clearLongPressTimer = () => {
@@ -76,7 +74,6 @@ export function useCardDrag<T>({
 		pointerIdRef.current = null;
 		startPointRef.current = null;
 		resolvedRef.current = "none";
-		elementRef.current = null;
 		currentTargetRef.current = null;
 	};
 
@@ -166,18 +163,11 @@ export function useCardDrag<T>({
 		pointerIdRef.current = e.pointerId;
 		startPointRef.current = { x: e.clientX, y: e.clientY };
 		resolvedRef.current = "none";
-		elementRef.current = e.currentTarget as HTMLElement;
 
-		// listen on window because pointer moves outside element bounds
+		// no setPointerCapture: capture retargets pointerup click, plain tap wouldn't reach inner button
 		window.addEventListener("pointermove", handlePointerMove);
 		window.addEventListener("pointerup", handlePointerUp);
 		window.addEventListener("pointercancel", handlePointerCancel);
-
-		try {
-			elementRef.current.setPointerCapture(e.pointerId);
-		} catch {
-			// capture not load bearing, window listeners suffice
-		}
 
 		longPressTimerRef.current = setTimeout(() => {
 			if (resolvedRef.current !== "none") return;

@@ -29,8 +29,9 @@ export function useSavedDecks() {
 			crewIds: readonly string[];
 			moveIds: readonly string[];
 		},
+		thumbnailArtSrc?: string,
 	) {
-		return saveDeckToStorage(name, selections);
+		return saveDeckToStorage(name, selections, thumbnailArtSrc);
 	}
 
 	function remove(id: string) {

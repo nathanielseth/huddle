@@ -1,15 +1,14 @@
-import {
-	useState,
-	type CSSProperties,
-	type DragEvent,
-	type ReactNode,
-} from "react";
+import type { CSSProperties, ReactNode } from "react";
 import { CARD_VARIANT_THEME } from "../../components/card/cardVariants";
 import { CARD_VARIANT_ICON } from "../../components/card/cardIconRegistry";
 import { MOVE_TAG_LABEL } from "../../components/card/cardAdapters";
 import { Card, type CardProps } from "../../components/card/Card";
 import { cn } from "../../../../lib/utils/cn";
 import type { CrewClass, MoveType } from "@shared/games/face-turn/types";
+import {
+	useDraftDropTarget,
+	useIsDraftDraggedOverTarget,
+} from "./draftDropTargets";
 
 export type PickedEntry =
 	| { kind: "boss"; id: string; name: string; artSrc?: string }
@@ -30,46 +29,18 @@ export type PickedEntry =
 			artSrc?: string;
 	  };
 
-// drag payload shared with the browse grid
-export const DRAG_MIME_TYPE = "application/x-faceturn-card";
-
-function readDragPayload(
-	e: DragEvent<HTMLElement>,
-): { kind: PickedEntry["kind"]; id: string } | null {
-	try {
-		const raw = e.dataTransfer.getData(DRAG_MIME_TYPE);
-		if (!raw) return null;
-		const parsed: unknown = JSON.parse(raw);
-		if (
-			parsed &&
-			typeof parsed === "object" &&
-			"kind" in parsed &&
-			"id" in parsed &&
-			typeof (parsed as { kind: unknown }).kind === "string" &&
-			typeof (parsed as { id: unknown }).id === "string"
-		) {
-			return parsed as { kind: PickedEntry["kind"]; id: string };
-		}
-		return null;
-	} catch {
-		return null;
-	}
-}
-
 function entryVariant(entry: PickedEntry) {
 	if (entry.kind === "boss") return "boss" as const;
 	if (entry.kind === "crew") return entry.crewClass;
 	return entry.moveType;
 }
 
-// used for tooltip and row tint, no separate icon or label
 function entryVariantLabel(entry: PickedEntry): string {
 	if (entry.kind === "boss") return "Boss";
 	if (entry.kind === "crew") return CARD_VARIANT_THEME[entry.crewClass].label;
 	return MOVE_TAG_LABEL[entry.moveType];
 }
 
-// row background carries type color, art stays clean
 function ArtThumb({ entry }: { entry: PickedEntry }) {
 	return (
 		<span className="shrink-0 w-10 h-10 rounded-lg overflow-hidden bg-black/30 border border-white/10">
@@ -88,7 +59,6 @@ function ArtThumb({ entry }: { entry: PickedEntry }) {
 	);
 }
 
-// cost badge for moves, icon for boss/crew; icon on move would be redundant
 function TrailingBadge({ entry }: { entry: PickedEntry }) {
 	const variant = entryVariant(entry);
 	const theme = CARD_VARIANT_THEME[variant];
@@ -119,7 +89,6 @@ function TrailingBadge({ entry }: { entry: PickedEntry }) {
 	);
 }
 
-// all clickable to deselect, right-click inspect; row bg tint carries type, title has type name
 export function SidebarRow({
 	entry,
 	onDeselect,
@@ -166,7 +135,6 @@ export function SidebarRow({
 	);
 }
 
-// same Card as browse grid for pixel-identical draft preview
 function ExpandedPickedCard({
 	entry,
 	cardProps,
@@ -200,56 +168,43 @@ function ExpandedPickedCard({
 	);
 }
 
-// neutral not tinted, one per section, expanded aspect matches cards
+// drop target: registers for pointer drag, clickable to jump to tab, hover via registry or css
 function DropSlot({
 	kind,
 	label,
 	compact,
-	onDropCard,
+	onNavigateToTab,
 }: {
 	kind: PickedEntry["kind"];
 	label: string;
 	compact: boolean;
-	onDropCard: (kind: PickedEntry["kind"], id: string) => void;
+	onNavigateToTab?: (kind: PickedEntry["kind"]) => void;
 }) {
-	const [dragOver, setDragOver] = useState(false);
+	const ref = useDraftDropTarget(kind);
+	const draggedOver = useIsDraftDraggedOverTarget(kind);
 
 	return (
-		<div
-			onDragOver={(e) => {
-				e.preventDefault();
-				e.dataTransfer.dropEffect = "copy";
-			}}
-			onDragEnter={(e) => {
-				e.preventDefault();
-				setDragOver(true);
-			}}
-			onDragLeave={() => {
-				setDragOver(false);
-			}}
-			onDrop={(e) => {
-				e.preventDefault();
-				setDragOver(false);
-				const payload = readDragPayload(e);
-				if (!payload || payload.kind !== kind) return;
-				onDropCard(payload.kind, payload.id);
-			}}
+		<button
+			type="button"
+			ref={ref}
+			onClick={() => onNavigateToTab?.(kind)}
+			title={`Add ${label.toLowerCase()} - click to browse, or drag a card here`}
 			className={cn(
-				"flex items-center justify-center rounded-lg border-2 border-dashed text-center transition-colors",
+				"flex items-center justify-center rounded-lg border-2 border-dashed text-center transition-colors cursor-pointer",
 				compact
-					? "mx-4 my-2 h-14 px-3 text-[10px] font-black uppercase tracking-widest"
+					? "mx-5 my-2 h-14 px-31 text-[10px] font-black uppercase tracking-widest"
 					: "aspect-63/88 text-[9px] font-black uppercase tracking-wide leading-tight px-1",
-				dragOver
+				draggedOver
 					? "border-white/50 bg-white/12 text-white"
-					: "border-white/15 bg-black/35 text-white/40",
+					: "border-white/15 bg-black/35 text-white/40 hover:border-white/50 hover:bg-white/12 hover:text-white",
 			)}
 		>
-			{compact ? `Drag ${label.toLowerCase()} here` : `Drag ${label}`}
-		</div>
+			{`Add ${label.toLowerCase()}`}
+		</button>
 	);
 }
 
-const EXPANDED_GRID_COLUMNS = 3;
+const EXPANDED_GRID_COLUMNS = 4;
 const EXPANDED_GRID_GAP = 8;
 const EXPANDED_GRID_PADDING_X = 14;
 
@@ -278,7 +233,6 @@ function ExpandedGrid({
 	);
 }
 
-// colored rule separates zones
 function SectionHeader({
 	label,
 	current,
@@ -311,14 +265,14 @@ function SectionHeader({
 	);
 }
 
-// grouped sections; expanded variant uses full cards, onDropCard enables drag from browse
 export function PickedSidebarSections({
 	entries,
 	crewMax,
 	moveMax,
 	onDeselect,
 	onInspect,
-	onDropCard,
+	dropEnabled = false,
+	onNavigateToTab,
 	variant = "compact",
 	cardPropsByKey,
 	cardSize,
@@ -328,7 +282,8 @@ export function PickedSidebarSections({
 	moveMax: number;
 	onDeselect: (entry: PickedEntry) => void;
 	onInspect?: (entry: PickedEntry) => void;
-	onDropCard?: (kind: PickedEntry["kind"], id: string) => void;
+	dropEnabled?: boolean;
+	onNavigateToTab?: (kind: PickedEntry["kind"]) => void;
 	variant?: "compact" | "expanded";
 	cardPropsByKey?: ReadonlyMap<string, CardProps>;
 	cardSize?: number;
@@ -368,13 +323,13 @@ export function PickedSidebarSections({
 		max: number,
 	) {
 		const dropSlot =
-			onDropCard && items.length < max ? (
+			dropEnabled && items.length < max ? (
 				<DropSlot
 					key={`drop-${kind}`}
 					kind={kind}
 					label={label}
 					compact={!expanded}
-					onDropCard={onDropCard}
+					onNavigateToTab={onNavigateToTab}
 				/>
 			) : null;
 

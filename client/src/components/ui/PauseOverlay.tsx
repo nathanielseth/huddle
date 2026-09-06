@@ -1,6 +1,9 @@
 import { useEffect, useState } from "react";
+import { createPortal } from "react-dom";
 import { m, AnimatePresence } from "motion/react";
 import type { PauseReason } from "@shared/core/room";
+
+const PAUSE_OVERLAY_Z = 1300;
 
 interface Props {
 	pauseReason: PauseReason | null;
@@ -56,9 +59,10 @@ export function PauseOverlay({
 	const [confirming, setConfirming] = useState(false);
 	const isHostDisconnected = pauseReason === "host_disconnected";
 
-	return (
+	return createPortal(
 		<m.div
-			className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 backdrop-blur-sm"
+			className="fixed inset-0 flex items-center justify-center bg-black/75 backdrop-blur-sm"
+			style={{ zIndex: PAUSE_OVERLAY_Z }}
 			initial={{ opacity: 0 }}
 			animate={{ opacity: 1 }}
 			exit={{ opacity: 0 }}
@@ -173,6 +177,7 @@ export function PauseOverlay({
 					</AnimatePresence>
 				)}
 			</m.div>
-		</m.div>
+		</m.div>,
+		document.body,
 	);
 }

@@ -30,6 +30,7 @@ import { useActiveMoveDiscardStore } from "../hooks/useActiveMoveDiscard";
 import { DragPortal } from "./hand/DragPortal";
 import { useHoverPreview } from "./hand/useHoverPreview";
 import { setCardHoverPreview } from "./hand/cardHoverPreviewStore";
+import { useBoardCardSize } from "../hooks/boardCardSizeStore";
 
 export const CREW_SLOT_CARD_SIZE = 120;
 export const HALF_CARD_ASPECT_RATIO = "63 / 51.72";
@@ -50,6 +51,7 @@ export function CrewSlotBadge({
 	onClick?: () => void;
 }) {
 	const { inspect, modal: inspectModal } = useCardInspect();
+	const cardPx = useBoardCardSize();
 
 	const revealedId =
 		slot.status === "empty"
@@ -69,7 +71,7 @@ export function CrewSlotBadge({
 	if (slot.status === "empty") {
 		return (
 			<div
-				style={{ width: CREW_SLOT_CARD_SIZE, aspectRatio: "63 / 88" }}
+				style={{ width: cardPx, aspectRatio: "63 / 88" }}
 				className="ft-panel-ink-flat rounded-lg border border-dashed border-white/15 flex items-center justify-center"
 			>
 				<span className="ft-eyebrow text-[8px] text-white/20">Empty</span>
@@ -87,7 +89,7 @@ export function CrewSlotBadge({
 	const card = (
 		<Card
 			{...cardProps}
-			size={CREW_SLOT_CARD_SIZE}
+			size={cardPx}
 			flipped={isFaceDown}
 			selected={selected}
 			armed={armed}
@@ -136,6 +138,7 @@ export function BossPanel({
 	onClick?: () => void;
 }) {
 	const { inspect, modal: inspectModal } = useCardInspect();
+	const cardPx = useBoardCardSize();
 	const bossCardProps = boss.id
 		? {
 				...bossToCard(getBossDisplay(boss.id)),
@@ -148,7 +151,7 @@ export function BossPanel({
 	if (!boss.id) {
 		return (
 			<div
-				style={{ width: CREW_SLOT_CARD_SIZE, aspectRatio: "63 / 88" }}
+				style={{ width: cardPx, aspectRatio: "63 / 88" }}
 				className="ft-panel-ink-flat rounded-lg border border-dashed border-white/15 flex items-center justify-center"
 			>
 				<span className="ft-eyebrow text-[8px] text-white/20">No boss</span>
@@ -171,7 +174,7 @@ export function BossPanel({
 			>
 				<Card
 					{...cardProps}
-					size={CREW_SLOT_CARD_SIZE}
+					size={cardPx}
 					armed={highlighted}
 					onClick={onClick}
 				/>
@@ -274,15 +277,12 @@ export function OpponentHandStrip({
 	);
 }
 
-const ACTIVE_MOVE_SLOT_PX = {
-	md: CREW_SLOT_CARD_SIZE,
-	sm: 44,
-} as const;
-
 const ACTIVE_MOVE_SLOT_GAP = {
 	md: "0.625rem",
 	sm: "0.375rem",
 } as const;
+
+const ACTIVE_MOVE_SLOT_PX_SM = 44;
 
 function RegisteredActiveMoveSlot({
 	slot,
@@ -464,11 +464,12 @@ export function ActiveMoveSlots({
 	discardEnabled = false,
 }: {
 	slots: readonly ActiveMoveSlotView[];
-	size?: keyof typeof ACTIVE_MOVE_SLOT_PX;
+	size?: "md" | "sm";
 	getTargetForSlot?: (slotIndex: number) => BoardTarget;
 	discardEnabled?: boolean;
 }) {
-	const px = ACTIVE_MOVE_SLOT_PX[size];
+	const liveCardPx = useBoardCardSize();
+	const px = size === "md" ? liveCardPx : ACTIVE_MOVE_SLOT_PX_SM;
 	const gap = ACTIVE_MOVE_SLOT_GAP[size];
 	return (
 		<div

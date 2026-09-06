@@ -61,7 +61,9 @@ export function RailMoveArea() {
 		<div
 			ref={ref}
 			className={cn(
-				"flex-1 min-h-0 flex flex-col gap-2 px-4 py-3 border-b border-white/10 transition-all",
+				"shrink-0 max-h-[26dvh] overflow-y-auto ft-scroll",
+				"lg:flex-1 lg:min-h-0 lg:max-h-none lg:overflow-visible",
+				"flex flex-col gap-2 px-4 py-3 border-b border-white/10 transition-all",
 				dropHighlighted && "ft-drop-zone-legal",
 			)}
 		>

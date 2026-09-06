@@ -1,12 +1,11 @@
 import { BOSS_DISPLAY_MAP } from "@shared/games/face-turn/card-display";
-
-// client only draft presets, localStorage backed, server validates card ids on load
 export interface SavedDeck {
 	id: string;
 	name: string;
 	bossId: string | null;
 	crewIds: string[];
 	moveIds: string[];
+	thumbnailArtSrc?: string;
 	savedAt: number;
 }
 
@@ -18,9 +17,6 @@ type Selections = {
 
 const STORAGE_KEY = "huddle_faceturn_decks:v1";
 const MAX_SAVED_DECKS = 20;
-
-// separate, auto-populated tier — no name, no explicit save step. Exists so
-// a draft isn't lost just because the player never hit "Save current draft".
 const RECENT_STORAGE_KEY = "huddle_faceturn_recent_decks:v1";
 const MAX_RECENT_DECKS = 3;
 
@@ -58,6 +54,8 @@ function isSavedDeck(v: unknown): v is SavedDeck {
 		(d.bossId === null || typeof d.bossId === "string") &&
 		Array.isArray(d.crewIds) &&
 		Array.isArray(d.moveIds) &&
+		(d.thumbnailArtSrc === undefined ||
+			typeof d.thumbnailArtSrc === "string") &&
 		typeof d.savedAt === "number"
 	);
 }
@@ -93,17 +91,34 @@ export function listSavedDecks(): SavedDeck[] {
 	return readAll().sort((a, b) => b.savedAt - a.savedAt);
 }
 
+// falls back to the boss's name when the player leaves the name blank
+function autoDeckName(selections: Selections): string {
+	if (selections.bossId) {
+		const boss = BOSS_DISPLAY_MAP.get(selections.bossId);
+		if (boss) return boss.name;
+	}
+	return "Untitled draft";
+}
+
+// thumbnail default for saves that skip the picker entirely
+function autoThumbnail(selections: Selections): string | undefined {
+	if (!selections.bossId) return undefined;
+	return BOSS_DISPLAY_MAP.get(selections.bossId)?.artSrc;
+}
+
 export function saveDeck(
 	name: string,
 	selections: Selections,
+	thumbnailArtSrc?: string,
 ): SavedDeck | null {
 	const decks = readAll();
 	const entry: SavedDeck = {
 		id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
-		name: name.trim() || "Untitled deck",
+		name: name.trim() || autoDeckName(selections),
 		bossId: selections.bossId,
 		crewIds: [...selections.crewIds],
 		moveIds: [...selections.moveIds],
+		thumbnailArtSrc: thumbnailArtSrc ?? autoThumbnail(selections),
 		savedAt: Date.now(),
 	};
 	decks.push(entry);
@@ -116,8 +131,6 @@ export function saveDeck(
 export function deleteSavedDeck(id: string): boolean {
 	return writeAll(readAll().filter((d) => d.id !== id));
 }
-
-// --- recently used (auto-saved) ---------------------------------------
 
 function sameSelections(a: SavedDeck, b: Selections): boolean {
 	if (a.bossId !== b.bossId) return false;
@@ -133,21 +146,13 @@ function sameSelections(a: SavedDeck, b: Selections): boolean {
 	);
 }
 
-function autoDeckName(selections: Selections): string {
-	if (selections.bossId) {
-		const boss = BOSS_DISPLAY_MAP.get(selections.bossId);
-		if (boss) return boss.name;
-	}
-	return "Untitled draft";
-}
-
 export function listRecentDecks(): SavedDeck[] {
 	return readFrom(RECENT_STORAGE_KEY).sort((a, b) => b.savedAt - a.savedAt);
 }
 
-// call as the draft changes (debounced by the caller) — dedupes against the
-// most recent entry so mid-edit churn doesn't spam the list, and silently
-// no-ops on an empty draft since there's nothing worth remembering yet
+// call as the draft changes (debounced by the caller)
+// most recent entry so mid-edit churn doesn't spam the list
+// silently no-ops on an empty draft
 export function recordRecentDeck(selections: Selections): void {
 	if (
 		!selections.bossId &&
@@ -171,6 +176,7 @@ export function recordRecentDeck(selections: Selections): void {
 		bossId: selections.bossId,
 		crewIds: [...selections.crewIds],
 		moveIds: [...selections.moveIds],
+		thumbnailArtSrc: autoThumbnail(selections),
 		savedAt: Date.now(),
 	};
 	decks.unshift(entry);
