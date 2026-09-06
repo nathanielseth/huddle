@@ -114,6 +114,13 @@ function requiresEnemyActiveMove(move: MoveCard): boolean {
 	);
 }
 
+// consume: needs a card in hand to discard, or it can't be played at all
+function requiresOwnNonEmptyHand(move: MoveCard): boolean {
+	return move.effects.some(
+		(e) => unwrapEffect(e).type === "discard_cards_from_hand",
+	);
+}
+
 export function requiresStrictAllyTarget(move: MoveCard): boolean {
 	return move.effects.some((e) => {
 		const targeting = EFFECT_TARGETING[unwrapEffect(e).type];
@@ -220,6 +227,13 @@ export function moveHasLegalTarget(
 			enemy.activeMoves.some((m) => m !== null),
 		);
 		if (!hasEligibleEnemy) return false;
+	}
+
+	if (requiresOwnNonEmptyHand(move)) {
+		const actor = state.players.get(actorId);
+		// hand still contains this move card itself at legality-check time
+		// (it's removed just before effects resolve), so require > 1
+		if (!actor || actor.hand.length <= 1) return false;
 	}
 
 	return true;
@@ -382,6 +396,11 @@ export function evaluateCondition(
 		case "no_face_up_crew":
 			return [actor, ...getTeammates(ctx.state, actor.playerId)].every((p) =>
 				p.crewIds.every((crewId, i) => !crewId || !p.crewTurned[i as 0 | 1]),
+			);
+
+		case "self_has_face_up_crew":
+			return actor.crewIds.some(
+				(crewId, i) => crewId !== null && actor.crewTurned[i as 0 | 1],
 			);
 
 		case "has_bluffed_successfully":

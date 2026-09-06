@@ -14,7 +14,7 @@ import {
 export interface FaceturnDerivedPlayerStats {
 	cashGainPerTurn: number;
 	drawPerTurn: number;
-	cashOnEnemyMoveOrStrike: number;
+	cashOnTeamDamagingMoveOrStrike: number;
 	healOnMovePlayed: number;
 	damageRandomEnemyOnMovePlayed: number;
 	crewSkillsDisabled: boolean;
@@ -33,6 +33,9 @@ export interface FaceturnDerivedPlayerStats {
 	// the razor: strike, or deal damage with a move other than Stab, to add a
 	// copy of Stab to hand
 	hasRazorStabPassive: boolean;
+	// discard stab active move: your crew/moves causing a discard adds a
+	// copy of Stab to hand, once per card discarded
+	hasDiscardStabPassive: boolean;
 	armorPerTurn: number;
 	// global move cost reduction; distinct from per-card costOverrides
 	moveBaseCostReduction: number;
@@ -48,6 +51,8 @@ export interface FaceturnDerivedPlayerStats {
 
 	// extortion: cash gained whenever this player wins a challenge
 	cashOnChallengeWinAmount: number;
+	// mayumi: gain cash for the act of declaring a challenge, win or lose
+	cashOnChallengeAmount: number;
 	// sell out: self-inflicted damage + cash gained at the start of this player's own turn
 	selfDamagePerTurn: number;
 	selfDamageCashGainAmount: number;
@@ -77,7 +82,7 @@ export function makeEmptyDerivedStats(): FaceturnDerivedPlayerStats {
 	return {
 		cashGainPerTurn: 0,
 		drawPerTurn: 0,
-		cashOnEnemyMoveOrStrike: 0,
+		cashOnTeamDamagingMoveOrStrike: 0,
 		healOnMovePlayed: 0,
 		damageRandomEnemyOnMovePlayed: 0,
 		crewSkillsDisabled: false,
@@ -89,6 +94,7 @@ export function makeEmptyDerivedStats(): FaceturnDerivedPlayerStats {
 		hasAllDamagePiercingPassive: false,
 		stealCashOnDamageDealtAmount: 0,
 		hasRazorStabPassive: false,
+		hasDiscardStabPassive: false,
 		armorPerTurn: 0,
 		moveBaseCostReduction: 0,
 		burstMoveCostReduction: 0,
@@ -96,6 +102,7 @@ export function makeEmptyDerivedStats(): FaceturnDerivedPlayerStats {
 		enemyMoveCostSurcharge: 0,
 		hasTerminalStrikeDefend: false,
 		cashOnChallengeWinAmount: 0,
+		cashOnChallengeAmount: 0,
 		selfDamagePerTurn: 0,
 		selfDamageCashGainAmount: 0,
 		hasCeaseDesist: false,
@@ -149,6 +156,7 @@ const ALSO_CLASS_GRANTS: Partial<Record<EffectPrimitive["type"], CrewClass>> = {
 	become_also_striker: "striker",
 	become_also_hider: "hider",
 	become_also_defender: "defender",
+	become_also_collector: "collector",
 };
 
 // pruning is a side‑effect cleanup, not a formula recompute; kept out of derived subtree
@@ -225,6 +233,10 @@ function evaluateConditionForRecompute(
 			return [player, ...getTeammates(state, player.playerId)].every((p) =>
 				p.crewIds.every((crewId, i) => !crewId || !p.crewTurned[i as 0 | 1]),
 			);
+		case "self_has_face_up_crew":
+			return player.crewIds.some(
+				(crewId, i) => crewId !== null && player.crewTurned[i as 0 | 1],
+			);
 		case "has_bluffed_successfully":
 			return player.hasBluffedSuccessfully;
 		default: {
@@ -247,8 +259,8 @@ function recomputePassiveSwitch(
 		case "passive_draw_per_turn":
 			stats.drawPerTurn += effect.amount;
 			break;
-		case "passive_cash_on_enemy_move_or_strike":
-			stats.cashOnEnemyMoveOrStrike += effect.amount;
+		case "passive_cash_on_team_damaging_move_or_strike":
+			stats.cashOnTeamDamagingMoveOrStrike += effect.amount;
 			break;
 		case "passive_heal_on_move_played":
 			stats.healOnMovePlayed += effect.amount;
@@ -261,6 +273,9 @@ function recomputePassiveSwitch(
 			break;
 		case "passive_razor_stab_on_strike_or_damage":
 			stats.hasRazorStabPassive = true;
+			break;
+		case "passive_stab_on_discard":
+			stats.hasDiscardStabPassive = true;
 			break;
 		case "passive_negate_damage_percent":
 			stats.damageReductionPercent = Math.max(
@@ -316,6 +331,9 @@ function recomputePassiveSwitch(
 		case "passive_cash_on_challenge_win":
 			stats.cashOnChallengeWinAmount += effect.amount;
 			break;
+		case "passive_cash_on_challenge":
+			stats.cashOnChallengeAmount += effect.amount;
+			break;
 		case "passive_self_damage_and_cash_per_turn":
 			stats.selfDamagePerTurn += effect.damage;
 			stats.selfDamageCashGainAmount += effect.cashAmount;
@@ -336,6 +354,7 @@ function recomputePassiveSwitch(
 		case "become_also_striker":
 		case "become_also_hider":
 		case "become_also_defender":
+		case "become_also_collector":
 			break;
 		case "passive_disable_all_enemy_crew_passives":
 			break;

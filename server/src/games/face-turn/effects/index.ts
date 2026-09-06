@@ -108,7 +108,6 @@ export {
 	resolveStrikeOrExecute,
 	performStrike,
 	triggerCrewTurnedEffects,
-	applyBloodMoneyOnStrike,
 	executedPlayerIdFrom,
 	type StrikeOrExecuteOutcome,
 } from "./strikes";

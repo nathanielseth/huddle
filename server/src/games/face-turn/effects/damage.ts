@@ -4,8 +4,9 @@ import { CARD_IDS } from "../cards";
 import { FACETURN_CONSTANTS as C } from "../types";
 import { recomputePassives } from "../derived";
 import type { EffectContext, Handler } from "./shared";
-import { getEnemies, resolveTarget } from "./shared";
+import { getEnemies, getTeammates, resolveTarget } from "./shared";
 import { pushLog } from "../log";
+import type { PendingInteraction } from "../interactions/types";
 
 // accumulates damage for chain resolution steps when an accumulator exists
 function accumulate(ctx: EffectContext, dmgDealt: number): void {
@@ -13,7 +14,6 @@ function accumulate(ctx: EffectContext, dmgDealt: number): void {
 		ctx.damageAccumulator.value += dmgDealt;
 	}
 }
-import type { PendingInteraction } from "../interactions/types";
 
 export function clampHp(hp: number, max: number): number {
 	return Math.max(0, Math.min(max, Math.round(hp)));
@@ -77,6 +77,20 @@ export function maybeTriggerRazorStabGrant(actor: FaceturnServerPlayer): void {
 	actor.hand.push(CARD_IDS.MOVE.STAB);
 }
 
+// blood money: your team gains cash whenever your team deals boss damage
+// via a move or a strike (including a killing-blow execution)
+export function maybeTriggerBloodMoneyOnTeamDamage(
+	state: FaceturnServerState,
+	sourceActor: FaceturnServerPlayer,
+): void {
+	if (sourceActor.derived.cashOnTeamDamagingMoveOrStrike <= 0) return;
+	const amount = sourceActor.derived.cashOnTeamDamagingMoveOrStrike;
+	sourceActor.cash += amount;
+	for (const teammate of getTeammates(state, sourceActor.playerId)) {
+		teammate.cash += amount;
+	}
+}
+
 // razor's passive fires on damage dealt by any move other than Stab
 function maybeTriggerRazorStabOnDamage(
 	sourceActor: FaceturnServerPlayer,
@@ -113,6 +127,7 @@ function applyResolvedDamageToBoss(
 		maybeTriggerBastionCashBonus(target);
 		maybeTriggerMonkeyManCashSteal(target, sourceActor, dmg);
 		maybeTriggerRazorStabOnDamage(sourceActor, dmg, moveId);
+		maybeTriggerBloodMoneyOnTeamDamage(state, sourceActor);
 		return rawAmount;
 	}
 
@@ -123,6 +138,7 @@ function applyResolvedDamageToBoss(
 	maybeTriggerBastionCashBonus(target);
 	maybeTriggerMonkeyManCashSteal(target, sourceActor, dmg);
 	maybeTriggerRazorStabOnDamage(sourceActor, dmg, moveId);
+	maybeTriggerBloodMoneyOnTeamDamage(state, sourceActor);
 	return dmg;
 }
 
@@ -210,19 +226,11 @@ export function applyPoisonToVictim(
 export const damageHandlers = {
 	deal_damage(effect, ctx) {
 		if (effect.type !== "deal_damage") return;
-		const target = resolveTarget(ctx);
-		if (!target) return;
-		accumulate(
+		dealDamageToTarget(
 			ctx,
-			applyDamage(
-				ctx.state,
-				target,
-				effect.amount,
-				ctx.actor,
-				effect.undefendable,
-				effect.cannotBeMultiplied,
-				ctx.moveId,
-			),
+			effect.amount,
+			effect.undefendable,
+			effect.cannotBeMultiplied,
 		);
 	},
 
@@ -246,24 +254,11 @@ export const damageHandlers = {
 
 	deal_damage_per_face_up_ally(effect, ctx) {
 		if (effect.type !== "deal_damage_per_face_up_ally") return;
-		const target = resolveTarget(ctx);
-		if (!target) return;
 		const actor = ctx.actor;
 		const allyCount = actor.crewIds.filter(
 			(id, i) => id && actor.crewTurned[i as 0 | 1],
 		).length;
-		accumulate(
-			ctx,
-			applyDamage(
-				ctx.state,
-				target,
-				effect.amountPerAlly * allyCount,
-				actor,
-				false,
-				false,
-				ctx.moveId,
-			),
-		);
+		dealDamageToTarget(ctx, effect.amountPerAlly * allyCount);
 	},
 
 	deal_damage_percent_current_hp(effect, ctx) {
@@ -271,18 +266,7 @@ export const damageHandlers = {
 		const target = resolveTarget(ctx);
 		if (!target) return;
 		const dmg = Math.floor(target.bossHp * (effect.percent / 100));
-		accumulate(
-			ctx,
-			applyDamage(
-				ctx.state,
-				target,
-				dmg,
-				ctx.actor,
-				false,
-				effect.cannotBeMultiplied,
-				ctx.moveId,
-			),
-		);
+		dealDamageToTarget(ctx, dmg, false, effect.cannotBeMultiplied);
 	},
 
 	deal_damage_ignore_armor(effect, ctx) {
@@ -319,20 +303,7 @@ export const damageHandlers = {
 		const count = ctx.state.lastEnemyHandDiscardCount ?? 0;
 		ctx.state.lastEnemyHandDiscardCount = undefined;
 		if (count <= 0) return;
-		const target = resolveTarget(ctx);
-		if (!target) return;
-		accumulate(
-			ctx,
-			applyDamage(
-				ctx.state,
-				target,
-				count * effect.damagePerCard,
-				ctx.actor,
-				false,
-				false,
-				ctx.moveId,
-			),
-		);
+		dealDamageToTarget(ctx, count * effect.damagePerCard);
 	},
 
 	deal_damage_self_boss(effect, ctx) {
@@ -407,3 +378,26 @@ export const damageHandlers = {
 		} satisfies PendingInteraction;
 	},
 } satisfies Partial<Record<EffectPrimitive["type"], Handler>>;
+
+// resolves the ctx's target and deals damage to it, accumulating for chain resolution
+function dealDamageToTarget(
+	ctx: EffectContext,
+	amount: number,
+	undefendable = false,
+	cannotBeMultiplied = false,
+): void {
+	const target = resolveTarget(ctx);
+	if (!target) return;
+	accumulate(
+		ctx,
+		applyDamage(
+			ctx.state,
+			target,
+			amount,
+			ctx.actor,
+			undefendable,
+			cannotBeMultiplied,
+			ctx.moveId,
+		),
+	);
+}

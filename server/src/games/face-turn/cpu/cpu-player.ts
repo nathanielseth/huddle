@@ -1,10 +1,6 @@
 import type { FaceturnsAction } from "../../../../../shared/games/face-turn/schemas";
 import type { FaceturnServerState } from "../types";
-import {
-	getMoveCost,
-	getClassActionCost,
-	computeActorWasBluffing,
-} from "../game";
+import { getClassActionCost, computeActorWasBluffing } from "../game";
 import type { EngineHelpers } from "./legal-actions";
 import { getLegalActions } from "./legal-actions";
 import { search } from "./ismcts";
@@ -26,7 +22,6 @@ export function decideAction(
 	strategyOverride?: StrategyOverride,
 ): FaceturnsAction | null {
 	const helpers: EngineHelpers = {
-		getMoveCost,
 		getClassActionCost,
 		computeActorWasBluffing,
 	};

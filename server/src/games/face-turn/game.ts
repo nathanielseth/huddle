@@ -103,6 +103,26 @@ export function makeServerPlayer(
 	};
 }
 
+// rotates a team's player list so it starts at `rep`, wrapping the rest to the end
+function rotateFromRep(team: readonly string[], rep: string): string[] {
+	const repIdx = team.indexOf(rep);
+	return [...team.slice(repIdx), ...team.slice(0, repIdx)];
+}
+
+// interleaves two rotated team orders (A, B, A, B, ...), skipping past the shorter team's end
+function interleaveTeamTurnOrder(
+	first: readonly string[],
+	second: readonly string[],
+): string[] {
+	const maxLen = Math.max(first.length, second.length);
+	const turnOrder: string[] = [];
+	for (let i = 0; i < maxLen; i++) {
+		if (first[i]) turnOrder.push(first[i]!);
+		if (second[i]) turnOrder.push(second[i]!);
+	}
+	return turnOrder;
+}
+
 export function buildTeamsAndTurnOrder(
 	config: GameConfig,
 	playerIds: string[],
@@ -136,18 +156,10 @@ export function buildTeamsAndTurnOrder(
 		const repB = teams[1]![Math.floor(rng() * teams[1]!.length)]!;
 		const playerOrder: [string, string] = [repA, repB];
 
-		const rotateFromRep = (team: string[], rep: string): string[] => {
-			const repIdx = team.indexOf(rep);
-			return [...team.slice(repIdx), ...team.slice(0, repIdx)];
-		};
-		const rotatedA = rotateFromRep(teams[0]!, repA);
-		const rotatedB = rotateFromRep(teams[1]!, repB);
-		const maxLen = Math.max(rotatedA.length, rotatedB.length);
-		const turnOrder: string[] = [];
-		for (let i = 0; i < maxLen; i++) {
-			if (rotatedA[i]) turnOrder.push(rotatedA[i]!);
-			if (rotatedB[i]) turnOrder.push(rotatedB[i]!);
-		}
+		const turnOrder = interleaveTeamTurnOrder(
+			rotateFromRep(teams[0]!, repA),
+			rotateFromRep(teams[1]!, repB),
+		);
 		return { teams, turnOrder, playerOrder, teamIndexByPlayerId };
 	}
 
@@ -187,21 +199,10 @@ export function setTurnOrderAfterRps(
 		? [teamOfRepA, repA, teamOfRepB, repB]
 		: [teamOfRepB, repB, teamOfRepA, repA];
 
-	const rotateFromRep = (team: string[], rep: string): string[] => {
-		const repIdx = team.indexOf(rep);
-		return [...team.slice(repIdx), ...team.slice(0, repIdx)];
-	};
-	const rotatedFirst = rotateFromRep(firstTeam, firstRep);
-	const rotatedSecond = rotateFromRep(secondTeam, secondRep);
-
-	const maxLen = Math.max(rotatedFirst.length, rotatedSecond.length);
-	const turnOrder: string[] = [];
-	for (let i = 0; i < maxLen; i++) {
-		if (rotatedFirst[i]) turnOrder.push(rotatedFirst[i]!);
-		if (rotatedSecond[i]) turnOrder.push(rotatedSecond[i]!);
-	}
-
-	state.turnOrder = turnOrder;
+	state.turnOrder = interleaveTeamTurnOrder(
+		rotateFromRep(firstTeam, firstRep),
+		rotateFromRep(secondTeam, secondRep),
+	);
 }
 
 // reserve crew is standard for every boss (C.RESERVE_CREW_SLOTS); the Dealer's
@@ -1031,13 +1032,6 @@ export function executeMove(
 	}
 
 	applyCoolGuyDamageOnMovePlayed(state, actor);
-
-	const enemies = getEnemies(state, actor.playerId);
-	for (const enemy of enemies) {
-		if (enemy.derived.cashOnEnemyMoveOrStrike > 0) {
-			enemy.cash += enemy.derived.cashOnEnemyMoveOrStrike;
-		}
-	}
 
 	if (move.moveType === "active") {
 		if (claimedSlot !== -1) {

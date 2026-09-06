@@ -24,7 +24,7 @@ import {
 } from "../effects";
 import {
 	isDraftValid,
-	effectiveCost as sharedEffectiveCost,
+	effectiveCost,
 	randomizeDraftSelections,
 } from "../game";
 import { computeChainPlayableMoveIds } from "../state-builders";
@@ -36,27 +36,7 @@ const CREW_CLASSES: readonly CrewClass[] = [
 	"hider",
 ];
 
-// delegates to shared effectiveCost; getMoveCost is unused here but kept for interface compatibility
-function effectiveCost(
-	state: FaceturnServerState,
-	player: FaceturnServerPlayer,
-	moveId: string,
-	getMoveCost: (
-		state: FaceturnServerState,
-		player: FaceturnServerPlayer,
-		moveId: string,
-	) => number,
-): number {
-	void getMoveCost;
-	return sharedEffectiveCost(state, player, moveId);
-}
-
 export interface EngineHelpers {
-	readonly getMoveCost: (
-		state: FaceturnServerState,
-		player: FaceturnServerPlayer,
-		moveId: string,
-	) => number;
 	readonly getClassActionCost: (
 		player: FaceturnServerPlayer,
 		action: "strike" | "defend" | "collect" | "hide",
@@ -162,7 +142,6 @@ function legalMulliganActions(player: FaceturnServerPlayer): FaceturnsAction[] {
 function activeMoveSlotsAreFullAndDefendingAnAffordableHandMove(
 	state: FaceturnServerState,
 	player: FaceturnServerPlayer,
-	getMoveCost: EngineHelpers["getMoveCost"],
 ): boolean {
 	const slotsFull =
 		player.activeMoves.filter((m) => m !== null).length >=
@@ -177,7 +156,7 @@ function activeMoveSlotsAreFullAndDefendingAnAffordableHandMove(
 		const move = getMove(moveId);
 		if (move.moveType !== "active") continue;
 
-		const cost = effectiveCost(state, player, moveId, getMoveCost);
+		const cost = effectiveCost(state, player, moveId);
 		if (player.cash >= cost) return true;
 	}
 
@@ -199,13 +178,7 @@ function legalActiveTurnActions(
 	actions.push({ type: "end_turn" });
 
 	// only offer discard when active slots are full and a playable active move is in hand to swap in
-	if (
-		activeMoveSlotsAreFullAndDefendingAnAffordableHandMove(
-			state,
-			player,
-			helpers.getMoveCost,
-		)
-	) {
+	if (activeMoveSlotsAreFullAndDefendingAnAffordableHandMove(state, player)) {
 		for (let i = 0; i < player.activeMoves.length; i++) {
 			if (player.activeMoves[i] !== null) {
 				actions.push({ type: "discard_active_move", slotIndex: i });
@@ -247,7 +220,7 @@ function legalPlayMoveActions(
 		seenMoveIds.add(moveId);
 
 		const move = getMove(moveId);
-		const cost = effectiveCost(state, player, moveId, helpers.getMoveCost);
+		const cost = effectiveCost(state, player, moveId);
 		if (player.cash < cost) continue;
 
 		if (move.moveType === "active" && !hasOpenActiveSlot) {
@@ -264,10 +237,8 @@ function legalPlayMoveActions(
 
 		if (isDefendableStrike) {
 			for (const enemy of getEnemies(state, player.playerId)) {
-				const faceDownSlots = eligibleFaceDownSlots(enemy);
-				const faceUpSlots = eligibleFaceUpSlots(enemy);
-
-				if (faceDownSlots.length === 0 && faceUpSlots.length === 0) {
+				const slots = eligibleCrewSlotsOrUntargeted(enemy);
+				if (slots === null) {
 					actions.push({
 						type: "play_move",
 						moveId,
@@ -275,17 +246,7 @@ function legalPlayMoveActions(
 					});
 					continue;
 				}
-
-				for (const slot of faceDownSlots) {
-					actions.push({
-						type: "play_move",
-						moveId,
-						targetPlayerId: enemy.playerId,
-						targetCrewSlot: slot,
-					});
-				}
-				// a face-up crew can also be targeted directly to kill it
-				for (const slot of faceUpSlots) {
+				for (const slot of slots) {
 					actions.push({
 						type: "play_move",
 						moveId,
@@ -468,23 +429,13 @@ function legalFaceTurnActions(
 	const actions: FaceturnsAction[] = [];
 
 	for (const enemy of getEnemies(state, player.playerId)) {
-		const faceDownSlots = eligibleFaceDownSlots(enemy);
-		const faceUpSlots = eligibleFaceUpSlots(enemy);
-
-		if (faceDownSlots.length === 0 && faceUpSlots.length === 0) {
+		const slots = eligibleCrewSlotsOrUntargeted(enemy);
+		if (slots === null) {
 			// no crew left on this enemy: untargeted use_face_turn resolves straight to execute
 			actions.push({ type: "use_face_turn", targetPlayerId: enemy.playerId });
 			continue;
 		}
-
-		for (const slot of faceDownSlots) {
-			actions.push({
-				type: "use_face_turn",
-				targetPlayerId: enemy.playerId,
-				targetCrewSlot: slot,
-			});
-		}
-		for (const slot of faceUpSlots) {
+		for (const slot of slots) {
 			actions.push({
 				type: "use_face_turn",
 				targetPlayerId: enemy.playerId,
@@ -512,6 +463,18 @@ function eligibleFaceUpSlots(player: FaceturnServerPlayer): (0 | 1)[] {
 		if (player.crewIds[slot] && player.crewTurned[slot]) slots.push(slot);
 	}
 	return slots;
+}
+
+// face-down slots first (the common case: turn it), then face-up (kill it outright);
+// null means the target has no crew left, so the move should be emitted untargeted
+function eligibleCrewSlotsOrUntargeted(
+	target: FaceturnServerPlayer,
+): (0 | 1)[] | null {
+	const slots = [
+		...eligibleFaceDownSlots(target),
+		...eligibleFaceUpSlots(target),
+	];
+	return slots.length === 0 ? null : slots;
 }
 
 function eligibleActiveMoveSlots(player: FaceturnServerPlayer): (0 | 1 | 2)[] {
@@ -796,9 +759,8 @@ function legalInteractionActions(
 			for (const targetPlayerId of interaction.eligibleTargetIds) {
 				const target = state.players.get(targetPlayerId);
 				if (!target) continue;
-				const faceDownSlots = eligibleFaceDownSlots(target);
-				const faceUpSlots = eligibleFaceUpSlots(target);
-				if (faceDownSlots.length === 0 && faceUpSlots.length === 0) {
+				const slots = eligibleCrewSlotsOrUntargeted(target);
+				if (slots === null) {
 					actions.push({
 						type: "resolve_bear_bones_bonus_strike",
 						confirmed: true,
@@ -806,15 +768,7 @@ function legalInteractionActions(
 					});
 					continue;
 				}
-				for (const slot of faceDownSlots) {
-					actions.push({
-						type: "resolve_bear_bones_bonus_strike",
-						confirmed: true,
-						targetPlayerId,
-						targetCrewSlot: slot,
-					});
-				}
-				for (const slot of faceUpSlots) {
+				for (const slot of slots) {
 					actions.push({
 						type: "resolve_bear_bones_bonus_strike",
 						confirmed: true,

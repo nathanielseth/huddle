@@ -90,9 +90,15 @@ export type EffectPrimitive =
 	| {
 			type: "copy_enemy_active_move";
 	  }
+	| {
+			type: "trigger_random_crew_reveal_and_damage";
+			damageAmount: number;
+	  }
 	| { type: "draw_cards"; amount: number }
+	| { type: "draw_random_active_move_from_deck" }
+	| { type: "add_card_to_hand"; cardId: string }
 	| { type: "discard_cards_from_hand"; amount: number }
-	| { type: "discard_all_enemy_hand" }
+	| { type: "discard_all_enemy_hand"; maxCards?: number }
 	| { type: "discard_all_actives_all_players" }
 	| { type: "discard_enemy_actives" }
 	| {
@@ -198,7 +204,7 @@ export type EffectPrimitive =
 	  }
 	| { type: "passive_draw_per_turn"; amount: number }
 	| {
-			type: "passive_cash_on_enemy_move_or_strike";
+			type: "passive_cash_on_team_damaging_move_or_strike";
 			amount: number;
 	  }
 	| { type: "passive_heal_on_move_played"; amount: number }
@@ -285,6 +291,11 @@ export type EffectPrimitive =
 	| {
 			type: "passive_razor_stab_on_strike_or_damage";
 	  }
+	// your crew/moves causing a discard adds a copy of Stab to hand,
+	// once per card discarded
+	| {
+			type: "passive_stab_on_discard";
+	  }
 	| {
 			type: "win_if_void_pieces_assembled";
 			requiredPieceIds: readonly string[];
@@ -292,6 +303,7 @@ export type EffectPrimitive =
 	| { type: "become_also_striker" }
 	| { type: "become_also_hider" }
 	| { type: "become_also_defender" }
+	| { type: "become_also_collector" }
 	| { type: "transform_andrew_into_wolfman" }
 	| {
 			type: "passive_reduce_all_move_costs";
@@ -348,6 +360,10 @@ export type EffectPrimitive =
 	  }
 	| {
 			type: "passive_cash_on_challenge_win";
+			amount: number;
+	  }
+	| {
+			type: "passive_cash_on_challenge";
 			amount: number;
 	  }
 	| {
@@ -428,8 +444,11 @@ const EFFECT_TARGETING_TABLE = {
 	swap_with_any_face_up_crew: { scope: "none" },
 	// modeled none: resolved via pendingInteraction
 	copy_enemy_active_move: { scope: "none" },
+	trigger_random_crew_reveal_and_damage: { scope: "enemy", slot: "boss" },
 
 	draw_cards: { scope: "self" },
+	draw_random_active_move_from_deck: { scope: "self" },
+	add_card_to_hand: { scope: "self" },
 	discard_cards_from_hand: { scope: "self" },
 	discard_all_enemy_hand: { scope: "enemy", slot: "player" },
 	discard_all_actives_all_players: { scope: "none" },
@@ -485,7 +504,7 @@ const EFFECT_TARGETING_TABLE = {
 
 	passive_cash_per_turn: { scope: "self" },
 	passive_draw_per_turn: { scope: "self" },
-	passive_cash_on_enemy_move_or_strike: { scope: "self" },
+	passive_cash_on_team_damaging_move_or_strike: { scope: "self" },
 	passive_heal_on_move_played: { scope: "self" },
 	// random target, no client-suppliable target
 	passive_damage_random_enemy_on_move_played: { scope: "none" },
@@ -512,9 +531,11 @@ const EFFECT_TARGETING_TABLE = {
 	passive_all_damage_is_piercing: { scope: "self" },
 	passive_steal_cash_on_damage_dealt: { scope: "self" },
 	passive_razor_stab_on_strike_or_damage: { scope: "self" },
+	passive_stab_on_discard: { scope: "self" },
 	become_also_striker: { scope: "self" },
 	become_also_hider: { scope: "self" },
 	become_also_defender: { scope: "self" },
+	become_also_collector: { scope: "self" },
 	passive_reduce_all_move_costs: { scope: "self" },
 	passive_reduce_burst_move_costs: { scope: "self" },
 	passive_reduce_class_action_costs: { scope: "self" },
@@ -525,6 +546,7 @@ const EFFECT_TARGETING_TABLE = {
 	passive_mirror_enemy_collect_cash: { scope: "enemy", slot: "player" },
 	passive_cease_and_desist: { scope: "none" },
 	passive_cash_on_challenge_win: { scope: "self" },
+	passive_cash_on_challenge: { scope: "self" },
 	passive_self_damage_and_cash_per_turn: { scope: "self" },
 
 	command_guess_crew_class_turn_if_correct: { scope: "none" },
@@ -565,6 +587,7 @@ export type EffectCondition =
 	| { when: "enemy_has_more_cash" }
 	| { when: "void_pieces_assembled" }
 	| { when: "no_face_up_crew" }
+	| { when: "self_has_face_up_crew" }
 	| { when: "self_turned_not_by_enemy" }
 	| { when: "has_bluffed_successfully" };
 
@@ -598,6 +621,9 @@ export interface CrewCard extends CrewCardDisplay {
 
 export interface MoveCard extends MoveCardDisplay {
 	readonly effects: readonly CardEffect[];
+	// if this card is discarded from hand (via discardFromHand), resolve
+	// these effects as if it had just been played
+	readonly onDiscardEffects?: readonly CardEffect[];
 }
 
 const BOSS_MECHANICS: Record<
@@ -632,7 +658,7 @@ const CREW_MECHANICS: Record<
 	Pick<CrewCard, "turnedEffects" | "passiveEffects">
 > = {
 	pektus: {
-		turnedEffects: [{ type: "deal_damage_ignore_armor", amount: 25 }],
+		turnedEffects: [{ type: "deal_damage_ignore_armor", amount: 20 }],
 		passiveEffects: [{ type: "passive_all_damage_is_piercing" }],
 	},
 	shrike: {
@@ -641,7 +667,7 @@ const CREW_MECHANICS: Record<
 	},
 	"g-rone": {
 		turnedEffects: [],
-		passiveEffects: [{ type: "passive_poison_per_round", damagePerRound: 10 }],
+		passiveEffects: [{ type: "passive_poison_per_round", damagePerRound: 5 }],
 	},
 	"monkey-man": {
 		turnedEffects: [{ type: "steal_random_card" }],
@@ -651,11 +677,11 @@ const CREW_MECHANICS: Record<
 		turnedEffects: [
 			when(
 				{ when: "another_ally_is_turned" },
-				{ type: "deal_damage", target: "enemy_boss", amount: 30 },
+				{ type: "deal_damage", target: "enemy_boss", amount: 20 },
 			),
 			when(
 				{ when: "another_ally_is_turned" },
-				{ type: "deal_damage", target: "enemy_boss", amount: 15 },
+				{ type: "deal_damage", target: "enemy_boss", amount: 10 },
 				true,
 			),
 		],
@@ -663,7 +689,7 @@ const CREW_MECHANICS: Record<
 	},
 	"hot-girl": {
 		turnedEffects: [
-			{ type: "discard_all_enemy_hand" },
+			{ type: "discard_all_enemy_hand", maxCards: 3 },
 			{ type: "deal_damage_per_enemy_hand_discarded", damagePerCard: 5 },
 		],
 		passiveEffects: [],
@@ -671,7 +697,7 @@ const CREW_MECHANICS: Record<
 	"black-fist": {
 		turnedEffects: [
 			{ type: "discard_cards_from_hand", amount: 2 },
-			{ type: "deal_damage", target: "enemy_boss", amount: 35 },
+			{ type: "deal_damage", target: "enemy_boss", amount: 25 },
 		],
 		passiveEffects: [],
 	},
@@ -679,8 +705,8 @@ const CREW_MECHANICS: Record<
 		turnedEffects: [
 			{
 				type: "discard_variable_by_bluff_flag",
-				baseAmount: 3,
-				reducedAmount: 1,
+				baseAmount: 4,
+				reducedAmount: 2,
 			},
 			{ type: "strike_enemy_crew", undefendable: true },
 		],
@@ -688,7 +714,7 @@ const CREW_MECHANICS: Record<
 	},
 	"rilla-gorilla": {
 		turnedEffects: [
-			{ type: "armor_boss", amount: 30 },
+			{ type: "armor_boss", amount: 20 },
 			{ type: "deal_damage", target: "enemy_boss", amount: 10 },
 		],
 		passiveEffects: [],
@@ -699,15 +725,15 @@ const CREW_MECHANICS: Record<
 	},
 	"mama-mercy": {
 		turnedEffects: [],
-		passiveEffects: [{ type: "passive_armor_on_ally_crew_turn", amount: 20 }],
+		passiveEffects: [{ type: "passive_armor_on_ally_crew_turn", amount: 10 }],
 	},
 	lighthouse: {
-		turnedEffects: [{ type: "deal_damage_all_enemy_bosses", amount: 10 }],
+		turnedEffects: [{ type: "deal_damage_all_enemy_bosses", amount: 5 }],
 		passiveEffects: [{ type: "passive_suppress_enemy_turned_effects" }],
 	},
 	glob: {
 		turnedEffects: [
-			when({ when: "has_armored_boss" }, { type: "armor_boss", amount: 40 }),
+			when({ when: "has_armored_boss" }, { type: "armor_boss", amount: 30 }),
 			when(
 				{ when: "has_armored_boss" },
 				{ type: "steal_cash", amount: 1 },
@@ -717,23 +743,20 @@ const CREW_MECHANICS: Record<
 		passiveEffects: [],
 	},
 	silencer: {
-		turnedEffects: [{ type: "armor_all_ally_bosses", amount: 10 }],
+		turnedEffects: [{ type: "armor_all_ally_bosses", amount: 5 }],
 		passiveEffects: [{ type: "passive_disable_all_enemy_crew_passives" }],
 	},
 	"doctor-norman": {
-		turnedEffects: [],
+		turnedEffects: [{ type: "add_card_to_hand", cardId: "serum" }],
 		passiveEffects: [{ type: "passive_armor_on_discard" }],
 	},
 	lotus: {
-		turnedEffects: [],
+		turnedEffects: [{ type: "deal_damage", target: "enemy_boss", amount: 5 }],
 		passiveEffects: [{ type: "become_also_striker" }],
 	},
 	mayumi: {
-		turnedEffects: [
-			{ type: "gain_cash", amount: 2 },
-			{ type: "draw_cards", amount: 1 },
-		],
-		passiveEffects: [],
+		turnedEffects: [{ type: "gain_cash", amount: 2 }],
+		passiveEffects: [{ type: "passive_cash_on_challenge", amount: 1 }],
 	},
 	"too-big": {
 		turnedEffects: [{ type: "swap_with_any_face_up_crew" }],
@@ -751,7 +774,7 @@ const CREW_MECHANICS: Record<
 	},
 	bagman: {
 		turnedEffects: [],
-		passiveEffects: [{ type: "become_also_defender" }],
+		passiveEffects: [{ type: "become_also_collector" }],
 	},
 	"cool-guy": {
 		turnedEffects: [],
@@ -794,14 +817,14 @@ const CREW_MECHANICS: Record<
 				{ type: "hide_other_ally_crew" },
 			),
 		],
-		passiveEffects: [{ type: "passive_armor_per_turn", amount: 10 }],
+		passiveEffects: [{ type: "passive_armor_per_turn", amount: 5 }],
 	},
 	terminal: {
 		turnedEffects: [],
 		passiveEffects: [{ type: "passive_defend_strikes_above_half_hp" }],
 	},
 	suplex: {
-		turnedEffects: [{ type: "deal_damage", target: "enemy_boss", amount: 10 }],
+		turnedEffects: [{ type: "deal_damage", target: "enemy_boss", amount: 5 }],
 		passiveEffects: [{ type: "passive_strike_on_self_turned_ally" }],
 	},
 	retro: {
@@ -827,7 +850,7 @@ const CREW_MECHANICS: Record<
 		passiveEffects: [{ type: "passive_increase_enemy_move_costs", amount: 1 }],
 	},
 	wolfman: {
-		turnedEffects: [{ type: "deal_damage", target: "enemy_boss", amount: 40 }],
+		turnedEffects: [{ type: "deal_damage", target: "enemy_boss", amount: 30 }],
 		passiveEffects: [],
 	},
 };
@@ -837,9 +860,12 @@ export const CREW: readonly CrewCard[] = CREW_DISPLAY.map((display) => ({
 	...CREW_MECHANICS[display.id]!,
 }));
 
-const MOVE_MECHANICS: Record<string, Pick<MoveCard, "effects">> = {
+const MOVE_MECHANICS: Record<
+	string,
+	Pick<MoveCard, "effects" | "onDiscardEffects">
+> = {
 	"poison-breath": {
-		effects: [{ type: "passive_poison_per_round", damagePerRound: 10 }],
+		effects: [{ type: "passive_poison_per_round", damagePerRound: 5 }],
 	},
 	"side-hustle": {
 		effects: [{ type: "passive_cash_per_turn", amount: 2 }],
@@ -859,7 +885,30 @@ const MOVE_MECHANICS: Record<string, Pick<MoveCard, "effects">> = {
 		effects: [{ type: "passive_draw_per_turn", amount: 1 }],
 	},
 	"blood-money": {
-		effects: [{ type: "passive_cash_on_enemy_move_or_strike", amount: 1 }],
+		effects: [
+			{ type: "passive_cash_on_team_damaging_move_or_strike", amount: 1 },
+		],
+	},
+	bladeworks: {
+		effects: [{ type: "passive_stab_on_discard" }],
+	},
+	consume: {
+		effects: [
+			{ type: "discard_cards_from_hand", amount: 1 },
+			{ type: "deal_damage", target: "enemy_boss", amount: 20 },
+		],
+	},
+	"parting-gift": {
+		effects: [{ type: "draw_random_active_move_from_deck" }],
+		onDiscardEffects: [{ type: "draw_random_active_move_from_deck" }],
+	},
+	serum: {
+		effects: [
+			{ type: "trigger_random_crew_reveal_and_damage", damageAmount: 10 },
+		],
+		onDiscardEffects: [
+			{ type: "trigger_random_crew_reveal_and_damage", damageAmount: 10 },
+		],
 	},
 	"background-check": {
 		effects: [{ type: "passive_background_check" }],
@@ -932,10 +981,10 @@ const MOVE_MECHANICS: Record<string, Pick<MoveCard, "effects">> = {
 		effects: [{ type: "draw_cards", amount: 2 }],
 	},
 	"drive-by": {
-		effects: [{ type: "deal_damage", target: "enemy_boss", amount: 30 }],
+		effects: [{ type: "deal_damage", target: "enemy_boss", amount: 25 }],
 	},
 	"claim-the-bounty": {
-		effects: [{ type: "deal_damage", target: "enemy_boss", amount: 25 }],
+		effects: [{ type: "deal_damage", target: "enemy_boss", amount: 20 }],
 	},
 	stab: {
 		effects: [{ type: "deal_damage", target: "enemy_boss", amount: 5 }],
@@ -971,7 +1020,7 @@ const MOVE_MECHANICS: Record<string, Pick<MoveCard, "effects">> = {
 				type: "set_ally_boss_hp_gain_cash_draw",
 				hpAmount: 1,
 				cashGain: 7,
-				drawAmount: 2,
+				drawAmount: 3,
 			},
 		],
 	},
@@ -985,17 +1034,17 @@ const MOVE_MECHANICS: Record<string, Pick<MoveCard, "effects">> = {
 		effects: [
 			when(
 				{ when: "ally_class_is_turned", class: "striker" },
-				{ type: "deal_damage", target: "enemy_boss", amount: 30 },
+				{ type: "deal_damage", target: "enemy_boss", amount: 20 },
 			),
 			when(
 				{ when: "ally_class_is_turned", class: "striker" },
-				{ type: "deal_damage", target: "enemy_boss", amount: 15 },
+				{ type: "deal_damage", target: "enemy_boss", amount: 10 },
 				true,
 			),
 		],
 	},
 	ratatatat: {
-		effects: [{ type: "deal_damage_ignore_armor", amount: 20 }],
+		effects: [{ type: "deal_damage_ignore_armor", amount: 15 }],
 	},
 	"dig-deep": {
 		effects: [
@@ -1009,9 +1058,7 @@ const MOVE_MECHANICS: Record<string, Pick<MoveCard, "effects">> = {
 		],
 	},
 	"empty-the-clip": {
-		effects: [
-			{ type: "deal_damage_per_discarded_variable", damagePerCard: 10 },
-		],
+		effects: [{ type: "deal_damage_per_discarded_variable", damagePerCard: 5 }],
 	},
 	"fresh-start": {
 		effects: [
@@ -1038,7 +1085,7 @@ const MOVE_MECHANICS: Record<string, Pick<MoveCard, "effects">> = {
 		effects: [{ type: "hide_ally_crew" }],
 	},
 	"first-aid": {
-		effects: [{ type: "heal_boss", amount: 20 }],
+		effects: [{ type: "heal_boss", amount: 15 }],
 	},
 	"neetos-clock": {
 		effects: [
@@ -1048,7 +1095,7 @@ const MOVE_MECHANICS: Record<string, Pick<MoveCard, "effects">> = {
 	bailout: {
 		effects: [
 			{ type: "heal_boss", amount: 20 },
-			{ type: "gain_cash", amount: 2 },
+			{ type: "gain_cash", amount: 3 },
 		],
 	},
 	"pull-counter": {
@@ -1076,21 +1123,21 @@ const MOVE_MECHANICS: Record<string, Pick<MoveCard, "effects">> = {
 		effects: [{ type: "gain_cash", amount: 4 }],
 	},
 	"sucker-punch": {
-		effects: [{ type: "deal_damage", target: "enemy_boss", amount: 15 }],
+		effects: [{ type: "deal_damage", target: "enemy_boss", amount: 10 }],
 	},
 	wolfblaster: {
-		effects: [{ type: "deal_damage", target: "enemy_boss", amount: 40 }],
+		effects: [{ type: "deal_damage", target: "enemy_boss", amount: 35 }],
 	},
 	"dead-drop-retrieval": {
 		effects: [{ type: "draw_cards", amount: 3 }],
 	},
 	"cheap-shot": {
-		effects: [{ type: "deal_damage", target: "enemy_boss", amount: 20 }],
+		effects: [{ type: "deal_damage", target: "enemy_boss", amount: 15 }],
 	},
 	"unfinished-business": {
 		effects: [
 			when(
-				{ when: "ally_class_is_turned", class: "defender" },
+				{ when: "self_has_face_up_crew" },
 				{ type: "strike_enemy_crew", undefendable: true },
 			),
 		],
@@ -1098,7 +1145,7 @@ const MOVE_MECHANICS: Record<string, Pick<MoveCard, "effects">> = {
 	kamikaze: {
 		effects: [
 			{ type: "turn_ally_crew" },
-			{ type: "deal_damage", target: "enemy_boss", amount: 30 },
+			{ type: "deal_damage", target: "enemy_boss", amount: 25 },
 		],
 	},
 	nope: {
@@ -1150,7 +1197,7 @@ const MOVE_MECHANICS: Record<string, Pick<MoveCard, "effects">> = {
 			{
 				type: "passive_self_damage_and_cash_per_turn",
 				damage: 5,
-				cashAmount: 2,
+				cashAmount: 1,
 			},
 		],
 	},
@@ -1318,7 +1365,8 @@ export const CARD_IDS = {
 		SPARE_CHANGE: "spare-change",
 		PAYCHECK: "paycheck",
 		SUCKER_PUNCH: "sucker-punch",
-		STAB: "stab",		WOLFBLASTER: "wolfblaster",
+		STAB: "stab",
+		WOLFBLASTER: "wolfblaster",
 		DEAD_DROP_RETRIEVAL: "dead-drop-retrieval",
 		CHEAP_SHOT: "cheap-shot",
 		UNFINISHED_BUSINESS: "unfinished-business",
@@ -1340,6 +1388,10 @@ export const CARD_IDS = {
 		RED_HERRING: "red-herring",
 		MY_TREAT: "my-treat",
 		TO_THE_DEATH: "to-the-death",
+		SERUM: "serum",
+		CONSUME: "consume",
+		PARTING_GIFT: "parting-gift",
+		BLADEWORKS: "bladeworks",
 	},
 } as const;
 

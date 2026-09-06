@@ -11,6 +11,7 @@ export interface BaseCardDisplay {
 
 export interface BossCardDisplay extends BaseCardDisplay {
 	readonly effectText: {
+		readonly faceTurn: string;
 		readonly command: string;
 		readonly passive: string;
 	};
@@ -44,6 +45,7 @@ export const BOSS_DISPLAY: readonly BossCardDisplay[] = [
 		artSrc: "/assets/games/face-turn/cards/boss/the-bastion.avif",
 		name: "The Bastion",
 		effectText: {
+			faceTurn: "8 Cash: Unstoppable Strike.",
 			command: "Deal damage equal to my Armor, then empty my Armor.",
 			passive: "I start with 10 Armor. Whenever I take damage, gain 1 Cash.",
 		},
@@ -51,13 +53,14 @@ export const BOSS_DISPLAY: readonly BossCardDisplay[] = [
 		lore: "",
 		synergyIds: ["glob", "rilla-gorilla", "miss-direction", "bulletproof-vest"],
 		maxHp: 100,
-		startingArmor: 15,
+		startingArmor: 10,
 	},
 	{
 		id: "the-dealer",
 		artSrc: "/assets/games/face-turn/cards/boss/dealer.jpg",
 		name: "The Dealer",
 		effectText: {
+			faceTurn: "8 Cash: Unstoppable Strike.",
 			command: "Discard your hand. Gain 1 Cash for each card discarded.",
 			passive: "You have one extra reserved Crew.",
 		},
@@ -71,6 +74,7 @@ export const BOSS_DISPLAY: readonly BossCardDisplay[] = [
 		artSrc: "/assets/games/face-turn/cards/boss/razor.jpg",
 		name: "The Razor",
 		effectText: {
+			faceTurn: "8 Cash: Unstoppable Strike.",
 			command:
 				"Guess a face-down enemy Crew's class. If correct, turn it face-up.",
 			passive:
@@ -87,6 +91,7 @@ export const BOSS_DISPLAY: readonly BossCardDisplay[] = [
 		artSrc: "/assets/games/face-turn/cards/boss/watcher.jpg",
 		name: "The Watcher",
 		effectText: {
+			faceTurn: "8 Cash: Unstoppable Strike.",
 			command:
 				"Look at 2 random cards in an enemy's hand, take 1, then steal 1 Cash.",
 			passive:
@@ -148,7 +153,7 @@ export const CREW_DISPLAY: readonly CrewCardDisplay[] = [
 		class: "striker",
 		effectText: {
 			revealed:
-				"An enemy discards their hand. I deal 5 damage to their Boss for each card discarded this way.",
+				"An enemy discards up to 3 cards from their hand. I deal 5 damage to their Boss for each card discarded this way.",
 		},
 		flavorText: "FEED THE FLAMES!!",
 		lore: "",
@@ -226,6 +231,7 @@ export const CREW_DISPLAY: readonly CrewCardDisplay[] = [
 		name: "Doctor Norman",
 		class: "defender",
 		effectText: {
+			revealed: "Create a Serum.",
 			passive: "Whenever you discard, I give my Boss 5 Armor for each.",
 		},
 		flavorText: "Exquisite! Another breakthrough.",
@@ -276,7 +282,8 @@ export const CREW_DISPLAY: readonly CrewCardDisplay[] = [
 		name: "Lotus",
 		class: "defender",
 		effectText: {
-			passive: "I can Strike.",
+			revealed: "I deal 5 damage to an enemy Boss.",
+			passive: "I can Strike while face-up.",
 		},
 		flavorText: "Don't die. I've already wasted enough time on you.",
 		lore: "",
@@ -330,7 +337,7 @@ export const CREW_DISPLAY: readonly CrewCardDisplay[] = [
 		name: "Bagman",
 		class: "collector",
 		effectText: {
-			passive: "I can Defend.",
+			passive: "I can Collect while face-up.",
 		},
 		flavorText: "Here comes the money.",
 		lore: "",
@@ -391,7 +398,10 @@ export const CREW_DISPLAY: readonly CrewCardDisplay[] = [
 		artSrc: "/assets/games/face-turn/cards/crew/mayumi.avif",
 		name: "Mayumi",
 		class: "collector",
-		effectText: { revealed: "You gain 2 Cash and draw 1." },
+		effectText: {
+			revealed: "You gain 2 Cash.",
+			passive: "Whenever you Challenge, gain 1 Cash.",
+		},
 		flavorText: "Curiosity pays surprisingly well...",
 		lore: "",
 		synergyIds: ["the-dealer"],
@@ -434,7 +444,7 @@ export const CREW_DISPLAY: readonly CrewCardDisplay[] = [
 		},
 		flavorText: "Just a sheep..",
 		lore: "",
-		synergyIds: ["wolfman","full-moon", "zednem", "command-center"],
+		synergyIds: ["wolfman", "full-moon", "zednem", "command-center"],
 	},
 	{
 		id: "handles",
@@ -586,7 +596,7 @@ export const MOVE_DISPLAY: readonly MoveCardDisplay[] = [
 		baseCost: 2,
 		moveType: "active",
 		effectText:
-			"Whenever an enemy plays a Move or performs a Strike, gain 1 Cash.",
+			"Whenever your team plays a damaging Move or Strike, gain 1 Cash.",
 		flavorText: "",
 		lore: "",
 		synergyIds: [],
@@ -598,7 +608,7 @@ export const MOVE_DISPLAY: readonly MoveCardDisplay[] = [
 		baseCost: 2,
 		moveType: "active",
 		effectText:
-			"The next time an enemy Crew would resolve its Revealed Effect, prevent it instead. Then discard this Move.",
+			"The next time an enemy Crew would resolve its Revealed Effect, prevent it instead. Then destroy this Move.",
 		flavorText: "",
 		lore: "",
 		synergyIds: [],
@@ -655,7 +665,7 @@ export const MOVE_DISPLAY: readonly MoveCardDisplay[] = [
 		baseCost: 1,
 		moveType: "active",
 		effectText:
-			"When one of your Crew would be turned face-up after you fail a challenge, prevent it and discard this Move instead.",
+			"When one of your Crew would be turned face-up after you fail a challenge, prevent it and destroy this Move instead.",
 		flavorText: "",
 		lore: "",
 		synergyIds: [],
@@ -667,7 +677,7 @@ export const MOVE_DISPLAY: readonly MoveCardDisplay[] = [
 		baseCost: 3,
 		moveType: "active",
 		effectText:
-			"Whenever an allied Boss would die for the first time, it survives with 1 HP instead. Then discard this Move.",
+			"Whenever an allied Boss would die for the first time, it survives with 1 HP instead. Then destroy this Move.",
 		flavorText: "",
 		lore: "",
 		synergyIds: [],
@@ -690,7 +700,7 @@ export const MOVE_DISPLAY: readonly MoveCardDisplay[] = [
 		baseCost: 1,
 		moveType: "active",
 		effectText:
-			"Choose one of your face-down Crew. The next Strike or Face Turn attempt against you must target that Crew. Then discard this Move.",
+			"Choose one of your face-down Crew. The next Strike or Face Turn attempt against you must target that Crew. Then destroy this Move.",
 		flavorText: "",
 		lore: "",
 		synergyIds: [],
@@ -1059,7 +1069,7 @@ export const MOVE_DISPLAY: readonly MoveCardDisplay[] = [
 		baseCost: 2,
 		moveType: "burst",
 		effectText:
-			"Choose an Ongoing Move in an enemy's ongoing zone. Discard it.",
+			"Choose an Ongoing Move in an enemy's ongoing zone. Destroy it.",
 		flavorText: "",
 		lore: "",
 		synergyIds: [],
@@ -1311,7 +1321,7 @@ export const MOVE_DISPLAY: readonly MoveCardDisplay[] = [
 		name: "Scorched Earth",
 		baseCost: 3,
 		moveType: "slow",
-		effectText: "Discard all Ongoing Moves from an enemy's ongoing zone.",
+		effectText: "Destroy all Ongoing Moves from an enemy's ongoing zone.",
 		flavorText: "",
 		lore: "",
 		synergyIds: [],
@@ -1354,10 +1364,10 @@ export const MOVE_DISPLAY: readonly MoveCardDisplay[] = [
 		id: "unfinished-business",
 		artSrc: "/assets/games/face-turn/cards/moves/unfinished-business.avif",
 		name: "Unfinished Business",
-		baseCost: 5,
+		baseCost: 6,
 		moveType: "slow",
 		effectText:
-			"If the team has a face-up Defender, perform an unstoppable Strike on an enemy Crew.",
+			"If you have a face-up Crew, perform an unstoppable Strike on an enemy Crew.",
 		flavorText: "",
 		lore: "",
 		synergyIds: [],
@@ -1385,6 +1395,53 @@ export const MOVE_DISPLAY: readonly MoveCardDisplay[] = [
 		lore: "",
 		synergyIds: [],
 	},
+	{
+		id: "bladeworks",
+		artSrc: "/assets/games/face-turn/cards/moves/bladeworks.avif",
+		name: "Bladeworks",
+		baseCost: 2,
+		moveType: "active",
+		effectText: "Whenever you discard, create a Stab for each card discarded.",
+		flavorText: "",
+		lore: "",
+		synergyIds: ["doctor-norman", "the-razor"],
+	},
+	{
+		id: "consume",
+		artSrc: "/assets/games/face-turn/cards/moves/consume.avif",
+		name: "Consume",
+		baseCost: 1,
+		moveType: "slow",
+		effectText: "Discard 1. Deal 20 damage to an enemy Boss.",
+		flavorText: "",
+		lore: "",
+		synergyIds: [],
+	},
+	{
+		id: "parting-gift",
+		artSrc: "/assets/games/face-turn/cards/moves/parting-gift.avif",
+		name: "Parting Gift",
+		baseCost: 2,
+		moveType: "burst",
+		effectText:
+			"Draw an ongoing Move. If this card is discarded instead of played, do this anyway.",
+		flavorText: "",
+		lore: "",
+		synergyIds: [],
+	},
+	{
+		id: "serum",
+		artSrc: "/assets/games/face-turn/cards/moves/serum.avif",
+		name: "Serum",
+		baseCost: 4,
+		moveType: "slow",
+		effectText:
+			"Trigger the Revealed Effect of a random Crew from the entire card pool, then deal 10 damage to an enemy Boss. If this card is discarded instead of played, do this anyway.",
+		flavorText: "",
+		lore: "",
+		synergyIds: ["doctor-norman"],
+		draftable: false,
+	},
 ];
 
 export type MoveTargetKind =
@@ -1406,6 +1463,7 @@ export const MOVE_TARGET_KIND: Readonly<Record<string, MoveTargetKind>> = {
 	"big-voucher": "no_target",
 	blackmail: "no_target",
 	"blood-money": "no_target",
+	bladeworks: "no_target",
 	"cease-and-desist": "no_target",
 	"command-center": "no_target",
 	dataminer: "no_target",
@@ -1456,6 +1514,7 @@ export const MOVE_TARGET_KIND: Readonly<Record<string, MoveTargetKind>> = {
 	"tag-out": "ally_teammate",
 	"take-it-back": "no_target",
 	"triangle-of-trust": "no_target",
+	"parting-gift": "no_target",
 
 	ambush: "enemy_crew",
 	"cheap-shot": "enemy_boss",
@@ -1478,6 +1537,8 @@ export const MOVE_TARGET_KIND: Readonly<Record<string, MoveTargetKind>> = {
 	"unfinished-business": "enemy_crew",
 	"wheel-of-fortune": "enemy_player",
 	wolfblaster: "enemy_boss",
+	consume: "enemy_boss",
+	serum: "enemy_boss",
 };
 
 export function getMoveTargetKind(moveId: string): MoveTargetKind {
@@ -1567,8 +1628,6 @@ export function getMoveDisplay(id: string): MoveCardDisplay {
 	return card;
 }
 
-export function isDraftable(
-	card: CrewCardDisplay | MoveCardDisplay,
-): boolean {
+export function isDraftable(card: CrewCardDisplay | MoveCardDisplay): boolean {
 	return card.draftable !== false;
 }

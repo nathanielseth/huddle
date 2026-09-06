@@ -18,7 +18,6 @@ import { firstTurnedSlot, firstUnturnedSlot } from "./strikes";
 import { applyDamage } from "./damage";
 import { drawCards, discardFromHand } from "./draw-discard";
 import {
-	applyBloodMoneyOnStrike,
 	resolveStrikeOrExecute,
 	triggerCrewTurnedEffects,
 	turnCrewAtSlot,
@@ -191,6 +190,7 @@ export const miscHandlers = {
 	become_also_striker() {},
 	become_also_hider() {},
 	become_also_defender() {},
+	become_also_collector() {},
 	command_guess_crew_class_turn_if_correct() {},
 	// dealer command: discard the whole hand, gain cashPerCard per card
 	// discarded. routed through discardFromHand so it triggers the same
@@ -208,11 +208,12 @@ export const miscHandlers = {
 	passive_reduce_class_action_costs() {},
 	passive_steal_cash_on_damage_dealt() {},
 	passive_razor_stab_on_strike_or_damage() {},
+	passive_stab_on_discard() {},
 	passive_strike_on_self_turned_ally() {},
 	passive_turn_self_down_on_enemy_crew_kill() {},
 	passive_cash_per_turn() {},
 	passive_draw_per_turn() {},
-	passive_cash_on_enemy_move_or_strike() {},
+	passive_cash_on_team_damaging_move_or_strike() {},
 	passive_heal_on_move_played() {},
 	passive_damage_random_enemy_on_move_played() {},
 	passive_armor_per_turn() {},
@@ -250,6 +251,7 @@ export const miscHandlers = {
 	passive_optional_strike_on_successful_challenge() {},
 	passive_suppress_enemy_turned_effects() {},
 	passive_cash_on_challenge_win() {},
+	passive_cash_on_challenge() {},
 	passive_self_damage_and_cash_per_turn() {},
 	passive_cease_and_desist() {},
 } satisfies Partial<Record<EffectPrimitive["type"], Handler>>;
@@ -404,6 +406,36 @@ export function resolveWatcherHide(
 	recomputePassives(target, state);
 }
 
+// swaps crewId, crewTurned, and class overrides between one slot on each of two players
+function swapCrewSlots(
+	state: FaceturnServerState,
+	playerA: FaceturnServerPlayer,
+	slotA: 0 | 1,
+	playerB: FaceturnServerPlayer,
+	slotB: 0 | 1,
+): void {
+	const aId = playerA.crewIds[slotA];
+	const aTurned = playerA.crewTurned[slotA];
+	const aOverrides = playerA.derived.crewClassOverrides.get(slotA);
+
+	const bId = playerB.crewIds[slotB];
+	const bTurned = playerB.crewTurned[slotB];
+	const bOverrides = playerB.derived.crewClassOverrides.get(slotB);
+
+	playerA.crewIds[slotA] = bId;
+	playerA.crewTurned[slotA] = bTurned;
+	if (bOverrides) playerA.derived.crewClassOverrides.set(slotA, bOverrides);
+	else playerA.derived.crewClassOverrides.delete(slotA);
+
+	playerB.crewIds[slotB] = aId;
+	playerB.crewTurned[slotB] = aTurned;
+	if (aOverrides) playerB.derived.crewClassOverrides.set(slotB, aOverrides);
+	else playerB.derived.crewClassOverrides.delete(slotB);
+
+	recomputePassives(playerA, state);
+	recomputePassives(playerB, state);
+}
+
 export function resolveTagOutPick(
 	state: FaceturnServerState,
 	actor: FaceturnServerPlayer,
@@ -415,31 +447,7 @@ export function resolveTagOutPick(
 ): void {
 	if (!ownEligibleSlots.includes(ownSlot)) return;
 	if (!teammateEligibleSlots.includes(teammateSlot)) return;
-	const oSlot = ownSlot as 0 | 1;
-	const tSlot = teammateSlot as 0 | 1;
-
-	const ownId = actor.crewIds[oSlot];
-	const ownTurned = actor.crewTurned[oSlot];
-	const ownOverrides = actor.derived.crewClassOverrides.get(oSlot);
-
-	const teammateId = teammate.crewIds[tSlot];
-	const teammateTurned = teammate.crewTurned[tSlot];
-	const teammateOverrides = teammate.derived.crewClassOverrides.get(tSlot);
-
-	actor.crewIds[oSlot] = teammateId;
-	actor.crewTurned[oSlot] = teammateTurned;
-	if (teammateOverrides)
-		actor.derived.crewClassOverrides.set(oSlot, teammateOverrides);
-	else actor.derived.crewClassOverrides.delete(oSlot);
-
-	teammate.crewIds[tSlot] = ownId;
-	teammate.crewTurned[tSlot] = ownTurned;
-	if (ownOverrides)
-		teammate.derived.crewClassOverrides.set(tSlot, ownOverrides);
-	else teammate.derived.crewClassOverrides.delete(tSlot);
-
-	recomputePassives(actor, state);
-	recomputePassives(teammate, state);
+	swapCrewSlots(state, actor, ownSlot as 0 | 1, teammate, teammateSlot as 0 | 1);
 }
 
 export function resolveTooBigSwapPick(
@@ -456,30 +464,7 @@ export function resolveTooBigSwapPick(
 	if (!isEligible) return;
 	const target = state.players.get(targetPlayerId);
 	if (!target) return;
-	const oSlot = ownSlot as 0 | 1;
-	const tSlot = targetSlot as 0 | 1;
-
-	const ownId = actor.crewIds[oSlot];
-	const ownTurned = actor.crewTurned[oSlot];
-	const ownOverrides = actor.derived.crewClassOverrides.get(oSlot);
-
-	const targetId = target.crewIds[tSlot];
-	const targetTurned = target.crewTurned[tSlot];
-	const targetOverrides = target.derived.crewClassOverrides.get(tSlot);
-
-	actor.crewIds[oSlot] = targetId;
-	actor.crewTurned[oSlot] = targetTurned;
-	if (targetOverrides)
-		actor.derived.crewClassOverrides.set(oSlot, targetOverrides);
-	else actor.derived.crewClassOverrides.delete(oSlot);
-
-	target.crewIds[tSlot] = ownId;
-	target.crewTurned[tSlot] = ownTurned;
-	if (ownOverrides) target.derived.crewClassOverrides.set(tSlot, ownOverrides);
-	else target.derived.crewClassOverrides.delete(tSlot);
-
-	recomputePassives(actor, state);
-	recomputePassives(target, state);
+	swapCrewSlots(state, actor, ownSlot as 0 | 1, target, targetSlot as 0 | 1);
 }
 
 // passing or an illegal target is a legal no-op; if actor's active zone is full it fizzles silently
@@ -548,15 +533,13 @@ export function resolveBearBonesBonusStrike(
 	const target = state.players.get(targetPlayerId);
 	if (!target || state.eliminatedPlayers.has(targetPlayerId)) return null;
 
-	const outcome = resolveStrikeOrExecute(
+	return resolveStrikeOrExecute(
 		state,
 		target,
 		actor.playerId,
 		{ reason: "strike" },
 		targetSlot !== null ? (targetSlot as 0 | 1) : undefined,
 	);
-	applyBloodMoneyOnStrike(state, actor);
-	return outcome;
 }
 
 export function resolveBackgroundCheckGuess(

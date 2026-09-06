@@ -12,7 +12,6 @@ export const truthSerumRevealSpec: InteractionSpec<Interaction> = {
 		if (action.type !== "resolve_truth_serum_reveal") return null;
 
 		const result = resolveTruthSerumReveal(
-			state,
 			respondingPlayer,
 			action.crewSlot,
 			interaction.eligibleSlots,
@@ -36,7 +35,6 @@ export const truthSerumRevealSpec: InteractionSpec<Interaction> = {
 		const slot = interaction.eligibleSlots[0];
 		if (target && slot !== undefined) {
 			const result = resolveTruthSerumReveal(
-				state,
 				target,
 				slot,
 				interaction.eligibleSlots,

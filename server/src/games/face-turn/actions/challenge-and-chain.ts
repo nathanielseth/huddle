@@ -164,12 +164,17 @@ export const challengeWindowAction: PhaseActionHandler = (
 
 	if (action.type === "challenge") {
 		const actor = state.players.get(pending.actorId)!;
+		const challenger = state.players.get(playerId);
 
 		pushLog(state, {
 			kind: "challenge_declared",
 			challengerId: playerId,
 			actorId: pending.actorId,
 		});
+
+		if (challenger && challenger.derived.cashOnChallengeAmount > 0) {
+			challenger.cash += challenger.derived.cashOnChallengeAmount;
+		}
 
 		if (actor.derived.hasBackgroundCheck) {
 			const eligibleSlots = ([0, 1] as const).filter(

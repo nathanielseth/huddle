@@ -1,6 +1,7 @@
 import type { EffectPrimitive } from "../cards";
+import { CREW_MAP } from "../cards";
 import { recomputePassives } from "../derived";
-import type { Handler } from "./shared";
+import type { EffectContext, Handler } from "./shared";
 import {
 	getEnemies,
 	getLivingPlayers,
@@ -14,6 +15,9 @@ import {
 	firstTurnedSlot,
 	triggerCrewTurnedEffects,
 } from "./strikes";
+import { applyDamage } from "./damage";
+import { resolveEffects } from "./index";
+import { pickRandom } from "../../lib/random";
 import type { PendingInteraction } from "../interactions/types";
 
 export const crewTurnHandlers = {
@@ -213,5 +217,49 @@ export const crewTurnHandlers = {
 			actorId: actor.playerId,
 			eligibleTargets,
 		} satisfies PendingInteraction;
+	},
+
+	trigger_random_crew_reveal_and_damage(effect, ctx) {
+		if (effect.type !== "trigger_random_crew_reveal_and_damage") return;
+		const actor = ctx.actor;
+
+		// entire card pool: draftable, undraftable, and crew not in either
+		// player's current deck — this is intentionally NOT scoped to the
+		// deck or draft pool
+		const allCrewIds = [...CREW_MAP.keys()];
+		const pickedId = pickRandom(allCrewIds, ctx.state.rng);
+		const pickedCrew = CREW_MAP.get(pickedId)!;
+
+		// the random crew isn't actually on anyone's board, so it has no
+		// real crew slot. if its revealed effect needs a target slot (e.g.
+		// "another ally crew"), supply a random one of the caster's own
+		// occupied slots; effects that don't need one simply ignore it.
+		const ownOccupiedSlots = ([0, 1] as const).filter(
+			(i) => actor.crewIds[i] !== null,
+		);
+		const randomOwnSlot =
+			ownOccupiedSlots.length > 0
+				? pickRandom(ownOccupiedSlots, ctx.state.rng)
+				: undefined;
+
+		const revealCtx: EffectContext = {
+			state: ctx.state,
+			actor,
+			targetAllySlot: randomOwnSlot,
+			targetCrewSlot: randomOwnSlot,
+		};
+		resolveEffects(pickedCrew.turnedEffects, revealCtx);
+
+		const target = resolveTarget(ctx);
+		if (!target) return;
+		applyDamage(
+			ctx.state,
+			target,
+			effect.damageAmount,
+			actor,
+			false,
+			false,
+			ctx.moveId,
+		);
 	},
 } satisfies Partial<Record<EffectPrimitive["type"], Handler>>;

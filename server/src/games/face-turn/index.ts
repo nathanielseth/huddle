@@ -22,7 +22,6 @@ import {
 	swapTurn,
 	recordBluffIfUnchallenged,
 	executePendingAction,
-	getMoveCost,
 	getClassActionCost,
 	computeActorWasBluffing,
 	resolveMoveChainFull,
@@ -293,7 +292,6 @@ export const faceturnsEngine: GameEngine &
 	getCpuSeatToAct(ctx: GameContext): string | null {
 		const state = ctx.room.gamePayload as FaceturnServerState;
 		const helpers: EngineHelpers = {
-			getMoveCost,
 			getClassActionCost,
 			computeActorWasBluffing,
 		};

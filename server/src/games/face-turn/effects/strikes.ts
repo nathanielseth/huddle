@@ -12,7 +12,11 @@ import {
 	findEffectAmount,
 } from "./shared";
 import { resolveEffects } from "./index";
-import { consumeLifeInsuranceProtecting, maybeTriggerRazorStabGrant } from "./damage";
+import {
+	consumeLifeInsuranceProtecting,
+	maybeTriggerBloodMoneyOnTeamDamage,
+	maybeTriggerRazorStabGrant,
+} from "./damage";
 import { pushLog } from "../log";
 
 function discardRedHerringMove(
@@ -270,7 +274,7 @@ export function resolveStrikeOrExecute(
 	if (isStrike && actorId) {
 		const striker = state.players.get(actorId);
 		if (striker) {
-			applyBloodMoneyOnStrike(state, striker);
+			maybeTriggerBloodMoneyOnTeamDamage(state, striker);
 			maybeTriggerRazorStabGrant(striker);
 		}
 	}
@@ -323,18 +327,6 @@ function triggerBertoOnCrewKill(
 	recomputePassives(killer, state);
 }
 
-// enemies with the passive gain cash on strike declaration
-export function applyBloodMoneyOnStrike(
-	state: FaceturnServerState,
-	striker: FaceturnServerPlayer,
-): void {
-	for (const enemy of getEnemies(state, striker.playerId)) {
-		if (enemy.derived.cashOnEnemyMoveOrStrike > 0) {
-			enemy.cash += enemy.derived.cashOnEnemyMoveOrStrike;
-		}
-	}
-}
-
 export function performStrike(
 	ctx: EffectContext,
 ): StrikeOrExecuteOutcome | null {
@@ -363,26 +355,12 @@ function triggerAllyTurnReactions(
 	turner: FaceturnServerPlayer,
 	causedByEnemy: boolean,
 ): void {
-	for (const holder of getLivingPlayers(state)) {
-		if (holder.derived.crewSkillsDisabled) continue;
-		const isSelfOrTeammate =
-			holder.playerId === turner.playerId ||
-			getTeammates(state, holder.playerId).some(
-				(t) => t.playerId === turner.playerId,
-			);
-		if (!isSelfOrTeammate) continue;
-
-		let mamaSlot: 0 | 1 | null = null;
-		for (let i = 0; i < 2; i++) {
-			if (holder.crewIds[i as 0 | 1] === CARD_IDS.CREW.MAMA_MERCY) {
-				mamaSlot = i as 0 | 1;
-				break;
-			}
-		}
-		if (mamaSlot === null) continue;
-		if (!holder.crewTurned[mamaSlot]) continue;
-		if (holder.disabledPassiveSlots.has(mamaSlot)) continue;
-
+	const mamaHolders = eligibleActiveCrewHolders(
+		state,
+		turner,
+		CARD_IDS.CREW.MAMA_MERCY,
+	);
+	for (const holder of mamaHolders) {
 		const mamaArmorAmount = findEffectAmount(
 			getCrew(CARD_IDS.CREW.MAMA_MERCY).passiveEffects,
 			"passive_armor_on_ally_crew_turn",
@@ -392,29 +370,41 @@ function triggerAllyTurnReactions(
 	}
 
 	if (!causedByEnemy) {
-		for (const holder of getLivingPlayers(state)) {
-			if (holder.derived.crewSkillsDisabled) continue;
-			const isSelfOrTeammate =
-				holder.playerId === turner.playerId ||
-				getTeammates(state, holder.playerId).some(
-					(t) => t.playerId === turner.playerId,
-				);
-			if (!isSelfOrTeammate) continue;
-
-			let suplexSlot: 0 | 1 | null = null;
-			for (let i = 0; i < 2; i++) {
-				if (holder.crewIds[i as 0 | 1] === CARD_IDS.CREW.SUPLEX) {
-					suplexSlot = i as 0 | 1;
-					break;
-				}
-			}
-			if (suplexSlot === null) continue;
-			if (!holder.crewTurned[suplexSlot]) continue;
-			if (holder.disabledPassiveSlots.has(suplexSlot)) continue;
-
+		const suplexHolders = eligibleActiveCrewHolders(
+			state,
+			turner,
+			CARD_IDS.CREW.SUPLEX,
+		);
+		for (const holder of suplexHolders) {
 			resolveEffects([{ type: "strike_enemy_crew" }], { state, actor: holder });
 		}
 	}
+}
+
+// players (self or teammate of `turner`) with a turned, non-disabled crewId slot
+function eligibleActiveCrewHolders(
+	state: FaceturnServerState,
+	turner: FaceturnServerPlayer,
+	crewId: string,
+): FaceturnServerPlayer[] {
+	const result: FaceturnServerPlayer[] = [];
+	for (const holder of getLivingPlayers(state)) {
+		if (holder.derived.crewSkillsDisabled) continue;
+		const isSelfOrTeammate =
+			holder.playerId === turner.playerId ||
+			getTeammates(state, holder.playerId).some(
+				(t) => t.playerId === turner.playerId,
+			);
+		if (!isSelfOrTeammate) continue;
+
+		const slot = ([0, 1] as const).find((i) => holder.crewIds[i] === crewId);
+		if (slot === undefined) continue;
+		if (!holder.crewTurned[slot]) continue;
+		if (holder.disabledPassiveSlots.has(slot)) continue;
+
+		result.push(holder);
+	}
+	return result;
 }
 
 export function triggerCrewTurnedEffects(

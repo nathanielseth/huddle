@@ -125,7 +125,6 @@ export function resolveLighthouseDisablePick(
 
 // truth serum reveals base class; overrides can't apply to face-down crew
 export function resolveTruthSerumReveal(
-	state: FaceturnServerState,
 	target: FaceturnServerPlayer,
 	slot: number,
 	eligibleSlots: readonly number[],
@@ -134,6 +133,5 @@ export function resolveTruthSerumReveal(
 	const crewId = target.crewIds[slot as 0 | 1];
 	if (!crewId) return null;
 	const revealedClass = getCrew(crewId).class;
-	void state;
 	return { revealedSlot: slot, revealedClass };
 }

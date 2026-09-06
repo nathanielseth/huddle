@@ -2,10 +2,11 @@ import type { FaceturnServerState, FaceturnServerPlayer } from "../types";
 import { FACETURN_CONSTANTS as C } from "../types";
 import type { EffectPrimitive } from "../cards";
 import { getCrew, getMove, CARD_IDS } from "../cards";
-import { shuffle } from "../../lib/random";
+import { shuffle, pickRandom } from "../../lib/random";
 import { recomputePassives } from "../derived";
-import type { Handler } from "./shared";
+import type { EffectContext, Handler } from "./shared";
 import { findEffectAmount, resolveTarget } from "./shared";
+import { resolveEffects } from "./index";
 import type { PendingInteraction } from "../interactions/types";
 
 export function drawCards(player: FaceturnServerPlayer, count: number): void {
@@ -30,13 +31,31 @@ export function discardFromHand(
 
 	if (toDiscard.length > 0) {
 		maybeTriggerDoctorNorman(player, toDiscard.length);
+		maybeTriggerDiscardStabGrant(player, toDiscard.length);
 		checkRatQueenDrawTrigger(player, state);
+		for (const cardId of toDiscard) {
+			maybeTriggerOnDiscardEffects(cardId, player, state);
+		}
 	}
 
 	return toDiscard;
 }
 
-const DOCTOR_NORMAN_ARMOR_PER_DISCARD = 10;
+// resolves a card's onDiscardEffects (if any) as though it had just been
+// played, with the discarding player as actor. runs only from the
+// discardFromHand pipeline (self-initiated discards).
+function maybeTriggerOnDiscardEffects(
+	cardId: string,
+	player: FaceturnServerPlayer,
+	state: FaceturnServerState,
+): void {
+	const move = getMove(cardId);
+	if (!move.onDiscardEffects || move.onDiscardEffects.length === 0) return;
+	const ctx: EffectContext = { state, actor: player, moveId: cardId };
+	resolveEffects(move.onDiscardEffects, ctx);
+}
+
+const DOCTOR_NORMAN_ARMOR_PER_DISCARD = 5;
 
 // doctor norman armor per self-initiated discard, scaled by cards discarded
 function maybeTriggerDoctorNorman(
@@ -53,6 +72,20 @@ function maybeTriggerDoctorNorman(
 	if (player.disabledPassiveSlots.has(slot as 0 | 1)) return;
 	player.bossArmor += DOCTOR_NORMAN_ARMOR_PER_DISCARD * cardsDiscarded;
 	player.hasArmoredBossThisGame = true;
+}
+
+// discard stab active move: adds a copy of Stab to hand for each card
+// discarded by the player's own crew/moves, up to the hand limit
+function maybeTriggerDiscardStabGrant(
+	player: FaceturnServerPlayer,
+	cardsDiscarded: number,
+): void {
+	if (cardsDiscarded <= 0) return;
+	if (!player.derived.hasDiscardStabPassive) return;
+	for (let i = 0; i < cardsDiscarded; i++) {
+		if (player.hand.length >= C.HAND_LIMIT) break;
+		player.hand.push(CARD_IDS.MOVE.STAB);
+	}
 }
 
 export function checkRatQueenDrawTrigger(
@@ -75,10 +108,44 @@ export function checkRatQueenDrawTrigger(
 	drawCards(player, amount);
 }
 
+// discards every filled active-type move slot for a player (caller recomputes passives)
+function discardActiveMoveSlots(player: FaceturnServerPlayer): void {
+	for (let i = 0; i < player.activeMoves.length; i++) {
+		const moveId = player.activeMoves[i];
+		if (!moveId) continue;
+		if (getMove(moveId).moveType === "active") {
+			player.discardPile.push(moveId);
+			player.activeMoves[i] = null;
+			player.trickleDownTargets.delete(i as 0 | 1 | 2);
+			player.totalCardsDiscarded++;
+		}
+	}
+}
+
 export const drawDiscardHandlers = {
 	draw_cards(effect, ctx) {
 		if (effect.type !== "draw_cards") return;
 		drawCards(ctx.actor, effect.amount);
+	},
+
+	draw_random_active_move_from_deck(effect, ctx) {
+		if (effect.type !== "draw_random_active_move_from_deck") return;
+		const actor = ctx.actor;
+		if (actor.hand.length >= C.HAND_LIMIT) return;
+		const candidates = actor.deck.filter(
+			(id) => getMove(id).moveType === "active",
+		);
+		if (candidates.length === 0) return;
+		const picked = pickRandom(candidates, ctx.state.rng);
+		actor.deck.splice(actor.deck.indexOf(picked), 1);
+		actor.hand.push(picked);
+	},
+
+	add_card_to_hand(effect, ctx) {
+		if (effect.type !== "add_card_to_hand") return;
+		getMove(effect.cardId); // validates the id, throws on typo
+		if (ctx.actor.hand.length >= C.HAND_LIMIT) return;
+		ctx.actor.hand.push(effect.cardId);
 	},
 
 	discard_cards_from_hand(effect, ctx) {
@@ -98,35 +165,35 @@ export const drawDiscardHandlers = {
 		return available === amount;
 	},
 
-	discard_all_enemy_hand(_effect, ctx) {
+	discard_all_enemy_hand(effect, ctx) {
+		if (effect.type !== "discard_all_enemy_hand") return;
 		const target = resolveTarget(ctx);
 		if (!target) {
 			ctx.state.lastEnemyHandDiscardCount = 0;
 			return;
 		}
-		const discarded = target.hand.splice(0);
+		const count =
+			effect.maxCards !== undefined
+				? Math.min(effect.maxCards, target.hand.length)
+				: target.hand.length;
+		const discarded = target.hand.splice(0, count);
 		target.discardPile.push(...discarded);
 		target.totalCardsDiscarded += discarded.length;
 		for (const id of discarded) target.costOverrides.delete(id);
 		ctx.state.lastEnemyHandDiscardCount = discarded.length;
-		// doctor norman does not trigger on enemy-forced discards
+		// doctor norman does not trigger on enemy-forced discards to the
+		// enemy's own hand, but the caster is the one doing the discarding
+		// here, so it counts as a self-triggered discard for the caster
 		if (discarded.length > 0) {
 			checkRatQueenDrawTrigger(target, ctx.state);
+			maybeTriggerDoctorNorman(ctx.actor, discarded.length);
+			maybeTriggerDiscardStabGrant(ctx.actor, discarded.length);
 		}
 	},
 
 	discard_all_actives_all_players(_effect, ctx) {
 		for (const player of ctx.state.players.values()) {
-			for (let i = 0; i < player.activeMoves.length; i++) {
-				const moveId = player.activeMoves[i];
-				if (!moveId) continue;
-				if (getMove(moveId).moveType === "active") {
-					player.discardPile.push(moveId);
-					player.activeMoves[i] = null;
-					player.trickleDownTargets.delete(i as 0 | 1 | 2);
-					player.totalCardsDiscarded++;
-				}
-			}
+			discardActiveMoveSlots(player);
 			recomputePassives(player, ctx.state);
 		}
 	},
@@ -134,16 +201,7 @@ export const drawDiscardHandlers = {
 	discard_enemy_actives(_effect, ctx) {
 		const target = resolveTarget(ctx);
 		if (!target) return;
-		for (let i = 0; i < target.activeMoves.length; i++) {
-			const moveId = target.activeMoves[i];
-			if (!moveId) continue;
-			if (getMove(moveId).moveType === "active") {
-				target.discardPile.push(moveId);
-				target.activeMoves[i] = null;
-				target.trickleDownTargets.delete(i as 0 | 1 | 2);
-				target.totalCardsDiscarded++;
-			}
-		}
+		discardActiveMoveSlots(target);
 		recomputePassives(target, ctx.state);
 	},
 

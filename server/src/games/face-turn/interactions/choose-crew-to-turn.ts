@@ -4,7 +4,6 @@ import {
 	turnCrewAtSlot,
 	recomputePassives,
 	triggerCrewTurnedEffects,
-	applyBloodMoneyOnStrike,
 	maybeTriggerRazorStabGrant,
 } from "../effects";
 import {
@@ -42,7 +41,6 @@ export const chooseCrewToTurnSpec: InteractionSpec<Interaction> = {
 		if (interaction.isStrike) {
 			const striker = state.players.get(interaction.actorId);
 			if (striker) {
-				applyBloodMoneyOnStrike(state, striker);
 				maybeTriggerRazorStabGrant(striker);
 			}
 		}
@@ -77,7 +75,6 @@ export const chooseCrewToTurnSpec: InteractionSpec<Interaction> = {
 			if (interaction.isStrike) {
 				const striker = state.players.get(interaction.actorId);
 				if (striker) {
-					applyBloodMoneyOnStrike(state, striker);
 					maybeTriggerRazorStabGrant(striker);
 				}
 			}
