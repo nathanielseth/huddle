@@ -15,9 +15,11 @@ import { CrewClassGuessPopover } from "./interaction-prompts/CrewClassGuessPopov
 import { useBoardTarget, type BoardTarget } from "../hooks/boardTargetRegistry";
 import { useFaceturnState } from "../hooks/useFaceturnState";
 import { useFaceturnInteraction } from "../hooks/useFaceturnInteraction";
-import { useBossCommandPopoverStore } from "../hooks/bossCommandPopoverStore";
-import { useClassActionPopoverStore } from "../hooks/classActionPopoverStore";
-import { useReserveSwapPopoverStore } from "../hooks/reserveSwapPopoverStore";
+import {
+	useBossCommandPopoverStore,
+	useClassActionPopoverStore,
+	useReserveSwapPopoverStore,
+} from "../hooks/anchoredPopoverStore";
 import { useArmedMove, useArmedMoveStore } from "../hooks/useArmedMove";
 import {
 	useTargetPickerSession,
@@ -95,7 +97,7 @@ function BossCell({
 	const { isMyTurn, myPlayer } = useFaceturnState();
 	const toggleCommandPopover = useBossCommandPopoverStore((s) => s.toggle);
 	const commandPopoverOpen = useBossCommandPopoverStore(
-		(s) => s.openForPlayerId === playerId,
+		(s) => s.openKey === playerId,
 	);
 	const armedMove = useArmedMove();
 	const disarmMove = useArmedMoveStore((s) => s.disarm);
@@ -149,14 +151,14 @@ function CrewSlotCell({
 		(s) =>
 			crewTarget !== null &&
 			crewTarget.playerId === playerId &&
-			s.openForSlotIndex === crewTarget.slotIndex,
+			s.openKey === crewTarget.slotIndex,
 	);
 	const toggleReserveSwapPopover = useReserveSwapPopoverStore((s) => s.toggle);
 	const reserveSwapPopoverOpen = useReserveSwapPopoverStore(
 		(s) =>
 			crewTarget !== null &&
 			crewTarget.playerId === playerId &&
-			s.openForSlotIndex === crewTarget.slotIndex,
+			s.openKey === crewTarget.slotIndex,
 	);
 
 	const isArmedTarget =
@@ -238,7 +240,8 @@ function CrewSlotCell({
 				onClick={
 					clickable
 						? () => {
-								if (isArmedTarget) pickSecondaryTarget(slot.slotIndex);
+								if (isArmedTarget && crewTarget)
+									pickSecondaryTarget(crewTarget);
 								if (isPickerTarget && crewTarget)
 									pickTarget({ kind: "crew", ...crewTarget });
 								if (canOpenClassAction && crewTarget && anchorEl) {

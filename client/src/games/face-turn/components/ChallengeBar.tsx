@@ -14,6 +14,8 @@ const ACTION_LABEL: Record<PendingActionType, string> = {
 	class_action_collect: "Collect",
 	class_action_hide: "Hide",
 	class_action_defend: "Defend",
+	class_action_steal: "Steal",
+	class_action_block_steal: "Block",
 	card_strike: "Ambush",
 };
 
@@ -64,6 +66,7 @@ export function ChallengeBar() {
 		if (canChallenge) {
 			const pending = ft.pendingAction;
 			const canDefend = pending?.type === "class_action_strike";
+			const canBlockSteal = pending?.type === "class_action_steal";
 			const title = pending
 				? `${pending.actorId === playerId ? "You" : "Someone"} declared ${ACTION_LABEL[pending.type]} — respond`
 				: "Respond";
@@ -96,6 +99,18 @@ export function ChallengeBar() {
 								onClick={() => {
 									runLocked(() => {
 										sendFaceturnAction({ type: "defend" });
+									});
+								}}
+							/>
+						)}
+						{canBlockSteal && (
+							<ActionButton
+								label="Block (claim Stealer)"
+								tone="sky"
+								disabled={locked}
+								onClick={() => {
+									runLocked(() => {
+										sendFaceturnAction({ type: "block_steal" });
 									});
 								}}
 							/>
@@ -148,17 +163,28 @@ export function ChallengeBar() {
 	} else if (ft.phase === "defend_declared") {
 		const pending = ft.pendingAction;
 		if (pending) {
-			// after defend, actorId is defender, targetPlayerId is original striker
-			const isOriginalStriker = pending.targetPlayerId === playerId;
-			if (isOriginalStriker) {
+			// after defend/block, actorId is the defender/blocker, targetPlayerId
+			// is the original actor whose action is being blocked
+			const isOriginalActor = pending.targetPlayerId === playerId;
+			if (isOriginalActor) {
+				const isBlockingSteal = pending.originalActionType === "class_action_steal";
 				const canChallengeDefend = pending.originalActionType !== "card_strike";
 				const challengeDefendIsFatalIfWrong = isPlayerExposed(myPlayer);
+				const title = isBlockingSteal
+					? "Your steal was blocked"
+					: "Your strike was defended";
+				const challengeLabel = isBlockingSteal
+					? "Challenge the block"
+					: "Challenge the defend";
+				const acceptLabel = isBlockingSteal
+					? "Accept the block"
+					: "Accept the defend";
 				content = (
-					<PromptShell title="Your strike was defended" tone="violet">
+					<PromptShell title={title} tone="violet">
 						{canChallengeDefend && challengeDefendIsFatalIfWrong && (
 							<p className="text-xs text-red-300/90 mb-1.5">
-								⚠️ Your Crew is fully exposed — if you challenge the defend and
-								it was real, you'll be executed.
+								⚠️ Your Crew is fully exposed — if you challenge and it was
+								real, you'll be executed.
 							</p>
 						)}
 						{!canChallengeDefend && (
@@ -170,7 +196,7 @@ export function ChallengeBar() {
 						<div className="flex gap-2 flex-wrap">
 							{canChallengeDefend && (
 								<ActionButton
-									label="Challenge the defend"
+									label={challengeLabel}
 									tone="red"
 									disabled={locked}
 									onClick={() => {
@@ -181,7 +207,7 @@ export function ChallengeBar() {
 								/>
 							)}
 							<ActionButton
-								label="Accept the defend"
+								label={acceptLabel}
 								tone="neutral"
 								disabled={locked}
 								onClick={() => {

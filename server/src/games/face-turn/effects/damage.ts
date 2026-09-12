@@ -121,25 +121,23 @@ function applyResolvedDamageToBoss(
 		...(moveId ? { moveId } : {}),
 	});
 
+	let dealt = dmg;
 	if (target.derived.hasLifeInsurance && target.bossHp - dmg <= 0) {
 		target.bossHp = 1;
 		consumeLifeInsuranceProtecting(state, target);
-		maybeTriggerBastionCashBonus(target);
-		maybeTriggerMonkeyManCashSteal(target, sourceActor, dmg);
-		maybeTriggerRazorStabOnDamage(sourceActor, dmg, moveId);
-		maybeTriggerBloodMoneyOnTeamDamage(state, sourceActor);
-		return rawAmount;
+		dealt = rawAmount;
+	} else {
+		if (target.bossHp - dmg <= 0) {
+			target.lastHpZeroCause = "damage";
+		}
+		target.bossHp = clampHp(target.bossHp - dmg, target.bossMaxHp);
 	}
 
-	if (target.bossHp - dmg <= 0) {
-		target.lastHpZeroCause = "damage";
-	}
-	target.bossHp = clampHp(target.bossHp - dmg, target.bossMaxHp);
 	maybeTriggerBastionCashBonus(target);
 	maybeTriggerMonkeyManCashSteal(target, sourceActor, dmg);
 	maybeTriggerRazorStabOnDamage(sourceActor, dmg, moveId);
 	maybeTriggerBloodMoneyOnTeamDamage(state, sourceActor);
-	return dmg;
+	return dealt;
 }
 
 // damage pipeline: flat bonus, reduction%, immunity, armor, life insurance
@@ -343,7 +341,7 @@ export const damageHandlers = {
 		);
 	},
 
-	// poison stacks per-source, ticked at round end
+	// poison stacks per-source, ticked at the end of the victim's turn
 	passive_poison_per_round(effect, ctx) {
 		if (effect.type !== "passive_poison_per_round") return;
 

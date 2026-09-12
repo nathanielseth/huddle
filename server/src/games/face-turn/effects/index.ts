@@ -1,4 +1,4 @@
-import type { FaceturnServerState } from "../types";
+import type { FaceturnServerState, FaceturnServerPlayer } from "../types";
 import type { CardEffect, EffectPrimitive } from "../cards";
 import { recomputePassives } from "../derived";
 import { applyDamage } from "./damage";
@@ -72,27 +72,19 @@ export function resolveEffects(
 	}
 }
 
-export function triggerRoundEndPassives(state: FaceturnServerState): void {
-	const living = getLivingPlayers(state);
-
-	for (const player of living) {
-		for (const [sourceId, damage] of player.incomingPoison) {
-			if (state.eliminatedPlayers.has(sourceId)) {
-				player.incomingPoison.delete(sourceId);
-				continue;
-			}
-			const sourcePlayer = state.players.get(sourceId);
-			if (!sourcePlayer) continue;
-			applyDamage(state, player, damage, sourcePlayer);
+// ticks poison accumulated against the player whose turn just ended
+export function triggerTurnEndPassives(
+	state: FaceturnServerState,
+	player: FaceturnServerPlayer,
+): void {
+	for (const [sourceId, damage] of player.incomingPoison) {
+		if (state.eliminatedPlayers.has(sourceId)) {
+			player.incomingPoison.delete(sourceId);
+			continue;
 		}
-
-		if (player.bossImmunityTurns > 0) {
-			player.bossImmunityTurns--;
-		}
-
-		player.playedMoveThisTurn = false;
-		player.classActionUsedThisTurn = false;
-		player.ratQueenDrawUsedThisTurn = false;
+		const sourcePlayer = state.players.get(sourceId);
+		if (!sourcePlayer) continue;
+		applyDamage(state, player, damage, sourcePlayer);
 	}
 }
 
@@ -139,10 +131,13 @@ export {
 	resolveTagOutPick,
 	resolveTooBigSwapPick,
 	resolveBelladonnaCopyPick,
+	resolveDestroyEnemyMovePick,
 	maybeOpenBearBonesOffer,
 	resolveBearBonesBonusStrike,
 	resolveBackgroundCheckGuess,
 	processWarrantOfArrestTicks,
+	maybeGrantHeelTurnOnChallengeWin,
+	triggerRaidStrikeOnTurnEnd,
 } from "./misc";
 export {
 	checkVoidPiecesAssembled,

@@ -33,6 +33,8 @@ export interface FaceturnDerivedPlayerStats {
 	// the razor: strike, or deal damage with a move other than Stab, to add a
 	// copy of Stab to hand
 	hasRazorStabPassive: boolean;
+	// fade: turn self face-down whenever this player performs a Strike
+	hasTurnSelfDownOnStrikePassive: boolean;
 	// discard stab active move: your crew/moves causing a discard adds a
 	// copy of Stab to hand, once per card discarded
 	hasDiscardStabPassive: boolean;
@@ -94,6 +96,7 @@ export function makeEmptyDerivedStats(): FaceturnDerivedPlayerStats {
 		hasAllDamagePiercingPassive: false,
 		stealCashOnDamageDealtAmount: 0,
 		hasRazorStabPassive: false,
+		hasTurnSelfDownOnStrikePassive: false,
 		hasDiscardStabPassive: false,
 		armorPerTurn: 0,
 		moveBaseCostReduction: 0,
@@ -348,6 +351,9 @@ function recomputePassiveSwitch(
 		case "passive_armor_on_discard":
 		case "passive_draw_on_hand_empty_once_per_turn":
 		case "passive_optional_strike_on_successful_challenge":
+		case "passive_grant_heel_turn_on_challenge_win":
+		case "passive_sacrifice_self_on_exposed_strike":
+		case "passive_raid_strike_on_turn_end":
 		case "passive_suppress_enemy_turned_effects":
 			break;
 		// class overrides handled in recomputePassives above
@@ -361,6 +367,11 @@ function recomputePassiveSwitch(
 		case "passive_strike_on_self_turned_ally":
 			break;
 		case "passive_turn_self_down_on_enemy_crew_kill":
+			break;
+		case "passive_turn_self_down_on_strike":
+			stats.hasTurnSelfDownOnStrikePassive = true;
+			break;
+		case "passive_randomize_class_on_self_turn_down":
 			break;
 		case "passive_all_damage_is_piercing":
 			stats.hasAllDamagePiercingPassive = true;
@@ -443,7 +454,7 @@ export function recomputePassives(
 				continue;
 			}
 			const effect = cardEffect;
-			// poison handled at round end via incomingPoison, no derived stat
+			// poison handled at the end of the victim's turn via incomingPoison, no derived stat
 			if (effect.type === "passive_poison_per_round") continue;
 			recomputePassiveSwitch(effect, next);
 		}

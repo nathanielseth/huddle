@@ -5,16 +5,13 @@ import {
 } from "@shared/games/face-turn/card-display";
 import type { FaceturnsAction } from "@shared/games/face-turn/schemas";
 import type { BoardTarget } from "../hooks/boardTargetRegistry";
+import type { SecondaryPick } from "../hooks/useArmedMove";
 
 export type PlayMoveAction = Extract<FaceturnsAction, { type: "play_move" }>;
 export type ChainPlayAction = Extract<
 	FaceturnsAction,
 	{ type: "chain_play_burst" | "chain_play_slow" }
 >;
-
-export interface SecondaryPick {
-	slotIndex: number;
-}
 
 // shared across play_move and chain actions: same board target maps to same fields
 function primaryTargetFields(
@@ -54,8 +51,13 @@ function applySecondaryPick(
 ): void {
 	if (!secondaryPick) return;
 	const postPlacement = getMovePostPlacementTarget(moveId);
-	// field name varies per move; getMovePostPlacementTarget().field is the source of truth
-	if (postPlacement?.field) {
+	if (!postPlacement) return;
+	// own_crew scope targets the caster implicitly, so only the slot matters;
+	// enemy_crew scope needs the opponent's id too, since it's ambiguous otherwise
+	if (postPlacement.scope === "enemy_crew") {
+		base.targetPlayerId = secondaryPick.playerId;
+		base.targetCrewSlot = secondaryPick.slotIndex;
+	} else if (postPlacement.field) {
 		base[postPlacement.field] = secondaryPick.slotIndex;
 	}
 }
@@ -74,6 +76,7 @@ export function resolvePlayMoveAction(
 		) {
 			Object.assign(base, { placeInActiveSlot: primaryTarget.slotIndex });
 		}
+		applySecondaryPick(base, moveId, secondaryPick);
 		return base;
 	}
 

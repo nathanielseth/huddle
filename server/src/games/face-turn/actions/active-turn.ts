@@ -181,6 +181,14 @@ export const activeTurnAction: PhaseActionHandler = (
 				if (isStrikeDefendedByTerminal(strikeTarget)) return noOp();
 			}
 
+			if (action.action === "steal") {
+				if (!action.targetPlayerId) return noOp();
+				const targetIsEnemy = getEnemies(state, playerId).some(
+					(e) => e.playerId === action.targetPlayerId,
+				);
+				if (!targetIsEnemy) return noOp();
+			}
+
 			let hideTargetPlayer = player;
 			if (action.action === "hide") {
 				if (action.targetPlayerId && action.targetPlayerId !== playerId) {
@@ -215,7 +223,7 @@ export const activeTurnAction: PhaseActionHandler = (
 			player.classActionUsedThisTurn = true;
 
 			const targetPlayerId =
-				action.action === "strike"
+				action.action === "strike" || action.action === "steal"
 					? (action.targetPlayerId ?? null)
 					: action.action === "hide" && hideTargetPlayer.playerId !== playerId
 						? hideTargetPlayer.playerId
@@ -353,6 +361,7 @@ export const activeTurnAction: PhaseActionHandler = (
 			player.crewIds[targetSlot] = reserveCrewId;
 			player.crewTurned[targetSlot] = false;
 			player.derived.crewClassOverrides.delete(targetSlot);
+			player.crewClassMutations.delete(targetSlot);
 			player.disabledPassiveSlots.delete(targetSlot);
 			player.reserveCrewIds[reserveSlot] = null;
 			recomputePassives(player, state);

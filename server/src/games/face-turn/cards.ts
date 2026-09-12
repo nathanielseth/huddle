@@ -97,10 +97,12 @@ export type EffectPrimitive =
 	| { type: "draw_cards"; amount: number }
 	| { type: "draw_random_active_move_from_deck" }
 	| { type: "add_card_to_hand"; cardId: string }
+	| { type: "add_multiple_cards_to_hand"; cardId: string; amount: number }
 	| { type: "discard_cards_from_hand"; amount: number }
 	| { type: "discard_all_enemy_hand"; maxCards?: number }
 	| { type: "discard_all_actives_all_players" }
 	| { type: "discard_enemy_actives" }
+	| { type: "discard_own_and_enemy_actives" }
 	| {
 			type: "discard_one_draw_three";
 	  }
@@ -150,6 +152,9 @@ export type EffectPrimitive =
 	| { type: "armor_boss"; amount: number }
 	| { type: "armor_all_ally_bosses"; amount: number }
 	| { type: "remove_all_armor"; target: "enemy_boss" | "ally_boss" }
+	| {
+			type: "steal_armor";
+	  }
 	| {
 			type: "immunity_until_next_turn";
 			turns?: number;
@@ -269,6 +274,20 @@ export type EffectPrimitive =
 	| {
 			type: "passive_optional_strike_on_successful_challenge";
 	  }
+	// heel: resolved structurally alongside cashOnChallengeWinAmount, both
+	// challenger-wins-bluff and actor-wins-defend branches
+	| {
+			type: "passive_grant_heel_turn_on_challenge_win";
+	  }
+	// sekyu: resolved in resolveStrikeOrExecute's execution branch, same
+	// interception point as life insurance
+	| {
+			type: "passive_sacrifice_self_on_exposed_strike";
+	  }
+	// raid: resolved structurally in swapTurn, once for the player whose turn just ended
+	| {
+			type: "passive_raid_strike_on_turn_end";
+	  }
 	// triggers when holder or teammate flips own crew
 	| {
 			type: "passive_strike_on_self_turned_ally";
@@ -276,6 +295,15 @@ export type EffectPrimitive =
 	// fires when holder kills enemy crew; turns holder's own slot face-down
 	| {
 			type: "passive_turn_self_down_on_enemy_crew_kill";
+	  }
+	// fires whenever holder performs a Strike; turns holder's own slot face-down
+	| {
+			type: "passive_turn_self_down_on_strike";
+	  }
+	// kamileon: fires whenever holder's own slot turns face-down (for any
+	// reason), rerolling which class the crew counts as while hidden
+	| {
+			type: "passive_randomize_class_on_self_turn_down";
 	  }
 	// all damage this player deals is piercing: bypasses armor
 	| {
@@ -357,6 +385,11 @@ export type EffectPrimitive =
 	  }
 	| {
 			type: "discard_targeted_enemy_active_move";
+	  }
+	// crew-facing: no client-supplied target, picks for the actor (auto if one
+	// option, opens destroy_enemy_move_pick if several)
+	| {
+			type: "destroy_enemy_active_move";
 	  }
 	| {
 			type: "passive_cash_on_challenge_win";
@@ -449,10 +482,12 @@ const EFFECT_TARGETING_TABLE = {
 	draw_cards: { scope: "self" },
 	draw_random_active_move_from_deck: { scope: "self" },
 	add_card_to_hand: { scope: "self" },
+	add_multiple_cards_to_hand: { scope: "self" },
 	discard_cards_from_hand: { scope: "self" },
 	discard_all_enemy_hand: { scope: "enemy", slot: "player" },
 	discard_all_actives_all_players: { scope: "none" },
 	discard_enemy_actives: { scope: "enemy", slot: "player" },
+	discard_own_and_enemy_actives: { scope: "enemy", slot: "player" },
 	discard_one_draw_three: { scope: "self" },
 	discard_variable_by_bluff_flag: { scope: "self" },
 	draw_cards_or_more_if_hand_was_empty: { scope: "self" },
@@ -474,6 +509,7 @@ const EFFECT_TARGETING_TABLE = {
 	armor_all_ally_bosses: { scope: "none" },
 	// current instance uses enemy_boss, but handler supports both
 	remove_all_armor: { scope: "enemy", slot: "boss" },
+	steal_armor: { scope: "enemy", slot: "boss" },
 	immunity_until_next_turn: { scope: "self" },
 	set_ally_boss_hp_gain_cash_draw: { scope: "ally", slot: "boss" },
 
@@ -485,6 +521,8 @@ const EFFECT_TARGETING_TABLE = {
 
 	mark_enemy_crew_for_delayed_turn: { scope: "enemy", slot: "crew" },
 	discard_targeted_enemy_active_move: { scope: "enemy", slot: "active" },
+	// modeled none: resolved via pendingInteraction
+	destroy_enemy_active_move: { scope: "none" },
 	shuffle_discard_into_deck_then_draw: { scope: "self" },
 	choose_red_herring_crew: { scope: "self" },
 	// strict: never self
@@ -526,8 +564,13 @@ const EFFECT_TARGETING_TABLE = {
 	passive_armor_on_discard: { scope: "self" },
 	passive_draw_on_hand_empty_once_per_turn: { scope: "self" },
 	passive_optional_strike_on_successful_challenge: { scope: "self" },
+	passive_grant_heel_turn_on_challenge_win: { scope: "self" },
+	passive_sacrifice_self_on_exposed_strike: { scope: "self" },
+	passive_raid_strike_on_turn_end: { scope: "self" },
 	passive_strike_on_self_turned_ally: { scope: "self" },
 	passive_turn_self_down_on_enemy_crew_kill: { scope: "self" },
+	passive_turn_self_down_on_strike: { scope: "self" },
+	passive_randomize_class_on_self_turn_down: { scope: "self" },
 	passive_all_damage_is_piercing: { scope: "self" },
 	passive_steal_cash_on_damage_dealt: { scope: "self" },
 	passive_razor_stab_on_strike_or_damage: { scope: "self" },
@@ -747,7 +790,7 @@ const CREW_MECHANICS: Record<
 		passiveEffects: [{ type: "passive_disable_all_enemy_crew_passives" }],
 	},
 	"doctor-norman": {
-		turnedEffects: [{ type: "add_card_to_hand", cardId: "serum" }],
+		turnedEffects: [{ type: "add_card_to_hand", cardId: "genesis-compound" }],
 		passiveEffects: [{ type: "passive_armor_on_discard" }],
 	},
 	lotus: {
@@ -767,6 +810,10 @@ const CREW_MECHANICS: Record<
 				cashAmount: 0,
 			},
 		],
+	},
+	song: {
+		turnedEffects: [{ type: "add_card_to_hand", cardId: "raid" }],
+		passiveEffects: [],
 	},
 	"claw-machine": {
 		turnedEffects: [{ type: "draw_cards", amount: 3 }],
@@ -853,6 +900,40 @@ const CREW_MECHANICS: Record<
 		turnedEffects: [{ type: "deal_damage", target: "enemy_boss", amount: 30 }],
 		passiveEffects: [],
 	},
+	fade: {
+		turnedEffects: [],
+		passiveEffects: [{ type: "passive_turn_self_down_on_strike" }],
+	},
+	sekyu: {
+		turnedEffects: [],
+		passiveEffects: [{ type: "passive_sacrifice_self_on_exposed_strike" }],
+	},
+	carrion: {
+		turnedEffects: [{ type: "steal_armor" }],
+		passiveEffects: [],
+	},
+	garbo: {
+		turnedEffects: [
+			{
+				type: "add_multiple_cards_to_hand",
+				cardId: "bakal-bote",
+				amount: 3,
+			},
+		],
+		passiveEffects: [],
+	},
+	heel: {
+		turnedEffects: [],
+		passiveEffects: [{ type: "passive_grant_heel_turn_on_challenge_win" }],
+	},
+	denier: {
+		turnedEffects: [{ type: "heal_boss", amount: 20 }],
+		passiveEffects: [{ type: "destroy_enemy_active_move" }],
+	},
+	kamileon: {
+		turnedEffects: [],
+		passiveEffects: [{ type: "passive_randomize_class_on_self_turn_down" }],
+	},
 };
 
 export const CREW: readonly CrewCard[] = CREW_DISPLAY.map((display) => ({
@@ -902,7 +983,7 @@ const MOVE_MECHANICS: Record<
 		effects: [{ type: "draw_random_active_move_from_deck" }],
 		onDiscardEffects: [{ type: "draw_random_active_move_from_deck" }],
 	},
-	serum: {
+	"genesis-compound": {
 		effects: [
 			{ type: "trigger_random_crew_reveal_and_damage", damageAmount: 10 },
 		],
@@ -1076,7 +1157,7 @@ const MOVE_MECHANICS: Record<
 		effects: [{ type: "transform_andrew_into_wolfman" }],
 	},
 	"scorched-earth": {
-		effects: [{ type: "discard_enemy_actives" }],
+		effects: [{ type: "discard_own_and_enemy_actives" }],
 	},
 	"triangle-of-trust": {
 		effects: [{ type: "discard_one_draw_three" }],
@@ -1215,6 +1296,13 @@ const MOVE_MECHANICS: Record<
 			{ type: "strike_enemy_crew", undefendable: true },
 		],
 	},
+	raid: {
+		effects: [{ type: "passive_raid_strike_on_turn_end" }],
+	},
+	"bakal-bote": {
+		effects: [],
+		onDiscardEffects: [{ type: "gain_cash", amount: 1 }],
+	},
 };
 
 export const MOVES: readonly MoveCard[] = MOVE_DISPLAY.map((display) => ({
@@ -1312,6 +1400,14 @@ export const CARD_IDS = {
 		ZEDNEM: "zednem",
 		KEEPER: "keeper",
 		WOLFMAN: "wolfman",
+		FADE: "fade",
+		SEKYU: "sekyu",
+		CARRION: "carrion",
+		GARBO: "garbo",
+		HEEL: "heel",
+		SONG: "song",
+		DENIER: "denier",
+		KAMILEON: "kamileon",
 	},
 	MOVE: {
 		POISON_BREATH: "poison-breath",
@@ -1388,10 +1484,12 @@ export const CARD_IDS = {
 		RED_HERRING: "red-herring",
 		MY_TREAT: "my-treat",
 		TO_THE_DEATH: "to-the-death",
-		SERUM: "serum",
+		GENESIS_COMPOUND: "genesis-compound",
 		CONSUME: "consume",
 		PARTING_GIFT: "parting-gift",
 		BLADEWORKS: "bladeworks",
+		RAID: "raid",
+		BAKAL_BOTE: "bakal-bote",
 	},
 } as const;
 

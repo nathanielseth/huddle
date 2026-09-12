@@ -196,6 +196,8 @@ function buildPlayerView(
 		poisonStacks: totalIncomingPoison,
 		cashGainPerTurn: player.derived.cashGainPerTurn,
 		moveBaseCostReduction: player.derived.moveBaseCostReduction,
+		burstMoveCostReduction: player.derived.burstMoveCostReduction,
+		enemyMoveCostSurcharge: player.derived.enemyMoveCostSurcharge,
 		classActionCostReduction: player.derived.classActionCostReduction,
 		isEliminated: state.eliminatedPlayers.has(player.playerId),
 		teamIndex: player.teamIndex,

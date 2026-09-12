@@ -2,8 +2,9 @@ import type { FaceturnServerState, FaceturnServerPlayer } from "../types";
 import { FACETURN_CONSTANTS as C } from "../types";
 import type { EffectPrimitive } from "../cards";
 import type { CrewTurnCause } from "../../../../../shared/games/face-turn/log";
+import type { CrewClass } from "../../../../../shared/games/face-turn/types";
 import { CARD_IDS, getCrew } from "../cards";
-import { shuffle } from "../../lib/random";
+import { shuffle, pickRandom } from "../../lib/random";
 import { recomputePassives } from "../derived";
 import type { Handler } from "./shared";
 import {
@@ -51,13 +52,45 @@ export const miscHandlers = {
 		if (ctx.targetActiveMoveSlot === undefined) return;
 		const slot = ctx.targetActiveMoveSlot;
 		if (slot < 0 || slot > 2) return;
-		const moveId = target.activeMoves[slot as 0 | 1 | 2];
-		if (!moveId) return;
-		target.activeMoves[slot as 0 | 1 | 2] = null;
-		target.trickleDownTargets.delete(slot as 0 | 1 | 2);
-		target.discardPile.push(moveId);
-		target.totalCardsDiscarded++;
-		recomputePassives(target, ctx.state);
+		destroyActiveMoveAtSlot(ctx.state, target, slot as 0 | 1 | 2);
+	},
+
+	// crew reveal has no client-supplied target: auto-pick when there's only
+	// one enemy active move, otherwise let the actor choose
+	destroy_enemy_active_move(_effect, ctx) {
+		const eligibleTargets: { playerId: string; slot: 0 | 1 | 2; moveId: string }[] =
+			[];
+		for (const enemy of getEnemies(ctx.state, ctx.actor.playerId)) {
+			for (let i = 0; i < enemy.activeMoves.length; i++) {
+				const moveId = enemy.activeMoves[i];
+				if (moveId) {
+					eligibleTargets.push({
+						playerId: enemy.playerId,
+						slot: i as 0 | 1 | 2,
+						moveId,
+					});
+				}
+			}
+		}
+		if (eligibleTargets.length === 0) return;
+
+		if (eligibleTargets.length === 1) {
+			const only = eligibleTargets[0]!;
+			resolveDestroyEnemyMovePick(
+				ctx.state,
+				ctx.actor,
+				only.playerId,
+				only.slot,
+				eligibleTargets,
+			);
+			return;
+		}
+
+		ctx.state.pendingInteraction = {
+			type: "destroy_enemy_move_pick",
+			actorId: ctx.actor.playerId,
+			eligibleTargets,
+		} satisfies PendingInteraction;
 	},
 
 	shuffle_discard_into_deck_then_draw(_effect, ctx) {
@@ -111,6 +144,7 @@ export const miscHandlers = {
 		const s = slot as 0 | 1;
 		actor.crewIds[s] = CARD_IDS.CREW.WOLFMAN;
 		actor.derived.crewClassOverrides.delete(s);
+		actor.crewClassMutations.delete(s);
 		actor.disabledPassiveSlots.delete(s);
 		recomputePassives(actor, ctx.state);
 
@@ -211,6 +245,8 @@ export const miscHandlers = {
 	passive_stab_on_discard() {},
 	passive_strike_on_self_turned_ally() {},
 	passive_turn_self_down_on_enemy_crew_kill() {},
+	passive_turn_self_down_on_strike() {},
+	passive_randomize_class_on_self_turn_down() {},
 	passive_cash_per_turn() {},
 	passive_draw_per_turn() {},
 	passive_cash_on_team_damaging_move_or_strike() {},
@@ -249,6 +285,9 @@ export const miscHandlers = {
 	passive_draw_on_hand_empty_once_per_turn() {},
 	passive_watcher_hide_on_challenge_win() {},
 	passive_optional_strike_on_successful_challenge() {},
+	passive_grant_heel_turn_on_challenge_win() {},
+	passive_sacrifice_self_on_exposed_strike() {},
+	passive_raid_strike_on_turn_end() {},
 	passive_suppress_enemy_turned_effects() {},
 	passive_cash_on_challenge_win() {},
 	passive_cash_on_challenge() {},
@@ -406,7 +445,7 @@ export function resolveWatcherHide(
 	recomputePassives(target, state);
 }
 
-// swaps crewId, crewTurned, and class overrides between one slot on each of two players
+// swaps crewId, crewTurned, class overrides, and class mutations between one slot on each of two players
 function swapCrewSlots(
 	state: FaceturnServerState,
 	playerA: FaceturnServerPlayer,
@@ -417,20 +456,26 @@ function swapCrewSlots(
 	const aId = playerA.crewIds[slotA];
 	const aTurned = playerA.crewTurned[slotA];
 	const aOverrides = playerA.derived.crewClassOverrides.get(slotA);
+	const aMutation = playerA.crewClassMutations.get(slotA);
 
 	const bId = playerB.crewIds[slotB];
 	const bTurned = playerB.crewTurned[slotB];
 	const bOverrides = playerB.derived.crewClassOverrides.get(slotB);
+	const bMutation = playerB.crewClassMutations.get(slotB);
 
 	playerA.crewIds[slotA] = bId;
 	playerA.crewTurned[slotA] = bTurned;
 	if (bOverrides) playerA.derived.crewClassOverrides.set(slotA, bOverrides);
 	else playerA.derived.crewClassOverrides.delete(slotA);
+	if (bMutation) playerA.crewClassMutations.set(slotA, bMutation);
+	else playerA.crewClassMutations.delete(slotA);
 
 	playerB.crewIds[slotB] = aId;
 	playerB.crewTurned[slotB] = aTurned;
 	if (aOverrides) playerB.derived.crewClassOverrides.set(slotB, aOverrides);
 	else playerB.derived.crewClassOverrides.delete(slotB);
+	if (aMutation) playerB.crewClassMutations.set(slotB, aMutation);
+	else playerB.crewClassMutations.delete(slotB);
 
 	recomputePassives(playerA, state);
 	recomputePassives(playerB, state);
@@ -501,6 +546,87 @@ export function resolveBelladonnaCopyPick(
 	recomputePassives(actor, state);
 }
 
+// illegal target is a no-op; the effect simply fizzles
+export function resolveDestroyEnemyMovePick(
+	state: FaceturnServerState,
+	actor: FaceturnServerPlayer,
+	targetPlayerId: string,
+	targetActiveMoveSlot: number,
+	eligibleTargets: readonly {
+		playerId: string;
+		slot: 0 | 1 | 2;
+		moveId: string;
+	}[],
+): void {
+	const isEligible = eligibleTargets.some(
+		(t) => t.playerId === targetPlayerId && t.slot === targetActiveMoveSlot,
+	);
+	if (!isEligible) return;
+
+	const target = state.players.get(targetPlayerId);
+	if (!target) return;
+	destroyActiveMoveAtSlot(state, target, targetActiveMoveSlot as 0 | 1 | 2);
+}
+
+// discards whatever active move sits at a slot; no-op if the slot is empty
+function destroyActiveMoveAtSlot(
+	state: FaceturnServerState,
+	target: FaceturnServerPlayer,
+	slot: 0 | 1 | 2,
+): void {
+	const moveId = target.activeMoves[slot];
+	if (!moveId) return;
+
+	target.activeMoves[slot] = null;
+	target.trickleDownTargets.delete(slot);
+	target.discardPile.push(moveId);
+	target.totalCardsDiscarded++;
+	recomputePassives(target, state);
+}
+
+export function maybeGrantHeelTurnOnChallengeWin(
+	state: FaceturnServerState,
+	actor: FaceturnServerPlayer,
+): void {
+	if (actor.derived.crewSkillsDisabled) return;
+	const slot = actor.crewIds.findIndex((id) => id === CARD_IDS.CREW.HEEL);
+	if (slot === -1) return;
+	if (!actor.crewTurned[slot as 0 | 1]) return;
+	if (actor.disabledPassiveSlots.has(slot as 0 | 1)) return;
+	if (actor.hand.length >= C.HAND_LIMIT) return;
+
+	actor.hand.push(CARD_IDS.MOVE.HEEL_TURN);
+	actor.costOverrides.set(CARD_IDS.MOVE.HEEL_TURN, 0);
+}
+
+// raid: strikes a random enemy player at the end of the holder's own turn.
+// picks both the enemy and, if they have 2 unturned crew, the slot randomly —
+// this keeps the strike fully synchronous instead of opening a picker
+// interaction mid-swapTurn, which would clobber the next player's turn-start
+export function triggerRaidStrikeOnTurnEnd(
+	state: FaceturnServerState,
+	actor: FaceturnServerPlayer,
+): void {
+	if (!actor.activeMoves.includes(CARD_IDS.MOVE.RAID)) return;
+	const enemies = getEnemies(state, actor.playerId);
+	if (enemies.length === 0) return;
+	const target = pickRandom(enemies, state.rng);
+
+	const unturnedSlots = ([0, 1] as const).filter(
+		(i) => target.crewIds[i] !== null && !target.crewTurned[i],
+	);
+	const randomSlot =
+		unturnedSlots.length > 0 ? pickRandom(unturnedSlots, state.rng) : undefined;
+
+	resolveStrikeOrExecute(
+		state,
+		target,
+		actor.playerId,
+		{ reason: "strike" },
+		randomSlot,
+	);
+}
+
 export function maybeOpenBearBonesOffer(
 	state: FaceturnServerState,
 	actor: FaceturnServerPlayer,
@@ -547,7 +673,7 @@ export function resolveBackgroundCheckGuess(
 	challenger: FaceturnServerPlayer,
 	target: FaceturnServerPlayer,
 	guessedSlot: number,
-	guessedClass: "striker" | "defender" | "collector" | "hider",
+	guessedClass: CrewClass,
 	eligibleSlots: readonly number[],
 ): { correct: boolean } {
 	if (!eligibleSlots.includes(guessedSlot)) return { correct: false };

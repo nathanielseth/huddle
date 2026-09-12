@@ -140,7 +140,7 @@ export const CREW_DISPLAY: readonly CrewCardDisplay[] = [
 		name: "G-Rone",
 		class: "striker",
 		effectText: {
-			passive: "At the end of each round, I deal 5 damage to an enemy Boss.",
+			passive: "At the end of your turn, I deal 5 damage to an enemy Boss.",
 		},
 		flavorText: "The white gazes into the unseen...",
 		lore: "",
@@ -156,20 +156,6 @@ export const CREW_DISPLAY: readonly CrewCardDisplay[] = [
 				"An enemy discards up to 3 cards from their hand. I deal 5 damage to their Boss for each card discarded this way.",
 		},
 		flavorText: "FEED THE FLAMES!!",
-		lore: "",
-		synergyIds: ["the-razor"],
-	},
-	{
-		id: "monkey-man",
-		artSrc: "/assets/games/face-turn/cards/crew/monkey-man.avif",
-		name: "Monkey-Man",
-		class: "striker",
-		effectText: {
-			revealed: "Take 1 random card from an enemy's hand.",
-			passive:
-				"Whenever you deal damage to an enemy Boss, steal 1 Cash from them.",
-		},
-		flavorText: "Finders keepers, sucker!",
 		lore: "",
 		synergyIds: ["the-razor"],
 	},
@@ -222,6 +208,19 @@ export const CREW_DISPLAY: readonly CrewCardDisplay[] = [
 		synergyIds: ["the-razor"],
 		draftable: false,
 	},
+	{
+		id: "rilla-gorilla",
+		artSrc: "/assets/games/face-turn/cards/crew/rilla-gorilla.avif",
+		name: "Rilla Gorilla",
+		class: "striker",
+		effectText: {
+			revealed:
+				"I give 20 Armor to my Boss, then deal 10 damage to an enemy Boss.",
+		},
+		flavorText: "GRRR-AAAAAH!",
+		lore: "",
+		synergyIds: ["the-bastion", "the-razor", "pull-counter"],
+	},
 
 	// defenders
 
@@ -231,7 +230,7 @@ export const CREW_DISPLAY: readonly CrewCardDisplay[] = [
 		name: "Doctor Norman",
 		class: "defender",
 		effectText: {
-			revealed: "Create a Serum.",
+			revealed: "Create a Genesis Compound.",
 			passive: "Whenever you discard, I give my Boss 5 Armor for each.",
 		},
 		flavorText: "Exquisite! Another breakthrough.",
@@ -293,7 +292,7 @@ export const CREW_DISPLAY: readonly CrewCardDisplay[] = [
 		id: "mama-mercy",
 		artSrc: "/assets/games/face-turn/cards/crew/mama-mercy.avif",
 		name: "Mama Mercy",
-		class: "defender",
+		class: "hider",
 		effectText: {
 			passive:
 				"Whenever the team turns a Crew face-up or face-down, I give my Boss 10 Armor.",
@@ -303,17 +302,17 @@ export const CREW_DISPLAY: readonly CrewCardDisplay[] = [
 		synergyIds: ["the-bastion", "the-watcher", "suplex"],
 	},
 	{
-		id: "rilla-gorilla",
-		artSrc: "/assets/games/face-turn/cards/crew/rilla-gorilla.avif",
-		name: "Rilla Gorilla",
+		id: "sekyu",
+		artSrc: "/assets/games/face-turn/cards/crew/sekyu.avif",
+		name: "Sekyu",
 		class: "defender",
 		effectText: {
-			revealed:
-				"I give 20 Armor to my Boss, then deal 10 damage to an enemy Boss.",
+			passive:
+				"While my Boss is Exposed, if it would be Struck, I die instead.",
 		},
-		flavorText: "GRRR-AAAAAH!",
+		flavorText: "The debt comes due one way or another.",
 		lore: "",
-		synergyIds: ["the-bastion", "the-razor", "pull-counter"],
+		synergyIds: ["the-bastion"],
 	},
 	{
 		id: "silencer",
@@ -342,20 +341,6 @@ export const CREW_DISPLAY: readonly CrewCardDisplay[] = [
 		flavorText: "Here comes the money.",
 		lore: "",
 		synergyIds: ["lotus"],
-	},
-	{
-		id: "bear-bones",
-		artSrc: "/assets/games/face-turn/cards/crew/bear-bones.avif",
-		name: "Bear Bones",
-		class: "collector",
-		effectText: {
-			revealed: "Steal 1 Cash.",
-			passive:
-				"Whenever you successfully challenge an enemy, Strike one of their Crew.",
-		},
-		flavorText: "I would do anything for my Ursula. Especially a felony.",
-		lore: "",
-		synergyIds: ["the-watcher"],
 	},
 	{
 		id: "belladonna",
@@ -431,6 +416,18 @@ export const CREW_DISPLAY: readonly CrewCardDisplay[] = [
 		lore: "",
 		synergyIds: ["warrant-of-arrest"],
 	},
+	{
+		id: "song",
+		artSrc: "/assets/games/face-turn/cards/crew/song.avif",
+		name: "Song",
+		class: "collector",
+		effectText: {
+			revealed: "Create a Raid in your hand.",
+		},
+		flavorText: "Every note has a price.",
+		lore: "",
+		synergyIds: [],
+	},
 
 	// hiders
 
@@ -460,6 +457,17 @@ export const CREW_DISPLAY: readonly CrewCardDisplay[] = [
 		synergyIds: ["miss-direction", "the-watcher", "the-bastion"],
 	},
 	{
+		id: "kamileon",
+		name: "Kamileon",
+		class: "hider",
+		effectText: {
+			passive: "Whenever I turn face-down, randomly change my Class.",
+		},
+		flavorText: "Ask her class twice, get two different answers.",
+		lore: "",
+		synergyIds: [],
+	},
+	{
 		id: "miss-direction",
 		artSrc: "/assets/games/face-turn/cards/crew/hider.avif",
 		name: "Miss Direction",
@@ -471,19 +479,6 @@ export const CREW_DISPLAY: readonly CrewCardDisplay[] = [
 		flavorText: "You'll be safe here.",
 		lore: "",
 		synergyIds: ["handles", "the-watcher"],
-	},
-	{
-		id: "keeper",
-		artSrc: "/assets/games/face-turn/cards/crew/keeper.avif",
-		name: "Keeper",
-		class: "hider",
-		effectText: {
-			revealed: "Take 1 random card from an enemy's hand.",
-			passive: "Enemy Moves cost 1 more Cash.",
-		},
-		flavorText: "Moving things that bite. Looking for a buyer.",
-		lore: "",
-		synergyIds: ["the-watcher", "trickle-down-economics"],
 	},
 	{
 		id: "retro",
@@ -516,7 +511,7 @@ export const CREW_DISPLAY: readonly CrewCardDisplay[] = [
 		id: "terminal",
 		artSrc: "/assets/games/face-turn/cards/crew/terminal.avif",
 		name: "Terminal",
-		class: "hider",
+		class: "defender",
 		effectText: {
 			passive: "My Boss cannot be Struck while its HP is greater than 60.",
 		},
@@ -536,6 +531,110 @@ export const CREW_DISPLAY: readonly CrewCardDisplay[] = [
 		flavorText: "THIS CITY HAS ENOUGH MONSTERS!",
 		lore: "",
 		synergyIds: ["cool-guy", "retro", "heel-turn", "pull-counter"],
+	},
+
+	// stealers
+
+	{
+		id: "bear-bones",
+		artSrc: "/assets/games/face-turn/cards/crew/bear-bones.avif",
+		name: "Bear Bones",
+		class: "stealer",
+		effectText: {
+			revealed: "Steal 1 Cash.",
+			passive:
+				"Whenever you successfully challenge an enemy, Strike one of their Crew.",
+		},
+		flavorText: "I would do anything for my Ursula. Especially a felony.",
+		lore: "",
+		synergyIds: ["the-watcher"],
+	},
+	{
+		id: "carrion",
+		artSrc: "/assets/games/face-turn/cards/crew/carrion.avif",
+		name: "Carrion",
+		class: "stealer",
+		effectText: {
+			revealed: "Steal an enemy's Armor.",
+		},
+		flavorText: "Nothing goes to waste.",
+		lore: "",
+		synergyIds: [],
+	},
+	{
+		id: "denier",
+		name: "Denier",
+		class: "stealer",
+		effectText: {
+			revealed: "Heal your Boss 20 HP.",
+			passive: "Destroy an enemy's Ongoing Move of your choice.",
+		},
+		flavorText: "Never happened.",
+		lore: "",
+		synergyIds: [],
+	},
+	{
+		id: "fade",
+		name: "Fade",
+		class: "stealer",
+		effectText: {
+			passive: "Turn me face-down when you Strike.",
+		},
+		flavorText: "Gone before you noticed she was there.",
+		lore: "",
+		synergyIds: [],
+	},
+	{
+		id: "garbo",
+		artSrc: "/assets/games/face-turn/cards/crew/garbo.avif",
+		name: "Garbo",
+		class: "stealer",
+		effectText: {
+			revealed: "Create 3 Bakal Bote in your hand.",
+		},
+		flavorText: "One man's trash...",
+		lore: "",
+		synergyIds: [],
+	},
+	{
+		id: "heel",
+		artSrc: "/assets/games/face-turn/cards/crew/heel.avif",
+		name: "Heel",
+		class: "stealer",
+		effectText: {
+			passive:
+				"Whenever you win a challenge, create a 0 Cost Heel Turn in your hand.",
+		},
+		flavorText: "The crowd loves to hate her.",
+		lore: "",
+		synergyIds: ["heel-turn"],
+	},
+	{
+		id: "keeper",
+		artSrc: "/assets/games/face-turn/cards/crew/keeper.avif",
+		name: "Keeper",
+		class: "stealer",
+		effectText: {
+			revealed: "Take 1 random card from an enemy's hand.",
+			passive: "Enemy Moves cost 1 more Cash.",
+		},
+		flavorText: "Moving things that bite. Looking for a buyer.",
+		lore: "",
+		synergyIds: ["the-watcher", "trickle-down-economics"],
+	},
+	{
+		id: "monkey-man",
+		artSrc: "/assets/games/face-turn/cards/crew/monkey-man.avif",
+		name: "Monkey-Man",
+		class: "stealer",
+		effectText: {
+			revealed: "Take 1 random card from an enemy's hand.",
+			passive:
+				"Whenever you deal damage to an enemy Boss, steal 1 Cash from them.",
+		},
+		flavorText: "Finders keepers, sucker!",
+		lore: "",
+		synergyIds: ["the-razor"],
 	},
 ];
 
@@ -688,7 +787,7 @@ export const MOVE_DISPLAY: readonly MoveCardDisplay[] = [
 		name: "Poison Breath",
 		baseCost: 3,
 		moveType: "active",
-		effectText: "At the end of each round, deal 5 damage to an enemy Boss.",
+		effectText: "At the end of your turn, deal 5 damage to an enemy Boss.",
 		flavorText: "",
 		lore: "",
 		synergyIds: [],
@@ -1321,7 +1420,7 @@ export const MOVE_DISPLAY: readonly MoveCardDisplay[] = [
 		name: "Scorched Earth",
 		baseCost: 3,
 		moveType: "slow",
-		effectText: "Destroy all Ongoing Moves from an enemy's ongoing zone.",
+		effectText: "Destroy all Ongoing Moves from you and an enemy's ongoing zone.",
 		flavorText: "",
 		lore: "",
 		synergyIds: [],
@@ -1407,6 +1506,18 @@ export const MOVE_DISPLAY: readonly MoveCardDisplay[] = [
 		synergyIds: ["doctor-norman", "the-razor"],
 	},
 	{
+		id: "bakal-bote",
+		artSrc: "/assets/games/face-turn/cards/moves/bakal-bote.avif",
+		name: "Bakal Bote",
+		baseCost: 0,
+		moveType: "burst",
+		effectText: "If discarded, gain 1 Cash.",
+		flavorText: "",
+		lore: "",
+		synergyIds: ["garbo"],
+		draftable: false,
+	},
+	{
 		id: "consume",
 		artSrc: "/assets/games/face-turn/cards/moves/consume.avif",
 		name: "Consume",
@@ -1418,28 +1529,39 @@ export const MOVE_DISPLAY: readonly MoveCardDisplay[] = [
 		synergyIds: [],
 	},
 	{
+		id: "genesis-compound",
+		artSrc: "/assets/games/face-turn/cards/moves/genesis-compound.avif",
+		name: "Genesis Compound",
+		baseCost: 4,
+		moveType: "slow",
+		effectText:
+			"Trigger the Revealed Effect of a Crew from the entire card pool, then deal 10 damage to an enemy Boss. If discarded, resolve this effect.",
+		flavorText: "",
+		lore: "",
+		synergyIds: ["doctor-norman"],
+		draftable: false,
+	},
+	{
 		id: "parting-gift",
 		artSrc: "/assets/games/face-turn/cards/moves/parting-gift.avif",
 		name: "Parting Gift",
 		baseCost: 2,
 		moveType: "burst",
-		effectText:
-			"Draw an ongoing Move. If this card is discarded instead of played, do this anyway.",
+		effectText: "Draw an ongoing Move. If discarded, resolve this effect.",
 		flavorText: "",
 		lore: "",
 		synergyIds: [],
 	},
 	{
-		id: "serum",
-		artSrc: "/assets/games/face-turn/cards/moves/serum.avif",
-		name: "Serum",
-		baseCost: 4,
-		moveType: "slow",
-		effectText:
-			"Trigger the Revealed Effect of a random Crew from the entire card pool, then deal 10 damage to an enemy Boss. If this card is discarded instead of played, do this anyway.",
+		id: "raid",
+		artSrc: "/assets/games/face-turn/cards/moves/raid.avif",
+		name: "Raid",
+		baseCost: 5,
+		moveType: "active",
+		effectText: "At the end of your turn, Strike a random enemy unit.",
 		flavorText: "",
 		lore: "",
-		synergyIds: ["doctor-norman"],
+		synergyIds: ["song"],
 		draftable: false,
 	},
 ];
@@ -1515,6 +1637,8 @@ export const MOVE_TARGET_KIND: Readonly<Record<string, MoveTargetKind>> = {
 	"take-it-back": "no_target",
 	"triangle-of-trust": "no_target",
 	"parting-gift": "no_target",
+	"bakal-bote": "no_target",
+	raid: "no_target",
 
 	ambush: "enemy_crew",
 	"cheap-shot": "enemy_boss",
@@ -1538,7 +1662,7 @@ export const MOVE_TARGET_KIND: Readonly<Record<string, MoveTargetKind>> = {
 	"wheel-of-fortune": "enemy_player",
 	wolfblaster: "enemy_boss",
 	consume: "enemy_boss",
-	serum: "enemy_boss",
+	"genesis-compound": "enemy_boss",
 };
 
 export function getMoveTargetKind(moveId: string): MoveTargetKind {

@@ -8,6 +8,7 @@ import {
 	getCrewDisplay,
 	getBossDisplay,
 } from "@shared/games/face-turn/card-display";
+import { getInteractionResponder } from "./interactionResponder";
 
 type PlayerLookup = Record<
 	string,
@@ -91,17 +92,11 @@ export function describeChainResolutionLog(
 	});
 }
 
-function responderOf(pi: PendingInteractionView): string {
-	if (pi.type === "choose_crew_to_turn") return pi.chooserPlayerId;
-	if (pi.type === "truth_serum_reveal") return pi.targetPlayerId;
-	return pi.actorId;
-}
-
 export function describePendingInteraction(
 	pi: PendingInteractionView,
 	playerMap: PlayerLookup,
 ): string {
-	const who = nameOf(playerMap, responderOf(pi)) ?? "Someone";
+	const who = nameOf(playerMap, getInteractionResponder(pi)) ?? "Someone";
 	switch (pi.type) {
 		case "peek_discard":
 			return `${who} is peeking the discard pile`;
@@ -143,6 +138,8 @@ export function describePendingInteraction(
 			return `${who} is picking a card to steal`;
 		case "belladonna_copy_pick":
 			return `${who} is deciding whether to copy an enemy Move`;
+		case "destroy_enemy_move_pick":
+			return `${who} is picking an enemy Move to destroy`;
 	}
 }
 

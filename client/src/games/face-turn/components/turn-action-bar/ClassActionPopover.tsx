@@ -4,11 +4,11 @@ import type { CrewClass } from "@shared/games/face-turn/types";
 import { getCrewDisplay } from "@shared/games/face-turn/card-display";
 import { sendFaceturnAction } from "../../actions";
 import { useFaceturnState } from "../../hooks/useFaceturnState";
-import { useClassActionPopoverStore } from "../../hooks/classActionPopoverStore";
+import { useClassActionPopoverStore } from "../../hooks/anchoredPopoverStore";
 import { PopoverShell } from "./PopoverShell";
 import { makeClassActionCostEstimator } from "../../lib/cost";
 
-type ClassAction = "strike" | "collect" | "hide";
+type ClassAction = "strike" | "collect" | "hide" | "steal";
 
 const CLASS_ACTIONS: {
 	action: ClassAction;
@@ -27,6 +27,12 @@ const CLASS_ACTIONS: {
 		label: "Strike",
 		needsClass: "striker",
 		hint: "Then click an enemy Crew, or their Boss if exposed.",
+	},
+	{
+		action: "steal",
+		label: "Steal",
+		needsClass: "stealer",
+		hint: "Then click an enemy to steal 1 Cash from them.",
 	},
 	{
 		action: "hide",
@@ -49,19 +55,17 @@ export function ClassActionPopover({
 	runLocked: (fn: () => void) => void;
 	// called when Strike/Hide is confirmed, so the caller can open the
 	// matching board target-picker session
-	onArm: (action: "strike" | "hide") => void;
+	onArm: (action: "strike" | "hide" | "steal") => void;
 }) {
 	const { myPlayer, secret, ft } = useFaceturnState();
-	const openForSlotIndex = useClassActionPopoverStore(
-		(s) => s.openForSlotIndex,
-	);
+	const openKey = useClassActionPopoverStore((s) => s.openKey);
 	const anchorEl = useClassActionPopoverStore((s) => s.anchorEl);
 	const closePopover = useClassActionPopoverStore((s) => s.close);
-	const isOpen = openForSlotIndex !== null && anchorEl !== null;
+	const isOpen = openKey !== null && anchorEl !== null;
 
 	if (!isOpen || !myPlayer || !ft) return null;
 
-	const slotIndex = openForSlotIndex;
+	const slotIndex = openKey;
 	const slot = myPlayer.crewSlots[slotIndex];
 	// popover only ever opens for a face-down slot; guard against stale state
 	// (e.g. the crew got turned face-up by something else while open)

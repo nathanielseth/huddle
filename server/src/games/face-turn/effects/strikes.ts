@@ -1,8 +1,10 @@
 import type { FaceturnServerState, FaceturnServerPlayer } from "../types";
 import type { EffectPrimitive } from "../cards";
 import type { CrewTurnCause } from "../../../../../shared/games/face-turn/log";
+import { CREW_CLASSES } from "../../../../../shared/games/face-turn/types";
 import { CARD_IDS, getCrew } from "../cards";
 import { recomputePassives } from "../derived";
+import { pickRandom } from "../../lib/random";
 import type { EffectContext, Handler } from "./shared";
 import {
 	getEnemies,
@@ -87,6 +89,22 @@ export function turnCrewAtSlot(
 	});
 }
 
+// turns a crew face up, recomputes passives, and fires its turned-effects —
+// the common sequence for a voluntary or move-triggered turn (as opposed to
+// resolveStrikeOrExecute's own turn branches, which need the outcome union)
+export function turnCrewAndTriggerEffects(
+	state: FaceturnServerState,
+	player: FaceturnServerPlayer,
+	slot: 0 | 1,
+	causedByActorId: string | null,
+	via: CrewTurnCause,
+	causedByEnemy = false,
+): void {
+	turnCrewAtSlot(state, player, slot, causedByActorId, via);
+	recomputePassives(player, state);
+	triggerCrewTurnedEffects(state, player, slot, causedByEnemy);
+}
+
 export function hideCrewAtSlot(
 	state: FaceturnServerState,
 	player: FaceturnServerPlayer,
@@ -98,6 +116,7 @@ export function hideCrewAtSlot(
 	if (!crewId) return;
 	player.crewTurned[slot] = false;
 	player.disabledPassiveSlots.delete(slot);
+	triggerKamileonOnSelfTurnDown(state, player, slot, crewId);
 	pushLog(state, {
 		kind: "crew_hidden",
 		playerId: player.playerId,
@@ -109,6 +128,27 @@ export function hideCrewAtSlot(
 	triggerAllyTurnReactions(state, player, causedByEnemy);
 }
 
+// kamileon: rerolls which class it counts as, to a different class than its
+// current one, persisting until the next reroll (survives the face-up/down
+// cycle, unlike derived.crewClassOverrides)
+function triggerKamileonOnSelfTurnDown(
+	state: FaceturnServerState,
+	player: FaceturnServerPlayer,
+	slot: 0 | 1,
+	crewId: string,
+): void {
+	if (crewId !== CARD_IDS.CREW.KAMILEON) return;
+	if (player.disabledPassiveSlots.has(slot)) return;
+
+	const currentClass =
+		player.crewClassMutations.get(slot) ?? getCrew(crewId).class;
+	const nextClass = pickRandom(
+		CREW_CLASSES.filter((c) => c !== currentClass),
+		state.rng,
+	);
+	player.crewClassMutations.set(slot, nextClass);
+}
+
 // refills from reserve if available
 function killCrewAtSlot(
 	state: FaceturnServerState,
@@ -118,6 +158,7 @@ function killCrewAtSlot(
 	const killedCrewId = owner.crewIds[slot]!;
 	owner.crewIds[slot] = null;
 	owner.crewTurned[slot] = false;
+	owner.crewClassMutations.delete(slot);
 
 	let refilledFromReserve = false;
 	const reserveIdx = owner.reserveCrewIds.findIndex((id) => id !== null);
@@ -150,6 +191,18 @@ export function firstTurnedSlot(player: FaceturnServerPlayer): 0 | 1 | null {
 	return null;
 }
 
+// sekyu: while exposed, sacrifices itself instead of letting a Strike execute the boss
+function findSekyuSlot(target: FaceturnServerPlayer): 0 | 1 | null {
+	if (target.derived.crewSkillsDisabled) return null;
+	for (const slot of [0, 1] as const) {
+		if (target.crewIds[slot] !== CARD_IDS.CREW.SEKYU) continue;
+		if (!target.crewTurned[slot]) continue;
+		if (target.disabledPassiveSlots.has(slot)) continue;
+		return slot;
+	}
+	return null;
+}
+
 export function isPlayerExposed(player: FaceturnServerPlayer): boolean {
 	return firstUnturnedSlot(player) === null;
 }
@@ -176,8 +229,12 @@ export function resolveStrikeOrExecute(
 	via: CrewTurnCause,
 	preSelectedSlot?: 0 | 1,
 ): StrikeOrExecuteOutcome {
-	// face_turn and challenge_loss turn crew but never escalate to a kill
-	const isStrike = via.reason === "strike";
+	// challenge_loss turns crew but never escalates to a kill/execute-adjacent
+	// consequence (redirects, kills, stab grants); face_turn is an actual
+	// Strike per its own card text ("Unstoppable Strike") and gets full
+	// Strike treatment, distinguished from a class-action strike only by
+	// `via.reason` for logging/crew-turn-cause purposes
+	const isStrike = via.reason === "strike" || via.reason === "face_turn";
 	if (isStrikeDefendedByTerminal(target)) {
 		return { outcome: "negated", negatedBy: "terminal" };
 	}
@@ -219,6 +276,7 @@ export function resolveStrikeOrExecute(
 		actorId !== target.playerId;
 
 	const causedByEnemy = actorId !== null && actorId !== target.playerId;
+	const sekyuSlot = isStrike ? findSekyuSlot(target) : null;
 
 	let result: StrikeOrExecuteOutcome;
 
@@ -227,13 +285,8 @@ export function resolveStrikeOrExecute(
 		const { refilledFromReserve } = killCrewAtSlot(state, target, slot);
 		result = { outcome: "crew_killed", slot, refilledFromReserve };
 		triggerBertoOnCrewKill(state, actorId);
-	} else if (resolvedPreSelected !== null) {
-		turnCrewAtSlot(state, target, resolvedPreSelected, actorId, via);
-		recomputePassives(target, state);
-		triggerCrewTurnedEffects(state, target, resolvedPreSelected, causedByEnemy);
-		result = { outcome: "crew_turned", slot: resolvedPreSelected };
-	} else if (unturnedSlots.length === 1) {
-		const slot = unturnedSlots[0]!;
+	} else if (resolvedPreSelected !== null || unturnedSlots.length === 1) {
+		const slot = resolvedPreSelected ?? unturnedSlots[0]!;
 		turnCrewAtSlot(state, target, slot, actorId, via);
 		recomputePassives(target, state);
 		triggerCrewTurnedEffects(state, target, slot, causedByEnemy);
@@ -257,6 +310,9 @@ export function resolveStrikeOrExecute(
 		return { outcome: "pending" };
 	} else if (target.bossImmunityTurns > 0) {
 		return { outcome: "negated", negatedBy: "immunity" };
+	} else if (sekyuSlot !== null) {
+		const { refilledFromReserve } = killCrewAtSlot(state, target, sekyuSlot);
+		result = { outcome: "crew_killed", slot: sekyuSlot, refilledFromReserve };
 	} else if (target.derived.hasLifeInsurance) {
 		target.bossHp = 1;
 		consumeLifeInsuranceProtecting(state, target);
@@ -277,6 +333,7 @@ export function resolveStrikeOrExecute(
 			maybeTriggerBloodMoneyOnTeamDamage(state, striker);
 			maybeTriggerRazorStabGrant(striker);
 		}
+		triggerFadeOnStrike(state, actorId);
 	}
 	return result;
 }
@@ -325,6 +382,29 @@ function triggerBertoOnCrewKill(
 		killer.disabledPassiveSlots.delete(slot);
 	}
 	recomputePassives(killer, state);
+}
+
+// fade: turns itself face-down whenever its holder performs a Strike
+function triggerFadeOnStrike(
+	state: FaceturnServerState,
+	strikerId: string,
+): void {
+	const striker = state.players.get(strikerId);
+	if (!striker) return;
+	if (!striker.derived.hasTurnSelfDownOnStrikePassive) return;
+
+	for (let i = 0; i < 2; i++) {
+		const slot = i as 0 | 1;
+		if (striker.crewIds[slot] !== CARD_IDS.CREW.FADE) continue;
+		if (!striker.crewTurned[slot]) continue;
+		if (striker.disabledPassiveSlots.has(slot)) continue;
+
+		hideCrewAtSlot(state, striker, slot, false, {
+			reason: "crew_passive",
+			crewId: CARD_IDS.CREW.FADE,
+		});
+	}
+	recomputePassives(striker, state);
 }
 
 export function performStrike(

@@ -9,11 +9,10 @@ import {
 	resolveTarget,
 } from "./shared";
 import {
-	turnCrewAtSlot,
+	turnCrewAndTriggerEffects,
 	hideCrewAtSlot,
 	firstUnturnedSlot,
 	firstTurnedSlot,
-	triggerCrewTurnedEffects,
 } from "./strikes";
 import { applyDamage } from "./damage";
 import { resolveEffects } from "./index";
@@ -30,12 +29,10 @@ export const crewTurnHandlers = {
 				? (effect.targetSlot as 0 | 1)
 				: firstUnturnedSlot(target);
 		if (slot === null) return;
-		turnCrewAtSlot(ctx.state, target, slot, ctx.actor.playerId, {
+		turnCrewAndTriggerEffects(ctx.state, target, slot, ctx.actor.playerId, {
 			reason: "move",
 			moveId: ctx.moveId!,
 		});
-		recomputePassives(target, ctx.state);
-		triggerCrewTurnedEffects(ctx.state, target, slot);
 	},
 
 	turn_ally_crew(effect, ctx) {
@@ -45,12 +42,10 @@ export const crewTurnHandlers = {
 				? (effect.targetSlot as 0 | 1)
 				: firstUnturnedSlot(ctx.actor);
 		if (slot === null) return false;
-		turnCrewAtSlot(ctx.state, ctx.actor, slot, null, {
+		turnCrewAndTriggerEffects(ctx.state, ctx.actor, slot, null, {
 			reason: "move",
 			moveId: ctx.moveId!,
 		});
-		recomputePassives(ctx.actor, ctx.state);
-		triggerCrewTurnedEffects(ctx.state, ctx.actor, slot);
 		return true;
 	},
 
@@ -62,12 +57,10 @@ export const crewTurnHandlers = {
 			if (slot === triggeringSlot) continue;
 			if (!actor.crewIds[slot]) continue;
 			if (actor.crewTurned[slot]) continue;
-			turnCrewAtSlot(ctx.state, actor, slot, null, {
+			turnCrewAndTriggerEffects(ctx.state, actor, slot, null, {
 				reason: "move",
 				moveId: ctx.moveId!,
 			});
-			recomputePassives(actor, ctx.state);
-			triggerCrewTurnedEffects(ctx.state, actor, slot);
 		}
 	},
 
@@ -108,9 +101,7 @@ export const crewTurnHandlers = {
 		const via = { reason: "move" as const, moveId: ctx.moveId! };
 		hideCrewAtSlot(ctx.state, ctx.actor, slot, false, via);
 		recomputePassives(ctx.actor, ctx.state);
-		turnCrewAtSlot(ctx.state, ctx.actor, slot, null, via);
-		recomputePassives(ctx.actor, ctx.state);
-		triggerCrewTurnedEffects(ctx.state, ctx.actor, slot);
+		turnCrewAndTriggerEffects(ctx.state, ctx.actor, slot, null, via);
 	},
 
 	hide_one_turn_different_ally(_effect, ctx) {

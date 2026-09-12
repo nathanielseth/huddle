@@ -1,4 +1,5 @@
 import type { FaceturnServerState, FaceturnServerPlayer } from "../types";
+import type { CrewClass } from "../../../../../shared/games/face-turn/types";
 import type {
 	CardEffect,
 	EffectPrimitive,
@@ -416,23 +417,25 @@ export function evaluateCondition(
 export function resolveCrewClass(
 	player: FaceturnServerPlayer,
 	slot: 0 | 1,
-	cls?: "striker" | "defender" | "collector" | "hider",
+	cls?: CrewClass,
 ): string | boolean {
 	const crewId = player.crewIds[slot];
 	if (!crewId) return cls ? false : "";
 	if (player.disabledPassiveSlots.has(slot)) return cls ? false : "";
+	const mutatedClass = player.crewClassMutations.get(slot);
+	const baseClass = mutatedClass ?? getCrew(crewId).class;
 	const overrides = player.derived.crewClassOverrides.get(slot);
 	if (cls) {
 		if (overrides?.has(cls)) return true;
-		return getCrew(crewId).class === cls;
+		return baseClass === cls;
 	}
-	return getCrew(crewId).class;
+	return baseClass;
 }
 
 // face-up crew are spent, only face-down count for class declarations
 export function playerHasClass(
 	player: FaceturnServerPlayer,
-	cls: "striker" | "defender" | "collector" | "hider",
+	cls: CrewClass,
 ): boolean {
 	return player.crewIds.some((crewId, i) => {
 		if (!crewId) return false;
@@ -441,6 +444,7 @@ export function playerHasClass(
 		const overrides = player.derived.crewClassOverrides.get(idx);
 		if (overrides?.has(cls)) return true;
 		if (player.crewTurned[idx]) return false;
-		return getCrew(crewId).class === cls;
+		const baseClass = player.crewClassMutations.get(idx) ?? getCrew(crewId).class;
+		return baseClass === cls;
 	});
 }

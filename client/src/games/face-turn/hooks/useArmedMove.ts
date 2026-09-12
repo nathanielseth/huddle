@@ -8,10 +8,15 @@ export interface ArmedMove {
 	primaryTarget: BoardTarget;
 }
 
+export interface SecondaryPick {
+	playerId: string;
+	slotIndex: number;
+}
+
 type ArmedCompleteHandler = (
 	moveId: string,
 	primaryTarget: BoardTarget,
-	secondaryPick: { slotIndex: number },
+	secondaryPick: SecondaryPick,
 ) => void;
 
 interface ArmedMoveStore {
@@ -19,7 +24,7 @@ interface ArmedMoveStore {
 	onComplete: ArmedCompleteHandler | null;
 	arm: (moveId: string, primaryTarget: BoardTarget) => void;
 	setOnComplete: (handler: ArmedCompleteHandler | null) => void;
-	pickSecondaryTarget: (slotIndex: number) => void;
+	pickSecondaryTarget: (target: SecondaryPick) => void;
 	disarm: () => void;
 }
 
@@ -28,10 +33,10 @@ export const useArmedMoveStore = create<ArmedMoveStore>((set, get) => ({
 	onComplete: null,
 	arm: (moveId, primaryTarget) => set({ armed: { moveId, primaryTarget } }),
 	setOnComplete: (handler) => set({ onComplete: handler }),
-	pickSecondaryTarget: (slotIndex) => {
+	pickSecondaryTarget: (target) => {
 		const { armed, onComplete } = get();
 		if (!armed) return;
-		onComplete?.(armed.moveId, armed.primaryTarget, { slotIndex });
+		onComplete?.(armed.moveId, armed.primaryTarget, target);
 		set({ armed: null });
 	},
 	disarm: () => set({ armed: null }),

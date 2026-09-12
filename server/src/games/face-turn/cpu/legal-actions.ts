@@ -1,5 +1,6 @@
 import type { FaceturnsAction } from "../../../../../shared/games/face-turn/schemas";
 import type { CrewClass } from "../../../../../shared/games/face-turn/types";
+import { CREW_CLASSES } from "../../../../../shared/games/face-turn/types";
 import { FACETURN_CONSTANTS as C } from "../types";
 import type {
 	FaceturnServerPlayer,
@@ -28,22 +29,16 @@ import {
 	randomizeDraftSelections,
 } from "../game";
 import { computeChainPlayableMoveIds } from "../state-builders";
-
-const CREW_CLASSES: readonly CrewClass[] = [
-	"striker",
-	"defender",
-	"collector",
-	"hider",
-];
+import { getInteractionSpec } from "../interactions/registry";
 
 export interface EngineHelpers {
 	readonly getClassActionCost: (
 		player: FaceturnServerPlayer,
-		action: "strike" | "defend" | "collect" | "hide",
+		action: "strike" | "defend" | "collect" | "hide" | "steal",
 	) => number;
 	readonly computeActorWasBluffing: (
 		actor: FaceturnServerPlayer,
-		action: "strike" | "collect" | "hide" | "defend",
+		action: "strike" | "collect" | "hide" | "defend" | "steal",
 	) => boolean;
 }
 
@@ -332,7 +327,7 @@ function legalClassActionDeclares(
 	const actions: FaceturnsAction[] = [];
 
 	const tryDeclare = (
-		action: "strike" | "collect" | "hide",
+		action: "strike" | "collect" | "hide" | "steal",
 		build: () => FaceturnsAction[],
 	) => {
 		const wouldBeBluffing = helpers.computeActorWasBluffing(player, action);
@@ -368,6 +363,16 @@ function legalClassActionDeclares(
 	tryDeclare("collect", () => [
 		{ type: "declare_class_action", action: "collect" },
 	]);
+
+	tryDeclare("steal", () =>
+		getEnemies(state, player.playerId)
+			.filter((enemy) => enemy.cash > 0)
+			.map((enemy) => ({
+				type: "declare_class_action" as const,
+				action: "steal" as const,
+				targetPlayerId: enemy.playerId,
+			})),
+	);
 
 	tryDeclare("hide", () => {
 		if (firstTurnedSlot(player) === null) return [];
@@ -587,6 +592,22 @@ function legalChallengeWindowActions(
 		}
 	}
 
+	if (pending && pending.type === "class_action_steal") {
+		const blocker = state.players.get(seat);
+		if (blocker) {
+			const wouldBeBluffing = helpers.computeActorWasBluffing(
+				blocker,
+				"steal",
+			);
+			const canPayBluff =
+				!wouldBeBluffing || firstUnturnedSlot(blocker) !== null;
+			const cost = helpers.getClassActionCost(blocker, "steal");
+			if (canPayBluff && blocker.cash >= cost) {
+				actions.push({ type: "block_steal" });
+			}
+		}
+	}
+
 	return actions;
 }
 
@@ -645,13 +666,8 @@ function legalInteractionActions(
 	const interaction = state.pendingInteraction;
 	if (!interaction) return [];
 
-	const responder =
-		interaction.type === "choose_crew_to_turn"
-			? interaction.chooserPlayerId
-			: interaction.type === "truth_serum_reveal"
-				? interaction.targetPlayerId
-				: interaction.actorId;
-	if (seat !== responder) return [];
+	if (seat !== getInteractionSpec(interaction).getResponderId(interaction))
+		return [];
 
 	switch (interaction.type) {
 		case "peek_discard": {
@@ -870,6 +886,13 @@ function legalInteractionActions(
 			}
 			return actions;
 		}
+
+		case "destroy_enemy_move_pick":
+			return interaction.eligibleTargets.map((t) => ({
+				type: "resolve_destroy_enemy_move_pick" as const,
+				targetPlayerId: t.playerId,
+				targetActiveMoveSlot: t.slot,
+			}));
 
 		default:
 			return [];

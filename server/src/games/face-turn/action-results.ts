@@ -45,64 +45,37 @@ export function buildStrikeResolution(
 		negatedBy: outcome.outcome === "negated" ? outcome.negatedBy : null,
 	});
 
-	if (outcome.outcome === "crew_turned") {
-		return {
-			type: "strike_or_execute_resolved",
-			attackerId,
-			targetPlayerId,
-			via,
-			outcome: "crew_turned",
-			crewTurnedSlot: outcome.slot,
-			crewKilledSlot: null,
-			crewRefilledFromReserve: false,
-			negatedBy: null,
-			survivedViaLifeInsurance: false,
-		};
-	}
-
-	if (outcome.outcome === "crew_killed") {
-		return {
-			type: "strike_or_execute_resolved",
-			attackerId,
-			targetPlayerId,
-			via,
-			outcome: "crew_killed",
-			crewTurnedSlot: null,
-			crewKilledSlot: outcome.slot,
-			crewRefilledFromReserve: outcome.refilledFromReserve,
-			negatedBy: null,
-			survivedViaLifeInsurance: false,
-		};
-	}
-
-	if (outcome.outcome === "executed") {
-		return {
-			type: "strike_or_execute_resolved",
-			attackerId,
-			targetPlayerId,
-			via,
-			outcome: "executed",
-			crewTurnedSlot: null,
-			crewKilledSlot: null,
-			crewRefilledFromReserve: false,
-			negatedBy: null,
-			survivedViaLifeInsurance: outcome.survivedViaLifeInsurance,
-		};
-	}
-
-	// negated
-	return {
-		type: "strike_or_execute_resolved",
+	const base = {
+		type: "strike_or_execute_resolved" as const,
 		attackerId,
 		targetPlayerId,
 		via,
-		outcome: "negated",
 		crewTurnedSlot: null,
 		crewKilledSlot: null,
 		crewRefilledFromReserve: false,
-		negatedBy: outcome.negatedBy,
+		negatedBy: null,
 		survivedViaLifeInsurance: false,
 	};
+
+	switch (outcome.outcome) {
+		case "crew_turned":
+			return { ...base, outcome: "crew_turned", crewTurnedSlot: outcome.slot };
+		case "crew_killed":
+			return {
+				...base,
+				outcome: "crew_killed",
+				crewKilledSlot: outcome.slot,
+				crewRefilledFromReserve: outcome.refilledFromReserve,
+			};
+		case "executed":
+			return {
+				...base,
+				outcome: "executed",
+				survivedViaLifeInsurance: outcome.survivedViaLifeInsurance,
+			};
+		case "negated":
+			return { ...base, outcome: "negated", negatedBy: outcome.negatedBy };
+	}
 }
 
 // executes the original class action after a deferred penalty interaction

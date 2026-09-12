@@ -25,7 +25,7 @@ export type LogEntry =
 			readonly seq: number;
 			readonly kind: "class_action_declared";
 			readonly actorId: string;
-			readonly action: "strike" | "collect" | "hide" | "defend";
+			readonly action: "strike" | "collect" | "hide" | "defend" | "steal";
 			readonly targetPlayerId: string | null;
 	  }
 	| {

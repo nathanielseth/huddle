@@ -3,7 +3,8 @@ import type {
 	PendingInteractionView,
 } from "@shared/games/face-turn/types";
 import { sendFaceturnAction, type FaceturnsAction } from "../actions";
-import { useFaceturnState, getInteractionResponder } from "./useFaceturnState";
+import { useFaceturnState } from "./useFaceturnState";
+import { getInteractionResponder } from "../lib/interactionResponder";
 import { useActionLock } from "../../../hooks/network/useActionLock";
 
 // interactions with a documented decline path
@@ -47,6 +48,7 @@ interface ResolveArgs {
 		targetPlayerId?: string;
 		targetActiveMoveSlot?: number;
 	};
+	destroy_enemy_move_pick: { targetPlayerId: string; targetActiveMoveSlot: number };
 }
 
 function buildResolveAction<K extends keyof ResolveArgs>(
@@ -153,6 +155,11 @@ function buildResolveAction<K extends keyof ResolveArgs>(
 			return {
 				type: "resolve_belladonna_copy_pick",
 				...(args as ResolveArgs["belladonna_copy_pick"]),
+			};
+		case "destroy_enemy_move_pick":
+			return {
+				type: "resolve_destroy_enemy_move_pick",
+				...(args as ResolveArgs["destroy_enemy_move_pick"]),
 			};
 		default: {
 			const _exhaustive: never = kind;

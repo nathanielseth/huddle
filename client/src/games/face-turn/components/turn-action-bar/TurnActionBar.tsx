@@ -18,11 +18,13 @@ import {
 } from "../../lib/challengeEligibility";
 import { PlayMoveSection } from "./PlayMoveSection";
 import { BossCommandControl } from "./BossCommandControl";
-import { useBossCommandPopoverStore } from "../../hooks/bossCommandPopoverStore";
 import { ClassActionPopover } from "./ClassActionPopover";
-import { useClassActionPopoverStore } from "../../hooks/classActionPopoverStore";
 import { ReserveSwapPopover } from "./ReserveSwapPopover";
-import { useReserveSwapPopoverStore } from "../../hooks/reserveSwapPopoverStore";
+import {
+	useBossCommandPopoverStore,
+	useClassActionPopoverStore,
+	useReserveSwapPopoverStore,
+} from "../../hooks/anchoredPopoverStore";
 
 export function TurnActionBar() {
 	const { ft, secret, myPlayer, playerId, isMyTurn } = useFaceturnState();
@@ -34,7 +36,7 @@ export function TurnActionBar() {
 
 	// one armed board-click pick at a time, opened via a popover confirm
 	const [armedAction, setArmedAction] = useState<
-		"strike" | "hide" | "face_turn" | null
+		"strike" | "hide" | "steal" | "face_turn" | null
 	>(null);
 
 	// clear armed pick on unmount; stores are module-level and outlive this component
@@ -121,7 +123,7 @@ export function TurnActionBar() {
 	}, [armed, armedAction, disarm]);
 
 	function declareClassAction(
-		action: "strike" | "collect" | "hide",
+		action: "strike" | "collect" | "hide" | "steal",
 		targetPlayerId?: string,
 		targetCrewSlot?: number,
 	) {
@@ -179,6 +181,24 @@ export function TurnActionBar() {
 			} else {
 				declareClassAction("strike", result.target.playerId, slotIndex);
 			}
+		},
+	);
+
+	// steal target: a whole enemy player, not a specific crew slot — the
+	// only sensible pick is their boss cell, which is the one board element
+	// that always represents "this player" regardless of crew exposure
+	const stealTargetPlayers =
+		ft && armedAction === "steal" ? getEnemyPlayers(ft, playerId) : [];
+	useTargetPickerSite(
+		stealTargetPlayers.length > 0
+			? {
+					mode: "single",
+					eligible: stealTargetPlayers.map((p) => bossTarget(p.playerId)),
+				}
+			: null,
+		(result) => {
+			if (!result.target) return;
+			declareClassAction("steal", result.target.playerId);
 		},
 	);
 

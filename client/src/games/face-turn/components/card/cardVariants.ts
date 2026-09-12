@@ -95,6 +95,15 @@ export const CARD_VARIANT_THEME: Record<CardVariant, CardVariantTheme> = {
 		titleBarBg: "#713F91",
 		textBoxBg: TEXT_BOX_DEFAULT,
 	}),
+	stealer: theme({
+		label: "STEALER",
+		accent: "#FFD65C",
+		accentSecondary: "#3ECF8E",
+		cardBg: CREW_BODY,
+		badgeCircle: "#8A6D00",
+		titleBarBg: "#8A6D00",
+		textBoxBg: TEXT_BOX_DEFAULT,
+	}),
 
 	boss: theme({
 		label: "BOSS",

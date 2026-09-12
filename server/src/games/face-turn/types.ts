@@ -7,6 +7,7 @@ import type {
 	GameMode,
 	MoveChainEntry,
 	MoveChainResolutionView,
+	CrewClass,
 } from "../../../../shared/games/face-turn/types";
 import type { LogEntry } from "../../../../shared/games/face-turn/log";
 import { FACETURN_CONSTANTS } from "../../../../shared/games/face-turn/constants";
@@ -91,6 +92,10 @@ export interface FaceturnServerPlayer {
 	lifeInsuranceTargets: Map<0 | 1 | 2, string>;
 	// maps active slot to watched enemy; read live by applyTrickleDownOnCollect
 	trickleDownTargets: Map<0 | 1 | 2, string>;
+	// kamileon: rerolled class per crew slot, persists across face-down/up
+	// unlike derived.crewClassOverrides (rebuilt from face-up crew only).
+	// set when the crew turns face-down, read by resolveCrewClass/playerHasClass
+	crewClassMutations: Map<0 | 1, CrewClass>;
 	// per-turn flag; reset in startTurn.
 	ratQueenDrawUsedThisTurn: boolean;
 	// crew slots with disabled passives; cleared when crew hides
@@ -194,6 +199,8 @@ export type ServerPendingActionType =
 	| "class_action_collect"
 	| "class_action_hide"
 	| "class_action_defend"
+	| "class_action_steal"
+	| "class_action_block_steal"
 	| "card_strike";
 
 export interface ServerPendingAction {

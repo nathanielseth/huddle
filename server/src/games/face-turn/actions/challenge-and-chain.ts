@@ -1,7 +1,10 @@
 import type { PhaseActionHandler } from "./types";
 import { noOpResult } from "./types";
 import { FACETURN_CONSTANTS as C } from "../types";
+import type { FaceturnServerState, FaceturnServerPlayer } from "../types";
 import { getMove } from "../cards";
+import type { MoveCard } from "../cards";
+import type { PendingAction } from "../../../../../shared/games/face-turn/types";
 import {
 	effectiveCost,
 	executeMove,
@@ -29,6 +32,86 @@ import {
 } from "../action-results";
 import { pushLog } from "../log";
 
+// shared by challenge_window's defend/block_steal and defend_window's defend:
+// declares a class action in response to a pending one, paying its cost and
+// opening a fresh defend_declared window. Mutates state and returns whether
+// it succeeded — false means the caller should no-op (bluffing with no crew
+// left to turn, or can't afford it).
+function tryDeclareResponseClassAction(
+	state: FaceturnServerState,
+	responder: FaceturnServerPlayer,
+	pending: PendingAction,
+	declaredType: "class_action_defend" | "class_action_block_steal",
+	declaredClass: "defend" | "steal",
+): boolean {
+	const wouldBeBluffing = computeActorWasBluffing(responder, declaredClass);
+	if (wouldBeBluffing && firstUnturnedSlot(responder) === null) return false;
+
+	const cost = getClassActionCost(responder, declaredClass);
+	if (responder.cash < cost) return false;
+
+	responder.cash -= cost;
+	state.pendingAction = {
+		type: declaredType,
+		actorId: responder.playerId,
+		targetCrewSlot: pending.targetCrewSlot,
+		targetAllySlot: pending.targetAllySlot,
+		moveId: null,
+		cashCost: cost,
+		declaredClass,
+		actorWasBluffing: wouldBeBluffing,
+		targetPlayerId: pending.actorId,
+		originalActionType: pending.type,
+	};
+	state.phase = "defend_declared";
+	return true;
+}
+
+// shared validation for playing a card into the chain: hand membership, move
+// type, cost, and legal target. Returns a rejection reason, or the validated
+// move/cost for the caller to act on (each branch pays and resolves the move
+// differently — burst executes immediately, slow pushes onto the chain).
+function validateChainPlay(
+	state: FaceturnServerState,
+	player: FaceturnServerPlayer,
+	playerId: string,
+	moveId: string,
+	moveType: "burst" | "slow",
+	targetPlayerId: string | undefined,
+): { ok: true; move: MoveCard; cost: number } | { ok: false; reason: string } {
+	if (!player.hand.includes(moveId)) {
+		return { ok: false, reason: "That card isn't in your hand." };
+	}
+
+	const move = getMove(moveId);
+	if (move.moveType !== moveType) {
+		return {
+			ok: false,
+			reason:
+				moveType === "burst"
+					? "That's not a burst move."
+					: "That's not a slow move.",
+		};
+	}
+
+	const cost = effectiveCost(state, player, moveId);
+	if (player.cash < cost) {
+		return {
+			ok: false,
+			reason: `Not enough cash — this move costs ₱${cost}, you have ₱${player.cash}.`,
+		};
+	}
+
+	if (!moveHasLegalTarget(state, playerId, move)) {
+		return { ok: false, reason: "No legal target for this move right now." };
+	}
+
+	const scopeCheck = validateMoveTargetScope(state, playerId, move, targetPlayerId);
+	if (!scopeCheck.ok) return { ok: false, reason: scopeCheck.reason! };
+
+	return { ok: true, move, cost };
+}
+
 export const moveChainWindowAction: PhaseActionHandler = (
 	state,
 	player,
@@ -55,32 +138,18 @@ export const moveChainWindowAction: PhaseActionHandler = (
 		if (playerId !== state.activePlayerId) return noOp();
 
 		const { moveId } = action;
-		if (!player.hand.includes(moveId))
-			return rejectPlay("That card isn't in your hand.");
-
-		const move = getMove(moveId);
-		if (move.moveType !== "burst")
-			return rejectPlay("That's not a burst move.");
-
-		const cost = effectiveCost(state, player, moveId);
-		if (player.cash < cost)
-			return rejectPlay(
-				`Not enough cash — this move costs ₱${cost}, you have ₱${player.cash}.`,
-			);
-
-		if (!moveHasLegalTarget(state, playerId, move))
-			return rejectPlay("No legal target for this move right now.");
-
-		const burstScopeCheck = validateMoveTargetScope(
+		const validated = validateChainPlay(
 			state,
+			player,
 			playerId,
-			move,
+			moveId,
+			"burst",
 			action.targetPlayerId,
 		);
-		if (!burstScopeCheck.ok) return rejectPlay(burstScopeCheck.reason!);
+		if (!validated.ok) return rejectPlay(validated.reason);
 
 		player.hand.splice(player.hand.indexOf(moveId), 1);
-		player.cash -= cost;
+		player.cash -= validated.cost;
 
 		executeMove(state, player, moveId, {
 			targetCrewSlot: action.targetCrewSlot,
@@ -97,31 +166,18 @@ export const moveChainWindowAction: PhaseActionHandler = (
 		if (playerId !== chain.responderId) return noOp();
 
 		const { moveId } = action;
-		if (!player.hand.includes(moveId))
-			return rejectPlay("That card isn't in your hand.");
-
-		const move = getMove(moveId);
-		if (move.moveType !== "slow") return rejectPlay("That's not a slow move.");
-
-		const cost = effectiveCost(state, player, moveId);
-		if (player.cash < cost)
-			return rejectPlay(
-				`Not enough cash — this move costs ₱${cost}, you have ₱${player.cash}.`,
-			);
-
-		if (!moveHasLegalTarget(state, playerId, move))
-			return rejectPlay("No legal target for this move right now.");
-
-		const slowScopeCheck = validateMoveTargetScope(
+		const validated = validateChainPlay(
 			state,
+			player,
 			playerId,
-			move,
+			moveId,
+			"slow",
 			action.targetPlayerId,
 		);
-		if (!slowScopeCheck.ok) return rejectPlay(slowScopeCheck.reason!);
+		if (!validated.ok) return rejectPlay(validated.reason);
 
 		player.hand.splice(player.hand.indexOf(moveId), 1);
-		player.cash -= cost;
+		player.cash -= validated.cost;
 
 		pushToMoveChain(state, {
 			moveId,
@@ -129,7 +185,7 @@ export const moveChainWindowAction: PhaseActionHandler = (
 			targetCrewSlot: action.targetCrewSlot ?? null,
 			targetAllySlot: action.targetAllySlot ?? null,
 			targetPlayerId: action.targetPlayerId ?? null,
-			cashCost: cost,
+			cashCost: validated.cost,
 		});
 
 		// pushing a slow move alternates priority and opens response window
@@ -246,28 +302,33 @@ export const challengeWindowAction: PhaseActionHandler = (
 		if (!isPlayerOrTeammate(state, playerId, pending.targetPlayerId!))
 			return noOp();
 		const defender = state.players.get(playerId)!;
-		const defenderWouldBeBluffing = computeActorWasBluffing(defender, "defend");
-		if (defenderWouldBeBluffing && firstUnturnedSlot(defender) === null) {
-			return noOp();
-		}
-		const defendCost = getClassActionCost(defender, "defend");
-		if (defender.cash < defendCost) return noOp();
+		const declared = tryDeclareResponseClassAction(
+			state,
+			defender,
+			pending,
+			"class_action_defend",
+			"defend",
+		);
+		if (!declared) return noOp();
 
-		defender.cash -= defendCost;
 		state.challengeEligiblePlayerIds = [];
-		state.pendingAction = {
-			type: "class_action_defend",
-			actorId: defender.playerId,
-			targetCrewSlot: pending.targetCrewSlot,
-			targetAllySlot: pending.targetAllySlot,
-			moveId: null,
-			cashCost: defendCost,
-			declaredClass: "defend",
-			actorWasBluffing: defenderWouldBeBluffing,
-			targetPlayerId: pending.actorId,
-			originalActionType: pending.type,
-		};
-		state.phase = "defend_declared";
+		return makeResult(state, C.DEFEND_DECLARED_MS);
+	}
+
+	if (action.type === "block_steal" && pending.type === "class_action_steal") {
+		if (!isPlayerOrTeammate(state, playerId, pending.targetPlayerId!))
+			return noOp();
+		const blocker = state.players.get(playerId)!;
+		const declared = tryDeclareResponseClassAction(
+			state,
+			blocker,
+			pending,
+			"class_action_block_steal",
+			"steal",
+		);
+		if (!declared) return noOp();
+
+		state.challengeEligiblePlayerIds = [];
 		return makeResult(state, C.DEFEND_DECLARED_MS);
 	}
 
@@ -323,25 +384,15 @@ export const defendWindowAction: PhaseActionHandler = (
 
 	if (action.type === "defend") {
 		const defender = state.players.get(playerId)!;
-		const defenderWouldBeBluffing = computeActorWasBluffing(defender, "defend");
-		if (defenderWouldBeBluffing && firstUnturnedSlot(defender) === null) {
-			return noOp();
-		}
-		const defendCost = getClassActionCost(defender, "defend");
-		if (defender.cash < defendCost) return noOp();
+		const declared = tryDeclareResponseClassAction(
+			state,
+			defender,
+			pending,
+			"class_action_defend",
+			"defend",
+		);
+		if (!declared) return noOp();
 
-		defender.cash -= defendCost;
-		state.pendingAction = {
-			...pending,
-			type: "class_action_defend",
-			actorId: defender.playerId,
-			cashCost: defendCost,
-			declaredClass: "defend",
-			actorWasBluffing: defenderWouldBeBluffing,
-			targetPlayerId: pending.actorId,
-			originalActionType: pending.type,
-		};
-		state.phase = "defend_declared";
 		return makeResult(state, C.DEFEND_DECLARED_MS);
 	}
 

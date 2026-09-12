@@ -147,7 +147,8 @@ function PersistentHand() {
 	const getCost = makeMoveCostEstimator(
 		secret,
 		myPlayer.hasBluffedSuccessfully,
-		myPlayer.moveBaseCostReduction,
+		myPlayer,
+		ft.players,
 	);
 	return (
 		<Hand<BoardTarget>

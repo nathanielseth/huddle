@@ -3,7 +3,7 @@ import { cn } from "../../../../lib/utils/cn";
 import { getCrewDisplay } from "@shared/games/face-turn/card-display";
 import { sendFaceturnAction } from "../../actions";
 import { useFaceturnState } from "../../hooks/useFaceturnState";
-import { useReserveSwapPopoverStore } from "../../hooks/reserveSwapPopoverStore";
+import { useReserveSwapPopoverStore } from "../../hooks/anchoredPopoverStore";
 import { PopoverShell } from "./PopoverShell";
 
 export function ReserveSwapPopover({
@@ -18,16 +18,14 @@ export function ReserveSwapPopover({
 	runLocked: (fn: () => void) => void;
 }) {
 	const { myPlayer, secret } = useFaceturnState();
-	const openForSlotIndex = useReserveSwapPopoverStore(
-		(s) => s.openForSlotIndex,
-	);
+	const openKey = useReserveSwapPopoverStore((s) => s.openKey);
 	const anchorEl = useReserveSwapPopoverStore((s) => s.anchorEl);
 	const closePopover = useReserveSwapPopoverStore((s) => s.close);
-	const isOpen = openForSlotIndex !== null && anchorEl !== null;
+	const isOpen = openKey !== null && anchorEl !== null;
 
 	if (!isOpen || !myPlayer || !secret) return null;
 
-	const slotIndex = openForSlotIndex;
+	const slotIndex = openKey;
 	const slot = myPlayer.crewSlots[slotIndex];
 	// popover only ever opens for a face-up slot; guard against stale state
 	if (!slot || slot.status !== "face_up") return null;

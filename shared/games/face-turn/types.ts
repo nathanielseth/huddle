@@ -19,9 +19,19 @@ export type FaceturnsPhase =
 	| "defend_challenge_window"
 	| "finished";
 
-export type CrewClass = "striker" | "defender" | "collector" | "hider";
+// single source of truth for the five crew classes: the union type below is
+// derived from this array, so adding a class only means editing this list
+export const CREW_CLASSES = [
+	"striker",
+	"defender",
+	"collector",
+	"hider",
+	"stealer",
+] as const;
+export type CrewClass = (typeof CREW_CLASSES)[number];
+
 export type MoveType = "burst" | "slow" | "active";
-export type ClassAction = "strike" | "defend" | "collect" | "hide";
+export type ClassAction = "strike" | "defend" | "collect" | "hide" | "steal";
 
 export type GameMode = "duel" | "ffa" | "teams";
 
@@ -111,6 +121,9 @@ export interface FaceturnsPlayerView {
 
 	readonly cashGainPerTurn: number;
 	readonly moveBaseCostReduction: number;
+	readonly burstMoveCostReduction: number;
+	// applied to enemies' move costs, read live by them; not this player's own reduction
+	readonly enemyMoveCostSurcharge: number;
 	readonly classActionCostReduction: number;
 	readonly isEliminated: boolean;
 	readonly teamIndex: number;
@@ -122,6 +135,8 @@ export type PendingActionType =
 	| "class_action_collect"
 	| "class_action_hide"
 	| "class_action_defend"
+	| "class_action_steal"
+	| "class_action_block_steal"
 	| "card_strike"; // burst-move defendable strike
 
 export interface PendingAction {
@@ -316,6 +331,16 @@ export type PendingInteractionView =
 	| {
 			// belladonna: copy enemy active move, or pass
 			type: "belladonna_copy_pick";
+			actorId: string;
+			eligibleTargets: readonly {
+				playerId: string;
+				slot: number;
+				moveId: string;
+			}[];
+	  }
+	| {
+			// denier: destroy one enemy active move, actor's choice among all of them
+			type: "destroy_enemy_move_pick";
 			actorId: string;
 			eligibleTargets: readonly {
 				playerId: string;

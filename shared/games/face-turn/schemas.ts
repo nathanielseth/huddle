@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { CREW_CLASSES } from "./types";
 
 export const FaceturnsConfigPayloadSchema = z.object({
 	mode: z.enum(["duel", "ffa", "teams"]),
@@ -88,10 +89,10 @@ const PlayMoveSchema = z.object({
 	placeInActiveSlot: z.number().int().min(0).max(2).optional(),
 });
 
-// strike targets enemy crew; hide targets the player's own face-up crew
+// strike and steal target enemy crew/players; hide targets the player's own face-up crew
 const DeclareClassActionSchema = z.object({
 	type: z.literal("declare_class_action"),
-	action: z.enum(["strike", "collect", "hide"]),
+	action: z.enum(["strike", "collect", "hide", "steal"]),
 	targetCrewSlot: z.number().int().min(0).max(1).optional(),
 	targetAllySlot: z.number().int().min(0).max(1).optional(),
 	targetPlayerId: z.string().optional(),
@@ -100,7 +101,7 @@ const DeclareClassActionSchema = z.object({
 // shared by the razor and dealer boss commands
 const UseBossCommandSchema = z.object({
 	type: z.literal("use_boss_command"),
-	guessClass: z.enum(["striker", "defender", "collector", "hider"]).optional(),
+	guessClass: z.enum(CREW_CLASSES).optional(),
 	targetCrewSlot: z.number().int().min(0).max(1).optional(),
 	targetAllySlot: z.number().int().min(0).max(1).optional(),
 	targetPlayerId: z.string().optional(),
@@ -132,6 +133,12 @@ const ChallengeSchema = z.object({
 
 const DefendSchema = z.object({
 	type: z.literal("defend"),
+});
+
+// blocks a pending steal by claiming Stealer; open to anyone on the
+// opposing team of the steal's target, mirroring defend's eligibility
+const BlockStealSchema = z.object({
+	type: z.literal("block_steal"),
 });
 
 const PassChallengeSchema = z.object({
@@ -249,7 +256,7 @@ const ResolveVoidLegsChoiceSchema = z.object({
 const ResolveBackgroundCheckGuessSchema = z.object({
 	type: z.literal("resolve_background_check_guess"),
 	targetCrewSlot: z.number().int().min(0).max(1),
-	guessClass: z.enum(["striker", "defender", "collector", "hider"]),
+	guessClass: z.enum(CREW_CLASSES),
 });
 
 // watcher passive: optional hide after challenge win; omit slot to decline.
@@ -301,6 +308,13 @@ const ResolveBelladonnaCopyPickSchema = z.object({
 	targetActiveMoveSlot: z.number().int().min(0).max(2).optional(),
 });
 
+// denier: pick which enemy active move to destroy
+const ResolveDestroyEnemyMovePickSchema = z.object({
+	type: z.literal("resolve_destroy_enemy_move_pick"),
+	targetPlayerId: z.string(),
+	targetActiveMoveSlot: z.number().int().min(0).max(2),
+});
+
 // the watcher: actor is shown 2 random cards from the enemy's hand and picks 1 to steal
 const ResolveWatcherStealPickSchema = z.object({
 	type: z.literal("resolve_watcher_steal_pick"),
@@ -327,6 +341,7 @@ export const FaceturnsActionSchema = z.discriminatedUnion("type", [
 	EndTurnSchema,
 	ChallengeSchema,
 	DefendSchema,
+	BlockStealSchema,
 	PassChallengeSchema,
 	ChainPlayBurstSchema,
 	ChainPlaySlowSchema,
@@ -354,6 +369,7 @@ export const FaceturnsActionSchema = z.discriminatedUnion("type", [
 	ResolveTooBigSwapPickSchema,
 	ResolveWatcherStealPickSchema,
 	ResolveBelladonnaCopyPickSchema,
+	ResolveDestroyEnemyMovePickSchema,
 ]);
 
 export type FaceturnsAction = z.infer<typeof FaceturnsActionSchema>;

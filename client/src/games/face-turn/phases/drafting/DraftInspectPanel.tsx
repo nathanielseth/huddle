@@ -63,8 +63,8 @@ function targetFromId(id: string): DraftInspectTarget | undefined {
 // class action rules for claiming each crew class; any player can claim any class
 const CLASS_ACTION_TEXT: Record<CrewClass, string> = {
 	striker: `Pay ${FACETURN_CONSTANTS.STRIKE_CASH_COST} Cash. Strike a unit.`,
-	defender: "Block an incoming Strike.",
-	collector: `Gain ${FACETURN_CONSTANTS.COLLECT_CASH_GAIN} Cash.`,
+	defender: "Defend an incoming Strike.",
+	collector: `Collect ${FACETURN_CONSTANTS.COLLECT_CASH_GAIN} Cash.`,
 	hider: `Pay ${FACETURN_CONSTANTS.HIDE_CASH_COST} Cash. Turn a face-up Crew face-down.`,
 };
 const CLASS_ACTION_NOTE = "(Truthful when face-down.)";

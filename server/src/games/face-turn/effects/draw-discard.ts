@@ -148,6 +148,15 @@ export const drawDiscardHandlers = {
 		ctx.actor.hand.push(effect.cardId);
 	},
 
+	add_multiple_cards_to_hand(effect, ctx) {
+		if (effect.type !== "add_multiple_cards_to_hand") return;
+		getMove(effect.cardId); // validates the id, throws on typo
+		for (let i = 0; i < effect.amount; i++) {
+			if (ctx.actor.hand.length >= C.HAND_LIMIT) break;
+			ctx.actor.hand.push(effect.cardId);
+		}
+	},
+
 	discard_cards_from_hand(effect, ctx) {
 		if (effect.type !== "discard_cards_from_hand") return true;
 		const available = Math.min(effect.amount, ctx.actor.hand.length);
@@ -203,6 +212,19 @@ export const drawDiscardHandlers = {
 		if (!target) return;
 		discardActiveMoveSlots(target);
 		recomputePassives(target, ctx.state);
+	},
+
+	// scorched earth: clears the caster's own ongoing zone along with the target's
+	discard_own_and_enemy_actives(_effect, ctx) {
+		discardActiveMoveSlots(ctx.actor);
+		recomputePassives(ctx.actor, ctx.state);
+
+		const target = resolveTarget(ctx);
+		if (!target) return;
+		discardActiveMoveSlots(target);
+		if (target.playerId !== ctx.actor.playerId) {
+			recomputePassives(target, ctx.state);
+		}
 	},
 
 	discard_one_draw_three(_effect, ctx) {

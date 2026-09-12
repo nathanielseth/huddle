@@ -130,6 +130,16 @@ export type PendingInteraction =
 			}[];
 	  }
 	| {
+			// denier: destroy one enemy active move, actor's choice among all of them
+			type: "destroy_enemy_move_pick";
+			actorId: string;
+			eligibleTargets: readonly {
+				playerId: string;
+				slot: 0 | 1 | 2;
+				moveId: string;
+			}[];
+	  }
+	| {
 			type: "watcher_steal_pick";
 			actorId: string;
 			targetPlayerId: string;

@@ -1,4 +1,5 @@
 import type { InteractionSpec, PendingInteraction } from "./types";
+import { CREW_CLASSES } from "../../../../../shared/games/face-turn/types";
 import { resolveBackgroundCheckGuess } from "../effects";
 import { resolveChallenge, executePendingAction } from "../game";
 import { buildStrikeResolution, afterAction } from "../action-results";
@@ -7,8 +8,6 @@ type Interaction = Extract<
 	PendingInteraction,
 	{ type: "background_check_guess" }
 >;
-
-const CLASSES = ["striker", "defender", "collector", "hider"] as const;
 
 export const backgroundCheckGuessSpec: InteractionSpec<Interaction> = {
 	getResponderId: (interaction) => interaction.actorId,
@@ -94,7 +93,7 @@ export const backgroundCheckGuessSpec: InteractionSpec<Interaction> = {
 		const target = state.players.get(interaction.targetPlayerId);
 		if (target && interaction.eligibleSlots[0] !== undefined) {
 			const randomGuess =
-				CLASSES[Math.floor(state.rng() * CLASSES.length)]!;
+				CREW_CLASSES[Math.floor(state.rng() * CREW_CLASSES.length)]!;
 			resolveBackgroundCheckGuess(
 				state,
 				challenger,

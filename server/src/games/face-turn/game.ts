@@ -28,7 +28,7 @@ import {
 } from "./cards";
 import {
 	resolveEffects,
-	triggerRoundEndPassives,
+	triggerTurnEndPassives,
 	recomputePassives,
 	getLivingPlayers,
 	getEnemies,
@@ -48,6 +48,9 @@ import {
 	executedPlayerIdFrom,
 	hideCrewAtSlot,
 	processWarrantOfArrestTicks,
+	stealCashFromVictim,
+	maybeGrantHeelTurnOnChallengeWin,
+	triggerRaidStrikeOnTurnEnd,
 } from "./effects";
 import type { StrikeOrExecuteOutcome } from "./effects";
 import { shuffle } from "../lib/random";
@@ -89,6 +92,7 @@ export function makeServerPlayer(
 		incomingPoison: new Map(),
 		lifeInsuranceTargets: new Map(),
 		trickleDownTargets: new Map(),
+		crewClassMutations: new Map(),
 		ratQueenDrawUsedThisTurn: false,
 		disabledPassiveSlots: new Set(),
 		playedMoveThisTurn: false,
@@ -523,6 +527,14 @@ export function startTurn(state: FaceturnServerState, playerId: string): void {
 }
 
 export function swapTurn(state: FaceturnServerState): void {
+	const endingPlayer = state.activePlayerId
+		? state.players.get(state.activePlayerId)
+		: undefined;
+	if (endingPlayer && !state.eliminatedPlayers.has(endingPlayer.playerId)) {
+		triggerRaidStrikeOnTurnEnd(state, endingPlayer);
+		triggerTurnEndPassives(state, endingPlayer);
+	}
+
 	const activeTurnOrder = state.turnOrder.filter(
 		(id) => !state.eliminatedPlayers.has(id),
 	);
@@ -538,7 +550,9 @@ export function swapTurn(state: FaceturnServerState): void {
 	const livingCount = activeTurnOrder.length;
 	if (state.turnNumber % livingCount === 0) {
 		state.roundNumber++;
-		triggerRoundEndPassives(state);
+		for (const p of getLivingPlayers(state)) {
+			if (p.bossImmunityTurns > 0) p.bossImmunityTurns--;
+		}
 	}
 
 	startTurn(state, nextPlayerId);
@@ -766,6 +780,33 @@ export function computeChallengeEligible(
 	return enemies.map((e) => e.playerId);
 }
 
+// applies the rewards a player earns for winning a challenge (as the actor,
+// when the challenger's bluff-call fails, or as the challenger, when it
+// succeeds): the watcher's draw+hide offer, extortion's cash, and heel's
+// bonus move. skipped if resolving the strike already opened an interaction,
+// so it doesn't stomp on that pending state.
+function grantChallengeWinRewards(
+	state: FaceturnServerState,
+	winner: FaceturnServerPlayer,
+): void {
+	if (state.pendingInteraction === null && winner.derived.hasWatcherPassive) {
+		drawCards(winner, 2);
+		const eligibleTargets = watcherEligibleTargets(state, winner);
+		if (eligibleTargets.length > 0) {
+			state.pendingInteraction = {
+				type: "watcher_hide_offer",
+				actorId: winner.playerId,
+				eligibleTargets,
+			};
+		}
+	}
+
+	if (winner.derived.cashOnChallengeWinAmount > 0) {
+		winner.cash += winner.derived.cashOnChallengeWinAmount;
+	}
+	maybeGrantHeelTurnOnChallengeWin(state, winner);
+}
+
 export function resolveChallenge(
 	state: FaceturnServerState,
 	challengerId: string,
@@ -799,23 +840,7 @@ export function resolveChallenge(
 		}
 
 		// the watcher: won the challenge by successfully defending against it (actor wasn't bluffing)
-		if (state.pendingInteraction === null) {
-			if (actor.derived.hasWatcherPassive) {
-				drawCards(actor, 2);
-				const eligibleTargets = watcherEligibleTargets(state, actor);
-				if (eligibleTargets.length > 0) {
-					state.pendingInteraction = {
-						type: "watcher_hide_offer",
-						actorId: pending.actorId,
-						eligibleTargets,
-					};
-				}
-			}
-		}
-
-		if (actor.derived.cashOnChallengeWinAmount > 0) {
-			actor.cash += actor.derived.cashOnChallengeWinAmount;
-		}
+		grantChallengeWinRewards(state, actor);
 
 		pushLog(state, {
 			kind: "challenge_resolved",
@@ -863,27 +888,9 @@ export function resolveChallenge(
 	}
 
 	// the watcher: the challenger also gets this if they just won the challenge
-	if (
-		state.pendingInteraction === null &&
-		challenger.derived.hasWatcherPassive
-	) {
-		drawCards(challenger, 2);
-		const eligibleTargets = watcherEligibleTargets(state, challenger);
-		if (eligibleTargets.length > 0) {
-			state.pendingInteraction = {
-				type: "watcher_hide_offer",
-				actorId: challenger.playerId,
-				eligibleTargets,
-			};
-		}
-	}
+	grantChallengeWinRewards(state, challenger);
 	if (state.pendingInteraction === null) {
 		maybeOpenBearBonesOffer(state, challenger, pending.actorId);
-	}
-
-	// extortion: same unconditional-grant reasoning as the actor's branch above
-	if (challenger.derived.cashOnChallengeWinAmount > 0) {
-		challenger.cash += challenger.derived.cashOnChallengeWinAmount;
 	}
 
 	pushLog(state, {
@@ -956,7 +963,18 @@ export function executePendingAction(
 			}
 			return null;
 		}
-		case "class_action_defend": {
+		case "class_action_steal": {
+			if (!targetPlayer) return null;
+			stealCashFromVictim(
+				actor,
+				targetPlayer.playerId,
+				C.STEAL_CASH_AMOUNT,
+				state,
+			);
+			return null;
+		}
+		case "class_action_defend":
+		case "class_action_block_steal": {
 			return null;
 		}
 	}
@@ -1226,7 +1244,7 @@ export function effectiveCost(
 
 export function getClassActionCost(
 	player: FaceturnServerPlayer,
-	action: "strike" | "defend" | "collect" | "hide",
+	action: "strike" | "defend" | "collect" | "hide" | "steal",
 ): number {
 	const base = (() => {
 		switch (action) {
@@ -1238,6 +1256,8 @@ export function getClassActionCost(
 				return C.COLLECT_CASH_COST;
 			case "hide":
 				return C.HIDE_CASH_COST;
+			case "steal":
+				return C.STEAL_CASH_COST;
 		}
 	})();
 	return Math.max(0, base - player.derived.classActionCostReduction);
@@ -1245,13 +1265,14 @@ export function getClassActionCost(
 
 export function computeActorWasBluffing(
 	actor: FaceturnServerPlayer,
-	action: "strike" | "collect" | "hide" | "defend",
+	action: "strike" | "collect" | "hide" | "defend" | "steal",
 ): boolean {
 	const requiredClass = {
 		strike: "striker",
 		collect: "collector",
 		hide: "hider",
 		defend: "defender",
+		steal: "stealer",
 	} as const;
 	return !playerHasClass(actor, requiredClass[action]);
 }

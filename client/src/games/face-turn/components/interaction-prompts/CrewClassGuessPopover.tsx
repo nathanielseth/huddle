@@ -1,14 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { cn } from "../../../../lib/utils/cn";
-import type { CrewClass } from "@shared/games/face-turn/types";
-
-const CLASS_OPTIONS: CrewClass[] = [
-	"striker",
-	"defender",
-	"collector",
-	"hider",
-];
+import { CREW_CLASSES } from "@shared/games/face-turn/types";
 
 interface Rect {
 	top: number;
@@ -91,7 +84,7 @@ export function CrewClassGuessPopover({
 				Guess class
 			</span>
 			<div className="grid grid-cols-2 gap-1.5">
-				{CLASS_OPTIONS.map((c) => (
+				{CREW_CLASSES.map((c) => (
 					<button
 						key={c}
 						type="button"

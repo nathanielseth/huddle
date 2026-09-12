@@ -10,7 +10,11 @@ import {
 } from "../../hooks/boardTargetRegistry";
 import { setDraggedOverTarget } from "../../hooks/draggedOverTargetStore";
 import { isValidMoveTarget } from "../../lib/moveTargetLegality";
-import { useArmedMove, useArmedMoveStore } from "../../hooks/useArmedMove";
+import {
+	useArmedMove,
+	useArmedMoveStore,
+	type SecondaryPick,
+} from "../../hooks/useArmedMove";
 import { useHandControllerStore } from "../../hooks/handControllerStore";
 import { resolveChainPlayAction } from "../../lib/resolvePlayMoveAction";
 
@@ -71,7 +75,7 @@ export function ChainMoveSection() {
 		(
 			moveId: string,
 			primaryTarget: BoardTarget,
-			secondaryPick?: { slotIndex: number },
+			secondaryPick?: SecondaryPick,
 		) => {
 			runLocked(() => {
 				sendFaceturnAction(

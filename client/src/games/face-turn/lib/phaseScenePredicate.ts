@@ -2,7 +2,7 @@ import type {
 	FaceturnsState,
 	PendingInteractionView,
 } from "@shared/games/face-turn/types";
-import { getInteractionResponder } from "../hooks/useFaceturnState";
+import { getInteractionResponder } from "./interactionResponder";
 
 // single source for phase takeover decisions
 // every pendingInteraction type must appear here or its prompt never mounts and the server timeout auto-resolves it
@@ -25,6 +25,7 @@ const TAKEOVER_INTERACTION_TYPES = new Set<PendingInteractionView["type"]>([
 	"tag_out_pick",
 	"too_big_swap_pick",
 	"belladonna_copy_pick",
+	"destroy_enemy_move_pick",
 	"watcher_steal_pick",
 ]);
 

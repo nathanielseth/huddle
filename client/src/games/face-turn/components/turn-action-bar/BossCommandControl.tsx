@@ -4,7 +4,7 @@ import { cn } from "../../../../lib/utils/cn";
 import { getBossDisplay } from "@shared/games/face-turn/card-display";
 import { sendFaceturnAction } from "../../actions";
 import { useFaceturnState } from "../../hooks/useFaceturnState";
-import { useBossCommandPopoverStore } from "../../hooks/bossCommandPopoverStore";
+import { useBossCommandPopoverStore } from "../../hooks/anchoredPopoverStore";
 import { TargetPicker } from "./TargetPicker";
 import { PopoverShell } from "./PopoverShell";
 import { useTargetPickerSite } from "../../hooks/useTargetPickerSite";
@@ -53,10 +53,10 @@ export function BossCommandControl({
 	onArmFaceTurn: () => void;
 }) {
 	const { myPlayer, players, playerId } = useFaceturnState();
-	const openForPlayerId = useBossCommandPopoverStore((s) => s.openForPlayerId);
+	const openKey = useBossCommandPopoverStore((s) => s.openKey);
 	const anchorEl = useBossCommandPopoverStore((s) => s.anchorEl);
 	const closePopover = useBossCommandPopoverStore((s) => s.close);
-	const isOpen = openForPlayerId === playerId && anchorEl !== null;
+	const isOpen = openKey === playerId && anchorEl !== null;
 
 	const otherPlayers = players.filter((p) => p.id !== playerId);
 	const defaultTargetId = otherPlayers.length === 1 ? otherPlayers[0].id : null;

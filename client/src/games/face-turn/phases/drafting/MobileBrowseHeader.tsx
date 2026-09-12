@@ -1,6 +1,7 @@
 import { useState, type ReactNode } from "react";
 import { cn } from "../../../../lib/utils/cn";
 import type { CrewClass, MoveType } from "@shared/games/face-turn/types";
+import { CREW_CLASSES } from "@shared/games/face-turn/types";
 import { CARD_VARIANT_THEME } from "../../components/card/cardVariants";
 import { IconToolbarPopover as ToolbarPopover } from "../../components/ui/ToolbarPopover";
 
@@ -39,12 +40,6 @@ function CountBadge({ current, max }: { current: number; max: number }) {
 const PICKED_FILTERS = ["all", "picked", "unpicked"] as const;
 type PickedFilterValue = (typeof PICKED_FILTERS)[number];
 
-const CREW_CLASS_OPTIONS: readonly CrewClass[] = [
-	"striker",
-	"defender",
-	"collector",
-	"hider",
-];
 const MOVE_TYPE_OPTIONS: readonly MoveType[] = ["burst", "slow", "active"];
 
 function SortPanel({
@@ -206,7 +201,7 @@ function FilterPanel({
 
 				<FilterSection label="Crew class">
 					<div className="flex flex-wrap gap-1.5">
-						{CREW_CLASS_OPTIONS.map((cls) => (
+						{CREW_CLASSES.map((cls) => (
 							<VariantToggle
 								key={cls}
 								value={cls}

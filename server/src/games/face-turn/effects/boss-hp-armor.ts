@@ -38,6 +38,14 @@ export const bossHpArmorHandlers = {
 		}
 	},
 
+	steal_armor(_effect, ctx) {
+		const target = resolveTarget(ctx);
+		if (!target || target.bossArmor <= 0) return;
+		ctx.actor.bossArmor += target.bossArmor;
+		ctx.actor.hasArmoredBossThisGame = true;
+		target.bossArmor = 0;
+	},
+
 	immunity_until_next_turn(effect, ctx) {
 		if (effect.type !== "immunity_until_next_turn") return;
 		const turns = effect.turns ?? 1;

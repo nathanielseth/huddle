@@ -3,10 +3,8 @@ import type { ReactNode } from "react";
 import { useNavigate } from "react-router";
 import { useGameStore } from "../../../app/store";
 import { modal } from "../../../lib/utils/modal";
-import {
-	getInteractionResponder,
-	useFaceturnState,
-} from "../hooks/useFaceturnState";
+import { useFaceturnState } from "../hooks/useFaceturnState";
+import { getInteractionResponder } from "../lib/interactionResponder";
 import { PhaseTimer } from "./PhaseTimer";
 import { IconToolbarPopover } from "./ui/ToolbarPopover";
 import { GameSettingsPanel } from "./ui/GameSettingsPanel";

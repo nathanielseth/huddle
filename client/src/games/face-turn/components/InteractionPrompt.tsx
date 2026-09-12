@@ -18,6 +18,7 @@ import {
 	LighthouseDisablePickPrompt,
 	TooBigSwapPickPrompt,
 	BelladonnaCopyPickPrompt,
+	DestroyEnemyMovePickPrompt,
 } from "./interaction-prompts/SimplePrompts";
 import {
 	ChooseDiscardCountPrompt,
@@ -223,6 +224,16 @@ export function InteractionPrompt() {
 					pi={pi}
 					resolve={resolve}
 					decline={decline}
+					locked={locked}
+				/>
+			);
+
+		case "destroy_enemy_move_pick":
+			return (
+				<DestroyEnemyMovePickPrompt
+					key={key}
+					pi={pi}
+					resolve={resolve}
 					locked={locked}
 				/>
 			);

@@ -580,6 +580,39 @@ export function BelladonnaCopyPickPrompt({
 	);
 }
 
+export function DestroyEnemyMovePickPrompt({
+	pi,
+	resolve,
+	locked,
+}: {
+	pi: Extract<PendingInteractionView, { type: "destroy_enemy_move_pick" }>;
+	resolve: ResolveFn;
+	locked: boolean;
+}) {
+	const { playerMap } = useFaceturnState();
+
+	return (
+		<PromptShell title="Denier: destroy an enemy's active Move">
+			<div className="flex flex-col gap-2">
+				{pi.eligibleTargets.map((t) => (
+					<SlotButton
+						key={`${t.playerId}-${t.slot}`}
+						label={`${playerMap[t.playerId]?.name ?? t.playerId} — ${getMoveDisplay(t.moveId).name}`}
+						disabled={locked}
+						onClick={() => {
+							resolve("destroy_enemy_move_pick", {
+								targetPlayerId: t.playerId,
+								targetActiveMoveSlot: t.slot,
+							});
+						}}
+					/>
+				))}
+			</div>
+			{locked && <p className="text-xs text-white/40">Submitting…</p>}
+		</PromptShell>
+	);
+}
+
 export function TruthSerumRevealPrompt({
 	pi,
 	resolve,

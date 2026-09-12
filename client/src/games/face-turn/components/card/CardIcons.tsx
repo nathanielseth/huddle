@@ -48,6 +48,17 @@ export function SwapIcon(props: IconProps) {
 	);
 }
 
+// stealer: a mask, for a class built around taking things unseen
+export function MaskIcon(props: IconProps) {
+	return (
+		<svg viewBox="1 3 22 18" {...baseIconProps} strokeWidth={0} {...props}>
+			<path d="M1 6c2.2-1.5 5.1-2 7.5-1 1.5.6 2.6 1.7 3.5 1.7s2-1.1 3.5-1.7c2.4-1 5.3-.5 7.5 1-.3 4.6-1.7 9-5.5 9-2.3 0-3.6-1.6-5.5-1.6S8.3 15 6 15C2.2 15 .8 10.6 1 6z" />
+			<circle cx="6.5" cy="9.5" r="1.6" fill="#000000" stroke="none" />
+			<circle cx="17.5" cy="9.5" r="1.6" fill="#000000" stroke="none" />
+		</svg>
+	);
+}
+
 export function CrownIcon(props: IconProps) {
 	return (
 		<svg viewBox="0 0 100 100" {...baseIconProps} {...props}>

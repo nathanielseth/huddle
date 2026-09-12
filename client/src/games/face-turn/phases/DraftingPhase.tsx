@@ -17,6 +17,7 @@ import {
 	isDraftable,
 } from "@shared/games/face-turn/card-display";
 import type { CrewClass, MoveType } from "@shared/games/face-turn/types";
+import { CREW_CLASSES } from "@shared/games/face-turn/types";
 import { FACETURN_CONSTANTS } from "@shared/games/face-turn/constants";
 import {
 	encodeDeckCode,
@@ -261,12 +262,6 @@ function InspectCornerButton({
 const PICKED_FILTERS = ["all", "picked", "unpicked"] as const;
 type PickedFilterValue = (typeof PICKED_FILTERS)[number];
 
-const CREW_CLASS_OPTIONS: readonly CrewClass[] = [
-	"striker",
-	"defender",
-	"collector",
-	"hider",
-];
 const MOVE_TYPE_OPTIONS: readonly MoveType[] = ["burst", "slow", "active"];
 
 function ToolbarPopover({
@@ -512,7 +507,7 @@ function FilterPanel({
 
 				<FilterSection label="Crew class">
 					<div className="flex flex-wrap gap-1.5">
-						{CREW_CLASS_OPTIONS.map((cls) => (
+						{CREW_CLASSES.map((cls) => (
 							<VariantToggle
 								key={cls}
 								value={cls}

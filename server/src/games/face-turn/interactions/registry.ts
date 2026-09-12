@@ -19,6 +19,7 @@ import { watcherStealPickSpec } from "./watcher-steal-pick";
 import { lighthouseDisablePickSpec } from "./lighthouse-disable-pick";
 import { watcherHideOfferSpec } from "./watcher-hide-offer";
 import { belladonnaCopyPickSpec } from "./belladonna-copy-pick";
+import { destroyEnemyMovePickSpec } from "./destroy-enemy-move-pick";
 
 // registry keyed by interaction type
 // exhaustive mapped type so every PendingInteraction variant has a spec
@@ -47,6 +48,7 @@ const interactionRegistry: {
 	watcher_steal_pick: watcherStealPickSpec,
 	lighthouse_disable_pick: lighthouseDisablePickSpec,
 	belladonna_copy_pick: belladonnaCopyPickSpec,
+	destroy_enemy_move_pick: destroyEnemyMovePickSpec,
 };
 
 export function getInteractionSpec<T extends PendingInteraction>(
