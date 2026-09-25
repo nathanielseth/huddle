@@ -6,7 +6,7 @@ import { socket } from "../../../lib/network/socket";
 import type { Stroke, SquadoodleState } from "@shared/games/squadoodle/index";
 import type { GameTimer } from "@shared/core/room";
 
-// Hoisted: closes over nothing — socket is a module-level singleton.
+// Hoisted: closes over nothing, socket is a module-level singleton.
 function handleSubmit(strokes: Stroke[]) {
 	socket.emit("player_action", { type: "submit_drawing", strokes });
 }
@@ -22,7 +22,7 @@ export function Drawing() {
 	);
 }
 
-// ─── Host ────────────────────────────────────────────────────────────────────
+// Host
 
 function HostView({
 	game,
@@ -51,7 +51,7 @@ function HostView({
 	);
 }
 
-// ─── Player ──────────────────────────────────────────────────────────────────
+// Player
 
 function PlayerView({
 	game,

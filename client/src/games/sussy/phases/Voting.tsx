@@ -6,7 +6,7 @@ import { getTaskMeta } from "../constants";
 import { cn } from "../../../lib/utils/cn";
 import type { SussyResponse } from "@shared/games/sussy/index";
 
-// ── Response formatter ────────────────────────────────────────────────────────
+// Response formatter
 
 function formatResponse(
 	response: SussyResponse | null,
@@ -18,7 +18,7 @@ function formatResponse(
 			return response.raised ? "✋ Hand up" : "✊ Hand down";
 		case "finger_pointing": {
 			const name = players.find((p) => p.id === response.targetId)?.name;
-			return name ? `👉 ${name}` : "👉 —";
+			return name ? `👉 ${name}` : "👉";
 		}
 		case "numbers_game":
 			return `${response.count} finger${response.count !== 1 ? "s" : ""}`;
@@ -31,14 +31,14 @@ function formatResponse(
 	}
 }
 
-// Fix: prefer-module-scope-pure-function — castVote() only closes over the
+// Fix: prefer-module-scope-pure-function, castVote() only closes over the
 // module-level `socket` import and receives `targetId` as a param.
 // Moving it out of Voting means it is allocated once, not on every render.
 function castVote(targetId: string) {
 	socket.emit("player_action", { type: "cast_vote", targetId });
 }
 
-// ── Component ─────────────────────────────────────────────────────────────────
+// Component
 
 export function Voting() {
 	const { sussy, role, players, playerId, myPlayer, timer } = useSussyState();
@@ -53,7 +53,7 @@ export function Voting() {
 	const hasResponses =
 		sussy.mode === "remote" || sussy.taskType === "glitch_in_the_chat";
 
-	// ── Host view ─────────────────────────────────────────────────────────────
+	// Host view
 	if (role === "host") {
 		return (
 			<div className="flex flex-col min-h-screen px-8 py-10 gap-8">
@@ -130,7 +130,7 @@ export function Voting() {
 		);
 	}
 
-	// ── Player — already voted ────────────────────────────────────────────────
+	// Player, already voted
 	if (hasVoted) {
 		return (
 			<div className="flex flex-col min-h-screen px-5 py-8 gap-6">
@@ -170,7 +170,7 @@ export function Voting() {
 				>
 					<span className="text-5xl">🗳️</span>
 					<p className="text-white/50 text-sm">
-						Vote cast — waiting for others
+						Vote cast, waiting for others
 					</p>
 					<p className="text-xs text-white/25">
 						{voted}/{total} voted
@@ -183,7 +183,7 @@ export function Voting() {
 		);
 	}
 
-	// ── Player — voting ───────────────────────────────────────────────────────
+	// Player, voting
 	const targets = players.filter((p) => p.id !== playerId);
 
 	return (
@@ -203,7 +203,7 @@ export function Voting() {
 				</div>
 			</div>
 
-			{/* Responses — show above vote targets so they can refer to them */}
+			{/* Responses, show above vote targets so they can refer to them */}
 			{hasResponses && <ResponseGrid players={players} sussy={sussy} />}
 
 			<div className="flex flex-col gap-2">
@@ -229,7 +229,7 @@ export function Voting() {
 	);
 }
 
-// ── Response grid (remote mode / glitch only) ─────────────────────────────────
+// Response grid (remote mode / glitch only)
 
 function ResponseGrid({
 	players,

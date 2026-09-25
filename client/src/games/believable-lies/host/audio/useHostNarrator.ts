@@ -59,7 +59,7 @@ function initHowl(): Promise<Howl> {
 	});
 }
 
-// sprite load failure is non-critical — warn and swallow
+// sprite load failure is non-critical, warn and swallow
 const _howlPromise: Promise<void> = initHowl().then(
 	() => undefined,
 	(err: unknown) => {

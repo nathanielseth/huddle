@@ -457,8 +457,8 @@ export const CREW_DISPLAY: readonly CrewCardDisplay[] = [
 		synergyIds: ["miss-direction", "the-watcher", "the-bastion"],
 	},
 	{
-		id: "kamileon",
-		name: "Kamileon",
+		id: "chamelia",
+		name: "Chamelia",
 		class: "hider",
 		effectText: {
 			passive: "Whenever I turn face-down, randomly change my Class.",
@@ -1706,8 +1706,7 @@ export const MOVE_POST_PLACEMENT_TARGET: Readonly<
 		field: "targetAllySlot",
 	},
 	"warrant-of-arrest": { required: true, scope: "enemy_crew" },
-	"poison-breath": { required: false, scope: "enemy_player" },
-	// primary target already supplies both fields, no secondary pick
+	"poison-breath": null,
 	sabotage: null,
 	"neetos-clock": null,
 };

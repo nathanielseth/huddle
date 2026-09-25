@@ -1,7 +1,7 @@
 import { create } from "zustand";
 
 // a popover anchored to one board element at a time, identified by some key
-// (a player id, a slot index, ...) — only one can be open per store
+// (a player id, a slot index...), only one can be open per store
 interface AnchoredPopoverStore<TKey> {
 	openKey: TKey | null;
 	anchorEl: HTMLElement | null;

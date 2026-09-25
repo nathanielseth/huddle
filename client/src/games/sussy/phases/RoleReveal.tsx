@@ -173,7 +173,7 @@ function GlitchReveal({
 					</p>
 				</div>
 				<p className="text-[11px] font-bold tracking-widest uppercase text-white/30">
-					Your questions — answer one at a time
+					Your questions, answer one at a time
 				</p>
 			</m.div>
 			<div className="flex flex-col gap-3">

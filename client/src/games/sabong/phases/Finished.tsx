@@ -23,7 +23,7 @@ function Leaderboard({ compact = false }: { compact?: boolean }) {
 		? sabong.manoks[tournamentWinnerId]
 		: null;
 
-	// Fix: js-tosorted-immutable — toSorted() instead of [...storePlayers].sort()
+	// Fix: js-tosorted-immutable, toSorted() instead of [...storePlayers].sort()
 	const ranked = storePlayers.toSorted((a, b) => {
 		const balA = sabong.players[a.id]?.balance ?? 0;
 		const balB = sabong.players[b.id]?.balance ?? 0;
@@ -145,7 +145,7 @@ export function FinishedPlayer() {
 	const pickedWinner =
 		tournamentWinnerId && myPlayer.bracketPickId === tournamentWinnerId;
 
-	// Fix: js-tosorted-immutable — toSorted() instead of [...storePlayers].sort()
+	// Fix: js-tosorted-immutable, toSorted() instead of [...storePlayers].sort()
 	const myRank =
 		storePlayers
 			.toSorted((a, b) => {
@@ -165,7 +165,7 @@ export function FinishedPlayer() {
 					animate={{ opacity: 1, y: 0 }}
 				>
 					<span className="font-display text-xs font-bold tracking-[0.3em] uppercase text-white/30">
-						Super Sabong — Final Results
+						Super Sabong, Final Results
 					</span>
 					<h1 className="font-display text-4xl font-black uppercase text-white leading-none">
 						Tournament Over!
@@ -240,7 +240,7 @@ export function FinishedHost() {
 			>
 				<div className="flex flex-col gap-1">
 					<span className="font-display text-xs font-bold tracking-[0.3em] uppercase text-white/30">
-						Super Sabong — Final Results
+						Super Sabong, Final Results
 					</span>
 					<h1 className="font-display text-6xl font-black uppercase leading-none text-white">
 						Tournament Over!

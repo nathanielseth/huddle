@@ -557,7 +557,7 @@ export function BelladonnaCopyPickPrompt({
 				{pi.eligibleTargets.map((t) => (
 					<SlotButton
 						key={`${t.playerId}-${t.slot}`}
-						label={`${playerMap[t.playerId]?.name ?? t.playerId} — ${getMoveDisplay(t.moveId).name}`}
+						label={`${playerMap[t.playerId]?.name ?? t.playerId}, ${getMoveDisplay(t.moveId).name}`}
 						disabled={locked}
 						onClick={() => {
 							resolve("belladonna_copy_pick", {
@@ -597,7 +597,7 @@ export function DestroyEnemyMovePickPrompt({
 				{pi.eligibleTargets.map((t) => (
 					<SlotButton
 						key={`${t.playerId}-${t.slot}`}
-						label={`${playerMap[t.playerId]?.name ?? t.playerId} — ${getMoveDisplay(t.moveId).name}`}
+						label={`${playerMap[t.playerId]?.name ?? t.playerId}, ${getMoveDisplay(t.moveId).name}`}
 						disabled={locked}
 						onClick={() => {
 							resolve("destroy_enemy_move_pick", {

@@ -27,5 +27,5 @@ export const C = {
 	MAX_STROKE_SIZE: 64,
 } as const;
 
-// kept separate — regex literals cannot appear inside `as const` objects
+// kept separate, regex literals cannot appear inside `as const` objects
 export const HEX_COLOR_RE = /^#[0-9a-fA-F]{3,8}$/;

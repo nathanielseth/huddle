@@ -5,7 +5,7 @@ import { TASK_META } from "../constants";
 import { TimerBar } from "../../sabong/components/TimerBar";
 import { SELECTABLE_TASKS, type SelectableTask } from "../constants";
 
-// Fix: prefer-module-scope-pure-function — pick() only closes over the
+// Fix: prefer-module-scope-pure-function, pick() only closes over the
 // module-level `socket` import and receives `category` as a param.
 // Moving it out of ChooserView means it is allocated once, not every render.
 function pick(category: SelectableTask) {

@@ -142,7 +142,7 @@ export function RoundResult() {
 				})}
 			</div>
 
-			{/* Verdict — step 1 */}
+			{/* Verdict, step 1 */}
 			<AnimatePresence>
 				{step >= 1 && (
 					<m.div
@@ -161,7 +161,7 @@ export function RoundResult() {
 				)}
 			</AnimatePresence>
 
-			{/* Impostor reveal + prompt — step 2 */}
+			{/* Impostor reveal + prompt, step 2 */}
 			<AnimatePresence>
 				{step >= 2 && (
 					<m.div

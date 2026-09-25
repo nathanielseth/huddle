@@ -231,7 +231,7 @@ function runIteration(
 				rolloutPolicyFn,
 			);
 
-	// each seat’s tree backs up with its own reward (ally shares rootValue, opponent gets negation)
+	// each seat's tree backs up with its own reward (ally shares rootValue, opponent gets negation)
 	const rootTeam = state.players.get(rootSeat)?.teamIndex;
 	const valueFor = (seat: string): number => {
 		if (rootTeam === undefined) return rootValue;

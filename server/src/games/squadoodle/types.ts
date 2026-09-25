@@ -5,7 +5,7 @@ import type {
 	Accolade,
 } from "../../../../shared/games/squadoodle/index";
 
-// engine mutates this in place (same pattern as CyberSecs). public-safe fields
+// engine mutates this in place (same pattern as Breachpoint). public-safe fields
 // projected into SquadoodleState by buildPublicState(). secret fields (chain
 // contents during working phases, per-player tasks) projected into SquadoodleSecret
 export interface SquadoodleServerState {

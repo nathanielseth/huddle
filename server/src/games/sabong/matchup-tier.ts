@@ -79,7 +79,7 @@ export function describeMatchup(
 	const undP = f1IsFavorite ? p2 : p1;
 	const tier = classifyFavoredProb(favP);
 	// bounds are defined in terms of the favorite's probability (>= 0.5), so both
-	// sides share one edge value — the underdog isn't a separate, symmetric case
+	// sides share one edge value, the underdog isn't a separate, symmetric case
 	const edge = computeEdge(favP, tier);
 
 	const favorite: FighterMatchupInfo = {

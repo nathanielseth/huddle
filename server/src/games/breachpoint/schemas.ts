@@ -3,7 +3,7 @@ import { MAX_TEAM_SIZE } from "./constants";
 
 const playerId = z.string().trim().min(1);
 
-export const CybsecsActionSchema = z.discriminatedUnion("type", [
+export const BreachpointActionSchema = z.discriminatedUnion("type", [
 	z.object({
 		type: z.literal("skip_vote"),
 		skip: z.boolean(),

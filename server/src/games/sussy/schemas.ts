@@ -56,7 +56,7 @@ export type ParsedGlitchInTheChatResponse = z.infer<
 >;
 
 // select_category intentionally excludes glitch_in_the_chat.
-// round 4 (glitch) is auto-assigned by the server — players never pick it
+// round 4 (glitch) is auto-assigned by the server, players never pick it
 const SelectCategorySchema = z.object({
 	type: z.literal("select_category"),
 	category: z.enum([

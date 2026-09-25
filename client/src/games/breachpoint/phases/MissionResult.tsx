@@ -1,17 +1,17 @@
 import { m } from "motion/react";
-import { useCybsecsState } from "../hooks/useCybsecsState";
+import { useBreachpointState } from "../hooks/useBreachpointState";
 import { TimerBar } from "../../sabong/components/TimerBar";
 import { MissionTrack } from "../components/MissionTrack";
 import { cn } from "../../../lib/utils/cn";
 import type {
-	CybsecsState,
-	CybsecsSecret,
+	BreachpointState,
+	BreachpointSecret,
 	MissionResult,
 } from "@shared/games/breachpoint/index";
 import type { GameTimer } from "@shared/core/room";
 
 export function MissionResult() {
-	const { game, secret, role, timer } = useCybsecsState();
+	const { game, secret, role, timer } = useBreachpointState();
 	if (!game) return null;
 
 	// missionResults' last entry is the just-completed mission, missionIndex still points to the upcoming one
@@ -75,7 +75,7 @@ function HostView({
 	timer,
 	result,
 }: {
-	game: CybsecsState;
+	game: BreachpointState;
 	timer: GameTimer | null;
 	result: MissionResult;
 }) {
@@ -130,8 +130,8 @@ function PlayerView({
 	timer,
 	result,
 }: {
-	game: CybsecsState;
-	secret: CybsecsSecret | null;
+	game: BreachpointState;
+	secret: BreachpointSecret | null;
 	timer: GameTimer | null;
 	result: MissionResult;
 }) {

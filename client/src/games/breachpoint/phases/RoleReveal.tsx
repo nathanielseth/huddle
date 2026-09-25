@@ -1,16 +1,16 @@
 import { m } from "motion/react";
-import { useCybsecsState } from "../hooks/useCybsecsState";
+import { useBreachpointState } from "../hooks/useBreachpointState";
 import { TimerBar } from "../../sabong/components/TimerBar";
 import { ROLE_META, MODE_LABELS } from "../constants";
 import { cn } from "../../../lib/utils/cn";
 import type {
-	CybsecsState,
-	CybsecsSecret,
+	BreachpointState,
+	BreachpointSecret,
 } from "@shared/games/breachpoint/index";
 import type { GameTimer, Player } from "@shared/core/room";
 
 export function RoleReveal() {
-	const { game, secret, role, timer, players, getName } = useCybsecsState();
+	const { game, secret, role, timer, players, getName } = useBreachpointState();
 	if (!game) return null;
 
 	if (role === "host") {
@@ -33,7 +33,7 @@ function HostView({
 	timer,
 	players,
 }: {
-	game: CybsecsState;
+	game: BreachpointState;
 	timer: GameTimer | null;
 	players: Player[];
 }) {
@@ -78,8 +78,8 @@ function PlayerView({
 	timer,
 	getName,
 }: {
-	game: CybsecsState;
-	secret: CybsecsSecret;
+	game: BreachpointState;
+	secret: BreachpointSecret;
 	timer: GameTimer | null;
 	getName: (id: string) => string;
 }) {
@@ -165,7 +165,7 @@ function PlayerView({
 					<InfoBlock
 						title="Obfuscate (1 use)"
 						color="amber"
-						note="During Nominating, Voting, or Mission — arm it to hide this mission's true result."
+						note="During Nominating, Voting, or Mission, arm it to hide this mission's true result."
 					/>
 				)}
 				{secret.role === "ethical_hacker" && (

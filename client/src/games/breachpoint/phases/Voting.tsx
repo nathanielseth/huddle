@@ -1,21 +1,21 @@
 import { useState } from "react";
 import { m } from "motion/react";
-import { useCybsecsState } from "../hooks/useCybsecsState";
+import { useBreachpointState } from "../hooks/useBreachpointState";
 import { TimerBar } from "../../sabong/components/TimerBar";
 import { MissionTrack } from "../components/MissionTrack";
 import { ObfuscatorToggle } from "../components/ObfuscatorToggle";
 import { socket } from "../../../lib/network/socket";
 import { cn } from "../../../lib/utils/cn";
 import type {
-	CybsecsState,
-	CybsecsSecret,
+	BreachpointState,
+	BreachpointSecret,
 	VoteChoice,
 } from "@shared/games/breachpoint/index";
 import type { GameTimer } from "@shared/core/room";
 
 export function Voting() {
 	const { game, secret, role, timer, playerId, myPlayer, getName } =
-		useCybsecsState();
+		useBreachpointState();
 	if (!game) return null;
 
 	if (role === "host") {
@@ -38,7 +38,7 @@ function HostView({
 	timer,
 	getName,
 }: {
-	game: CybsecsState;
+	game: BreachpointState;
 	timer: GameTimer | null;
 	getName: (id: string) => string;
 }) {
@@ -133,8 +133,8 @@ function PlayerView({
 	hasVoted,
 	getName,
 }: {
-	game: CybsecsState;
-	secret: CybsecsSecret | null;
+	game: BreachpointState;
+	secret: BreachpointSecret | null;
 	timer: GameTimer | null;
 	playerId: string;
 	hasVoted: boolean;

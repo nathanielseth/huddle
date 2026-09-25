@@ -59,7 +59,7 @@ export const activeTurnAction: PhaseActionHandler = (
 			const cost = effectiveCost(state, player, moveId);
 			if (player.cash < cost)
 				return rejectPlay(
-					`Not enough cash — this move costs ₱${cost}, you have ₱${player.cash}.`,
+					`Not enough cash. This move costs ₱${cost}, you have ₱${player.cash}.`,
 				);
 
 			if (!moveHasLegalTarget(state, playerId, move))
@@ -149,11 +149,7 @@ export const activeTurnAction: PhaseActionHandler = (
 					targetPlayerId: action.targetPlayerId ?? null,
 					cashCost: cost,
 				});
-				// playing a slow move — even the opening one — hands
-				// priority straight to the other participant (see
-				// openMoveChain). They now need to actually respond, so
-				// this opens a real response window, same as any later
-				// push does.
+				// playing a slow move hands priority straight to the other participant (see openMoveChain), so it opens a real response window
 				return makeResult(state, C.MOVE_CHAIN_WINDOW_MS);
 			}
 
@@ -344,9 +340,8 @@ export const activeTurnAction: PhaseActionHandler = (
 			return afterAction(state);
 		}
 
-		// standard reserve mechanic: swap a face-up crew for a reserve, which
-		// enters face-down. free, unlimited (each reserve is one-time use by
-		// nature of being consumed), available to every player.
+		// standard reserve mechanic: swap a face-up crew for a reserve, which enters face-down
+		// free, unlimited, each reserve is one-time use by nature of being consumed
 		case "swap_in_reserve_crew": {
 			const targetSlot = action.targetAllySlot as 0 | 1;
 			if (!player.crewIds[targetSlot] || !player.crewTurned[targetSlot])

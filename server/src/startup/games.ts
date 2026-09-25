@@ -4,7 +4,7 @@ import { sussyEngine } from "../games/sussy/index";
 import { believableLiesEngine } from "../games/believable-lies/index";
 import { witzoneEngine } from "../games/witzone/index";
 import { pokerEngine } from "../games/poker/index";
-import { cybsecsEngine } from "../games/cybersecs/index";
+import { breachpointEngine } from "../games/breachpoint/index";
 import { squadoodleEngine } from "../games/squadoodle/index";
 import { faceturnsEngine } from "../games/face-turn/index";
 import { blankSlateEngine } from "../games/blank-slate/index";
@@ -18,7 +18,7 @@ const ENGINES: readonly GameEngine[] = [
 	believableLiesEngine,
 	witzoneEngine,
 	pokerEngine,
-	cybsecsEngine,
+	breachpointEngine,
 	squadoodleEngine,
 	faceturnsEngine,
 	blankSlateEngine,

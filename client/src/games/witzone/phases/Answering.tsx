@@ -61,7 +61,7 @@ export function Answering() {
 	const [inputs, setInputs] = useState<Record<number, string>>({});
 	const [submitting, setSubmitting] = useState<Record<number, boolean>>({});
 
-	// Fix: no-autofocus — useRef + useEffect instead of autoFocus prop
+	// Fix: no-autofocus, useRef + useEffect instead of autoFocus prop
 	const firstInputRef = useRef<HTMLInputElement>(null);
 	useEffect(() => {
 		firstInputRef.current?.focus();
@@ -142,8 +142,8 @@ export function Answering() {
 										className="flex flex-col gap-2"
 									>
 										{/*
-										 * Fix: control-has-associated-label — aria-label describes which prompt this answers
-										 * Fix: no-autofocus — ref on first input only, no autoFocus prop anywhere
+										 * Fix: control-has-associated-label, aria-label describes which prompt this answers
+										 * Fix: no-autofocus, ref on first input only, no autoFocus prop anywhere
 										 */}
 										<input
 											ref={idx === 0 ? firstInputRef : undefined}
@@ -169,7 +169,7 @@ export function Answering() {
 											>
 												{charsLeft} left
 											</span>
-											{/* Fix: button-has-type — explicit type="button" */}
+											{/* Fix: button-has-type, explicit type="button" */}
 											<button
 												type="button"
 												onClick={() => { handleSubmit(prompt.promptIndex); }}

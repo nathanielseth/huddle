@@ -6,33 +6,33 @@ import type {
 } from "../../engine/GameEngine";
 import type { GameTimer } from "../../../../shared/core/room";
 import type {
-	CybsecsState,
-	CybsecsPlayerView,
-	CybsecsSecret,
+	BreachpointState,
+	BreachpointPlayerView,
+	BreachpointSecret,
 } from "../../../../shared/games/breachpoint/index";
-import type { CybsecsServerState, CybsecsServerAction } from "./types";
+import type { BreachpointServerState, BreachpointServerAction } from "./types";
 import { C } from "./constants";
 import { pickMode, assignRoles, buildRoleIndex } from "./roles";
 import { resolveMission, commitMissionResult, getWinCounts } from "./mission";
-import { CybsecsActionSchema } from "./schemas";
+import { BreachpointActionSchema } from "./schemas";
 import { shuffle } from "../lib/random";
 import { makeTimer } from "../lib/timer";
 import { invariant } from "../lib/assert";
 
-// ─── exhaustiveness helper ───────────────────────────────────────────────────
+// exhaustiveness helper
 
-// Throws at runtime if an unhandled case is ever reached, and forces a TS
+// throws at runtime if an unhandled case is ever reached, and forces a TS
 // error at compile time if a new phase is added without a matching case.
 function assertNever(x: never): never {
 	throw new Error(`Unhandled case: ${String(x)}`);
 }
 
-// ─── secrets ─────────────────────────────────────────────────────────────────
+// secrets
 
 function playerSecret(
-	state: CybsecsServerState,
+	state: BreachpointServerState,
 	playerId: string,
-): CybsecsSecret | null {
+): BreachpointSecret | null {
 	const p = state.players.get(playerId);
 	if (!p) return null;
 	return {
@@ -51,8 +51,8 @@ function playerSecret(
 	};
 }
 
-function allSecrets(state: CybsecsServerState): Map<string, CybsecsSecret> {
-	const out = new Map<string, CybsecsSecret>();
+function allSecrets(state: BreachpointServerState): Map<string, BreachpointSecret> {
+	const out = new Map<string, BreachpointSecret>();
 	for (const id of state.playerOrder) {
 		const secret = playerSecret(state, id);
 		if (secret) out.set(id, secret);
@@ -60,13 +60,13 @@ function allSecrets(state: CybsecsServerState): Map<string, CybsecsSecret> {
 	return out;
 }
 
-// ─── public state builder ────────────────────────────────────────────────────
+// public state builder
 
-function buildPublicState(state: CybsecsServerState): CybsecsState {
+function buildPublicState(state: BreachpointServerState): BreachpointState {
 	const revealVotes = state.phase !== "voting";
 	const nominatedSet = new Set(state.nominatedTeam);
 
-	const players: Record<string, CybsecsPlayerView> = {};
+	const players: Record<string, BreachpointPlayerView> = {};
 	for (const [id, p] of state.players) {
 		players[id] = {
 			playerId: id,
@@ -121,12 +121,12 @@ function buildPublicState(state: CybsecsServerState): CybsecsState {
 	};
 }
 
-// ─── result factory ──────────────────────────────────────────────────────────
+// result factory
 
 function makeResult(
-	state: CybsecsServerState,
+	state: BreachpointServerState,
 	timer: GameTimer | null,
-	privatePayloads?: Map<string, CybsecsSecret>,
+	privatePayloads?: Map<string, BreachpointSecret>,
 	roomPhase?: "ended",
 ): EngineResult {
 	return {
@@ -138,34 +138,34 @@ function makeResult(
 	};
 }
 
-// ─── phase transitions ───────────────────────────────────────────────────────
+// phase transitions
 
-function enterTalking(state: CybsecsServerState): GameTimer {
+function enterTalking(state: BreachpointServerState): GameTimer {
 	state.phase = "talking";
 	for (const p of state.players.values()) p.skipVote = null;
 	return makeTimer(C.TALKING_MS);
 }
 
-function enterNominating(state: CybsecsServerState): GameTimer {
+function enterNominating(state: BreachpointServerState): GameTimer {
 	state.phase = "nominating";
 	state.nominatedTeam = [];
 	return makeTimer(C.NOMINATING_MS);
 }
 
-function enterVoting(state: CybsecsServerState): GameTimer {
+function enterVoting(state: BreachpointServerState): GameTimer {
 	state.phase = "voting";
 	for (const p of state.players.values()) p.vote = null;
 	return makeTimer(C.VOTING_MS);
 }
 
-function enterMission(state: CybsecsServerState): GameTimer {
+function enterMission(state: BreachpointServerState): GameTimer {
 	state.phase = "mission";
 	for (const p of state.players.values()) p.missionAction = null;
 	return makeTimer(C.MISSION_MS);
 }
 
-// Fills team from leader's position clockwise on timer expiry.
-function autoNominate(state: CybsecsServerState): void {
+// fills team from leader's position clockwise on timer expiry
+function autoNominate(state: BreachpointServerState): void {
 	const { playerOrder, leaderIndex, teamSize } = state;
 	const candidates = [
 		...playerOrder.slice(leaderIndex),
@@ -174,11 +174,11 @@ function autoNominate(state: CybsecsServerState): void {
 	state.nominatedTeam = candidates.slice(0, teamSize);
 }
 
-// ─── action helpers ──────────────────────────────────────────────────────────
+// action helpers
 
-// Returns null to signal caller should fall through to noOp.
+// returns null to signal caller should fall through to noOp
 function handleToggleObfuscate(
-	state: CybsecsServerState,
+	state: BreachpointServerState,
 	playerId: string,
 	active: boolean,
 	currentTimer: GameTimer | null,
@@ -194,18 +194,18 @@ function handleToggleObfuscate(
 	player.obfuscateArmed = active;
 	const secret = playerSecret(state, playerId);
 	const payloads = secret
-		? new Map<string, CybsecsSecret>([[playerId, secret]])
+		? new Map<string, BreachpointSecret>([[playerId, secret]])
 		: undefined;
 	return makeResult(state, currentTimer, payloads);
 }
 
-// Builds private payloads for player IDs returned by commitMissionResult.
+// builds private payloads for player IDs returned by commitMissionResult
 function collectSecretPayloads(
-	state: CybsecsServerState,
+	state: BreachpointServerState,
 	updatedIds: Set<string>,
-): Map<string, CybsecsSecret> | undefined {
+): Map<string, BreachpointSecret> | undefined {
 	if (updatedIds.size === 0) return undefined;
-	const payloads = new Map<string, CybsecsSecret>();
+	const payloads = new Map<string, BreachpointSecret>();
 	for (const id of updatedIds) {
 		const secret = playerSecret(state, id);
 		if (secret) payloads.set(id, secret);
@@ -213,16 +213,16 @@ function collectSecretPayloads(
 	return payloads.size > 0 ? payloads : undefined;
 }
 
-// ─── mission resolution ──────────────────────────────────────────────────────
+// mission resolution
 
-function executeMission(state: CybsecsServerState): EngineResult {
+function executeMission(state: BreachpointServerState): EngineResult {
 	const resolution = resolveMission(state);
 	const updatedIds = commitMissionResult(state, resolution);
 	const payloads = collectSecretPayloads(state, updatedIds);
 	return makeResult(state, makeTimer(C.MISSION_RESULT_MS), payloads);
 }
 
-function resolveVoting(state: CybsecsServerState): EngineResult {
+function resolveVoting(state: BreachpointServerState): EngineResult {
 	const totalPlayers = state.playerOrder.length;
 
 	let approvals = 0;
@@ -246,7 +246,7 @@ function resolveVoting(state: CybsecsServerState): EngineResult {
 	return makeResult(state, enterNominating(state));
 }
 
-function afterMissionResult(state: CybsecsServerState): EngineResult {
+function afterMissionResult(state: BreachpointServerState): EngineResult {
 	const { secureds, hacked } = getWinCounts(state);
 
 	if (secureds >= 3) {
@@ -277,7 +277,7 @@ function afterMissionResult(state: CybsecsServerState): EngineResult {
 }
 
 function resolveDoxx(
-	state: CybsecsServerState,
+	state: BreachpointServerState,
 	targetId: string,
 ): EngineResult {
 	invariant(
@@ -293,12 +293,12 @@ function resolveDoxx(
 	return makeResult(state, null, undefined, "ended");
 }
 
-export const cybsecsEngine: GameEngine & GameEngineWithSecrets = {
-	gameId: "cybersecs",
+export const breachpointEngine: GameEngine & GameEngineWithSecrets = {
+	gameId: "breachpoint",
 
-	actionSchema: CybsecsActionSchema,
+	actionSchema: BreachpointActionSchema,
 
-	getInitialState(): CybsecsServerState {
+	getInitialState(): BreachpointServerState {
 		return {
 			phase: "role_reveal",
 			mode: "baseline",
@@ -320,7 +320,7 @@ export const cybsecsEngine: GameEngine & GameEngineWithSecrets = {
 
 	onStart(ctx: GameContext): EngineResult {
 		const { room } = ctx;
-		const state = room.gamePayload as CybsecsServerState;
+		const state = room.gamePayload as BreachpointServerState;
 		const playerIds = [...room.players.values()].map((p) => p.playerId);
 
 		state.mode = pickMode(playerIds.length);
@@ -338,8 +338,8 @@ export const cybsecsEngine: GameEngine & GameEngineWithSecrets = {
 
 	onAction(ctx: GameContext, playerId: string, raw: unknown): EngineResult {
 		const { room } = ctx;
-		const state = room.gamePayload as CybsecsServerState;
-		const action = raw as CybsecsServerAction;
+		const state = room.gamePayload as BreachpointServerState;
+		const action = raw as BreachpointServerAction;
 		const player = state.players.get(playerId);
 
 		const noOp = (): EngineResult => makeResult(state, room.timer);
@@ -467,7 +467,7 @@ export const cybsecsEngine: GameEngine & GameEngineWithSecrets = {
 
 	onTimerExpired(ctx: GameContext): EngineResult {
 		const { room } = ctx;
-		const state = room.gamePayload as CybsecsServerState;
+		const state = room.gamePayload as BreachpointServerState;
 
 		switch (state.phase) {
 			case "role_reveal":
@@ -506,7 +506,7 @@ export const cybsecsEngine: GameEngine & GameEngineWithSecrets = {
 
 				invariant(
 					agentPlayers.length > 0,
-					"Doxxing phase has no agent-aligned players — invalid game state",
+					"Doxxing phase has no agent-aligned players, invalid game state",
 				);
 
 				const targetId =
@@ -522,7 +522,7 @@ export const cybsecsEngine: GameEngine & GameEngineWithSecrets = {
 		}
 	},
 
-	getPlayerSecret(ctx: GameContext, playerId: string): CybsecsSecret | null {
-		return playerSecret(ctx.room.gamePayload as CybsecsServerState, playerId);
+	getPlayerSecret(ctx: GameContext, playerId: string): BreachpointSecret | null {
+		return playerSecret(ctx.room.gamePayload as BreachpointServerState, playerId);
 	},
 };

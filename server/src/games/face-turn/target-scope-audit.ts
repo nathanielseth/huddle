@@ -91,7 +91,7 @@ export function findMoveTargetKindFindings(): AuditFinding[] {
 					moveId: move.id,
 					message:
 						`KNOWN_ROUTING_OVERRIDES says "${override}" but MOVE_TARGET_KIND ` +
-						`says "${actual}" — override entry is stale, update one or the other`,
+						`says "${actual}", override entry is stale, update one or the other`,
 				});
 			}
 			continue;
@@ -102,7 +102,7 @@ export function findMoveTargetKindFindings(): AuditFinding[] {
 				moveId: move.id,
 				message:
 					`MOVE_TARGET_KIND says "${actual}" but EFFECT_TARGETING derives ` +
-					`"${derived}" from its effects — if this move deliberately routes ` +
+					`"${derived}" from its effects, if this move deliberately routes ` +
 					`its real target through the armed post-placement flow, add it to ` +
 					`KNOWN_ROUTING_OVERRIDES with a comment tracing why (see ` +
 					`warrant-of-arrest); otherwise this is a real mismatch`,
@@ -129,7 +129,7 @@ export function findEnemyActivePostPlacementFindings(): AuditFinding[] {
 				moveId,
 				message:
 					`MOVE_POST_PLACEMENT_TARGET scope "${target.scope}" can never be ` +
-					`completed by any tap (no armed picker exists for this scope) — this ` +
+					`completed by any tap (no armed picker exists for this scope), this ` +
 					`card would arm on drop and sit stuck forever. Remove this entry; ` +
 					`either the primary drop's own MOVE_TARGET_KIND should carry this ` +
 					`scope instead if it's a required target (see sabotage), or, if the ` +

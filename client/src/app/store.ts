@@ -281,7 +281,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
 			rejoinTimeoutId = null;
 			const { roomCode, players } = get();
 			if (roomCode === session.roomCode && players.length === 0) {
-				console.warn("[rejoin] timed out — clearing stale session");
+				console.warn("[rejoin] timed out, clearing stale session");
 				clearRoomSession();
 				set({
 					...ROOM_RESET,

@@ -48,7 +48,7 @@ export function useHostPhaseNarration(
 				sayRef.current("phase-finished");
 				break;
 		}
-	}, [state, contentKey]); // say intentionally excluded — using ref
+	}, [state, contentKey]); // say intentionally excluded, using ref
 
 	useEffect(() => {
 		if (!state?.lastResult) return;
@@ -63,7 +63,7 @@ export function useHostPhaseNarration(
 
 		const id = setTimeout(() => { sayRef.current(stingerKey); }, 1800);
 		return () => { clearTimeout(id); };
-	}, [state]); // say intentionally excluded — using ref
+	}, [state]); // say intentionally excluded, using ref
 
 	return {
 		notifyCategorySelected: (cat: string) => { sayCategoryRef.current(cat); },

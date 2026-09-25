@@ -5,7 +5,7 @@ import { TimerBar } from "../components/TimerBar";
 import { socket } from "../../../lib/network/socket";
 import { cn } from "../../../lib/utils/cn";
 
-// ── Player ─────────────────────────────────────────────────────────────────────
+// Player
 
 export function PreTournamentPlayer() {
 	const { sabong, myPlayer, myBracketPickId, manokList, players, timer } =
@@ -95,7 +95,7 @@ export function PreTournamentPlayer() {
 							initial={{ opacity: 0 }}
 							animate={{ opacity: 1 }}
 						>
-							✓ Locked in — waiting for others
+							✓ Locked in, waiting for others
 						</m.div>
 					) : (
 						<m.button
@@ -121,7 +121,7 @@ export function PreTournamentPlayer() {
 	);
 }
 
-// ── Host ───────────────────────────────────────────────────────────────────────
+// Host
 
 export function PreTournamentHost() {
 	const { sabong, players, timer } = useSabongState();

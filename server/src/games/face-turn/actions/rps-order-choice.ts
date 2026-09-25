@@ -2,8 +2,7 @@ import type { PhaseActionHandler } from "./types";
 import { noOpResult } from "./types";
 import { resolveRpsOrderChoice } from "../action-results";
 
-// only the rps winner acts here; everyone else (including the rps loser)
-// is a spectator, same shape as rpsAction's rep-only gating.
+// only the rps winner acts here; everyone else (including the rps loser) is a spectator, same as rpsAction's rep-only gating
 export const rpsOrderChoiceAction: PhaseActionHandler = (
 	state,
 	player,

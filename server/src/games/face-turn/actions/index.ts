@@ -16,8 +16,7 @@ import {
 	defendDeclaredAction,
 } from "./challenge-and-chain";
 
-// thin phase router:
-// onAction handles player lookup, pending‑interaction short‑circuit (via registry), and dispatch to phase handler
+// thin phase router: onAction handles player lookup, pending-interaction short-circuit (via registry), and dispatch
 // phase handlers hold the actual game logic
 export function dispatchAction(
 	ctx: GameContext,
@@ -97,7 +96,7 @@ function dispatchPendingInteraction(
 	if (playerId !== spec.getResponderId(interaction)) return noOp();
 	if (action.type !== spec.actionType) return noOp();
 
-	// each spec’s resolve() clears state.pendingInteraction at the same point as its original branch
+	// each spec's resolve() clears state.pendingInteraction at the same point as its original branch
 	// usually before return, but bonus_strike and background_check_guess clear up front to avoid wiping a new interaction
 	const outcome = spec.resolve(state, interaction, action, player);
 	if (!outcome) return noOp();

@@ -18,7 +18,7 @@ export interface WitzoneStateResult {
 	sendAction: (action: WitzoneAction) => void;
 }
 
-// Hoisted: closes over nothing — socket is a module-level singleton.
+// Hoisted: closes over nothing, socket is a module-level singleton.
 function sendAction(action: WitzoneAction): void {
 	socket.emit("player_action", action);
 }
@@ -31,7 +31,7 @@ export function useWitzoneState(): WitzoneStateResult {
 	const state = useGameStore((s) => s.gamePayload) as WitzoneState | null;
 	const secret = useGameStore((s) => s.secret) as WitzonePlayerSecret | null;
 
-	// Cannot hoist — closes over `players` from the store subscription above.
+	// Cannot hoist, closes over `players` from the store subscription above.
 	function getName(id: string) {
 		return players.find((p) => p.id === id)?.name ?? id;
 	}

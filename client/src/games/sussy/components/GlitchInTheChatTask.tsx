@@ -6,7 +6,7 @@ import { m } from "motion/react";
 
 /**
  * Rendered once per taskNumber. TaskPerform passes key={sussy.taskNumber}
- * so the component remounts fresh on each question — no useEffect needed.
+ * so the component remounts fresh on each question, no useEffect needed.
  */
 export function GlitchInTheChatTask() {
 	const { sussy, myPlayer, currentPrompt, timer } = useSussyState();

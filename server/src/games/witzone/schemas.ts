@@ -39,7 +39,7 @@ const WitzoneActionSchema = z.discriminatedUnion("type", [
 
 export type ParsedWitzoneAction = z.infer<typeof WitzoneActionSchema>;
 
-// narrowed types for each branch — use these inside action handlers so
+// narrowed types for each branch, use these inside action handlers so
 // typescript knows the exact shape without needing a second cast
 export type ParsedSubmitAnswer = z.infer<typeof SubmitAnswerSchema>;
 export type ParsedCastVote = z.infer<typeof CastVoteSchema>;

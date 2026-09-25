@@ -115,7 +115,7 @@ export function razorTargets(targetPlayerId: string): BoardTarget[] {
 	}));
 }
 
-// own face-up slots only — used by the standard reserve-swap action
+// own face-up slots only, used by the standard reserve-swap action
 export function reserveSwapTargets(
 	faceUpSlotIndexes: readonly number[],
 	selfPlayerId: string,

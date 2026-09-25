@@ -148,7 +148,7 @@ export function PayoutHost() {
 			<div className="flex items-end justify-between">
 				<div className="flex flex-col gap-1">
 					<span className="font-display text-xs font-bold tracking-[0.3em] uppercase text-white/30">
-						{matchLabel} — Result
+						{matchLabel}, Result
 					</span>
 					<h1 className="font-display text-5xl font-black uppercase leading-none text-white">
 						{winnerManok.name} wins!

@@ -40,7 +40,7 @@ export function getBigBlindIndex(state: PokerServerState): number {
 }
 
 // first to act pre-flop after blinds. standard: utg (3 left of dealer). heads-up: dealer/sb acts first
-// betting.ts — replace getpreflopstartindex
+// betting.ts, replace getpreflopstartindex
 
 export function getPreFlopStartIndex(state: PokerServerState): number {
 	const inHand = countInHandPlayers(state);
@@ -76,7 +76,7 @@ export function countActivePlayers(state: PokerServerState): number {
 	return n;
 }
 
-// players still contesting the hand (active or allin — not folded, not out)
+// players still contesting the hand (active or allin, not folded, not out)
 export function countInHandPlayers(state: PokerServerState): number {
 	let n = 0;
 	for (const p of state.players.values()) {
@@ -343,7 +343,7 @@ function applyAllIn(state: PokerServerState, player: PokerServerPlayer): void {
 	const isFullRaise = increment >= state.betting.lastRaiseIncrement;
 
 	if (isFullRaise) {
-		// case 2a: full raise — reopens for everyone
+		// case 2a: full raise, reopens for everyone
 		state.betting.lastRaiseIncrement = increment;
 		state.betting.lastRaiserId = player.playerId;
 
@@ -354,7 +354,7 @@ function applyAllIn(state: PokerServerState, player: PokerServerPlayer): void {
 			p.canRaise = true;
 		}
 	} else {
-		// case 2b: incomplete raise — bettocall up, not a full raise.
+		// case 2b: incomplete raise, bettocall up, not a full raise.
 		// players who already acted: can call/fold only (canraise = false).
 		// players who haven't acted: full options, no flag changes needed.
 		// lastraiseincrement and lastraiserid not updated

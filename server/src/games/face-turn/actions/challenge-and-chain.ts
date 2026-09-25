@@ -32,11 +32,9 @@ import {
 } from "../action-results";
 import { pushLog } from "../log";
 
-// shared by challenge_window's defend/block_steal and defend_window's defend:
-// declares a class action in response to a pending one, paying its cost and
-// opening a fresh defend_declared window. Mutates state and returns whether
-// it succeeded — false means the caller should no-op (bluffing with no crew
-// left to turn, or can't afford it).
+// shared by challenge_window's defend/block_steal and defend_window's defend: declares a class action in
+// response to a pending one, paying its cost. returns false if the caller should no-op (bluffing with no
+// crew left, or can't afford it)
 function tryDeclareResponseClassAction(
 	state: FaceturnServerState,
 	responder: FaceturnServerPlayer,
@@ -67,10 +65,8 @@ function tryDeclareResponseClassAction(
 	return true;
 }
 
-// shared validation for playing a card into the chain: hand membership, move
-// type, cost, and legal target. Returns a rejection reason, or the validated
-// move/cost for the caller to act on (each branch pays and resolves the move
-// differently — burst executes immediately, slow pushes onto the chain).
+// shared validation for playing a card into the chain: hand membership, move type, cost, legal target
+// returns a rejection reason, or the validated move/cost (burst executes immediately, slow pushes onto the chain)
 function validateChainPlay(
 	state: FaceturnServerState,
 	player: FaceturnServerPlayer,
@@ -98,7 +94,7 @@ function validateChainPlay(
 	if (player.cash < cost) {
 		return {
 			ok: false,
-			reason: `Not enough cash — this move costs ₱${cost}, you have ₱${player.cash}.`,
+			reason: `Not enough cash. This move costs ₱${cost}, you have ₱${player.cash}.`,
 		};
 	}
 

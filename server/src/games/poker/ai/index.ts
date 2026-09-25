@@ -285,7 +285,7 @@ export function makeAIAction(
 			canRaise: ctx.canRaise,
 			canCall: ctx.canCall,
 			phase,
-			note: "BUG: makePreflopDecision returned invalid action — using safe fallback",
+			note: "BUG: makePreflopDecision returned invalid action, using safe fallback",
 		});
 
 		return ctx.canCheck ? { type: "check" } : { type: "fold" };
@@ -313,7 +313,7 @@ export function makeAIAction(
 
 	if (!state.activeLines) {
 		throw new Error(
-			"activeLines not initialized — call initializeRangeModels before makeAIAction",
+			"activeLines not initialized, call initializeRangeModels before makeAIAction",
 		);
 	}
 
@@ -387,7 +387,7 @@ export function makeAIAction(
 		minRaiseTo,
 		maxRaiseTo,
 		phase,
-		note: "BUG: selectAction returned invalid action — using safe fallback",
+		note: "BUG: selectAction returned invalid action, using safe fallback",
 	});
 
 	return ctx.canCheck ? { type: "check" } : { type: "fold" };

@@ -208,7 +208,7 @@ export function DigDeepPrompt({
 
 	if (!revealed) {
 		return (
-			<PromptShell title="Dig Deep — pick from the top of your deck">
+			<PromptShell title="Dig Deep, pick from the top of your deck">
 				<p className="text-xs text-white/30">Waiting for revealed cards…</p>
 			</PromptShell>
 		);
@@ -229,8 +229,8 @@ export function DigDeepPrompt({
 		<PromptShell
 			title={
 				maxPicks > 1
-					? `Dig Deep — pick up to ${maxPicks} cards`
-					: "Dig Deep — pick a card"
+					? `Dig Deep, pick up to ${maxPicks} cards`
+					: "Dig Deep, pick a card"
 			}
 		>
 			<div className="flex flex-col gap-2">

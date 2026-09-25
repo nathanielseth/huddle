@@ -1,4 +1,4 @@
-export type CybsecsPhase =
+export type BreachpointPhase =
 	| "role_reveal"
 	| "talking"
 	| "nominating"
@@ -10,7 +10,7 @@ export type CybsecsPhase =
 
 export type GameMode = "baseline" | "exposure" | "override";
 
-export type CybsecsRole =
+export type BreachpointRole =
 	| "agent" // regular agent, can only secure
 	| "hacker" // regular hacker, can secure or hack
 	| "sysadmin" // exposure: knows all hackers, must stay covert
@@ -23,7 +23,7 @@ export type CybsecsRole =
 	| "honeypot" // override 7+: agent who appears as hacker to hackers
 	| "obfuscator"; // override 7+: hacker with one-time mission obfuscation
 
-export type CybsecsAlignment = "agent" | "hacker";
+export type BreachpointAlignment = "agent" | "hacker";
 
 export type MissionAction = "secure" | "hack";
 export type VoteChoice = "approve" | "reject";
@@ -57,7 +57,7 @@ export type MissionResult =
 // true result delivered privately on obfuscated resolve
 export type ObfuscatorIntel = Extract<MissionResult, { obfuscated: false }>;
 
-export interface CybsecsPlayerView {
+export interface BreachpointPlayerView {
 	readonly playerId: string;
 	readonly isLeader: boolean;
 	readonly isNominated: boolean;
@@ -66,8 +66,8 @@ export interface CybsecsPlayerView {
 	readonly hasSubmittedMissionAction: boolean;
 }
 
-export interface CybsecsState {
-	readonly phase: CybsecsPhase;
+export interface BreachpointState {
+	readonly phase: BreachpointPhase;
 	readonly mode: GameMode;
 	readonly missionIndex: number;
 	readonly playerOrder: readonly string[];
@@ -81,10 +81,10 @@ export interface CybsecsState {
 	// apparent counts exclude obfuscated missions
 	readonly secureds: number;
 	readonly hacked: number;
-	readonly players: Readonly<Record<string, CybsecsPlayerView>>;
-	readonly winner: CybsecsAlignment | null;
+	readonly players: Readonly<Record<string, BreachpointPlayerView>>;
+	readonly winner: BreachpointAlignment | null;
 	readonly winReason: WinReason | null;
-	readonly finalRoles: Readonly<Record<string, CybsecsRole>> | null;
+	readonly finalRoles: Readonly<Record<string, BreachpointRole>> | null;
 }
 
 // visibility matrix:
@@ -92,9 +92,9 @@ export interface CybsecsState {
 // hacker/doxxer/spoofer/obfuscator - see hacker ring (hacker/doxxer/spoofer/black_hat/honeypot/obfuscator)
 // black_hat - same ring + knownEthicalHackerId
 // sysadmin - all hacker-aligned (including intern)
-export interface CybsecsSecret {
-	readonly role: CybsecsRole;
-	readonly alignment: CybsecsAlignment;
+export interface BreachpointSecret {
+	readonly role: BreachpointRole;
+	readonly alignment: BreachpointAlignment;
 	readonly knownHackerIds: readonly string[];
 	readonly knownEthicalHackerId: string | null; // black hat only
 	readonly ethicalHackerUsesLeft: number; // 2 for EH, 0 otherwise
@@ -116,7 +116,7 @@ export interface CybsecsSecret {
 	readonly obfuscatorIntelMissionIndex: number | null;
 }
 
-export type CybsecsAction =
+export type BreachpointAction =
 	| { readonly type: "skip_vote"; readonly skip: boolean }
 	| { readonly type: "nominate"; readonly team: readonly string[] }
 	| { readonly type: "pass" }

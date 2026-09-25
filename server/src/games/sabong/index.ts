@@ -71,7 +71,7 @@ function warnInvalidPhase(expected: SabongPhase, actual: SabongPhase): void {
 function currentSlot(state: SabongServerState): ServerBracketSlot {
 	return defined(
 		state.bracket[state.currentMatchIndex],
-		`bracket[${String(state.currentMatchIndex)}] missing — currentMatchIndex out of range`,
+		`bracket[${String(state.currentMatchIndex)}] missing, currentMatchIndex out of range`,
 	);
 }
 
@@ -445,7 +445,7 @@ export function buildPublicState(state: SabongServerState): SabongState {
 	// bracket picks and bets are a blind commit: nobody's choice is visible in
 	// the shared public state until they lock it in. the owner sees their own
 	// in-progress choice via SabongPrivateView.myPendingBracketPick/myPendingBet
-	// instead — see buildPrivatePayloads.
+	// instead, see buildPrivatePayloads.
 	const players: Record<string, SabongPlayerView> = {};
 	for (const [id, p] of state.players) {
 		players[id] = {
@@ -654,7 +654,7 @@ function applyPayouts(state: SabongServerState): Record<string, number> {
 				(totalPool > 0 ? 1 - sidePool / totalPool : 0) * C.CONTRARIAN_BONUS_MAX;
 			payout = Math.round(amount * moneylineToDecimal(ml) * contraryMult);
 		} else {
-			// should not occur in normal flow — return stake only
+			// should not occur in normal flow, return stake only
 			payout = amount;
 		}
 

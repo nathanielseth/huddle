@@ -3,7 +3,7 @@
 // teamIndex of 0 and playerOrder[1] a teamIndex of 1 (see
 // buildTeamsAndTurnOrder in server/src/games/face-turn/game.ts), so this is
 // a stable, server-authoritative "who's red / who's blue" for this matchup
-// — not a client guess, and consistent with each player's actual team color
+//, not a client guess, and consistent with each player's actual team color
 // when in teams mode.
 export type RpsTeamColor = "red" | "blue";
 

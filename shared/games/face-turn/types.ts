@@ -217,7 +217,7 @@ export interface RpsState {
 export interface RpsOrderChoiceState {
 	readonly winnerId: string;
 	// true when the winner was decided by a coinflip (equal or missing
-	// choices) rather than real rock-paper-scissors logic — drives whether
+	// choices) rather than real rock-paper-scissors logic, drives whether
 	// the client plays a suspense flicker before the go-first/second choice
 	// becomes interactive
 	readonly wasTie: boolean;

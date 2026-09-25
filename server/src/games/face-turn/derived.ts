@@ -30,13 +30,11 @@ export interface FaceturnDerivedPlayerStats {
 	hasAllDamagePiercingPassive: boolean;
 	// monkey man: cash stolen from the boss whenever this player deals damage to it
 	stealCashOnDamageDealtAmount: number;
-	// the razor: strike, or deal damage with a move other than Stab, to add a
-	// copy of Stab to hand
+	// the razor: strike, or deal damage with a move other than Stab, to add a copy of Stab to hand
 	hasRazorStabPassive: boolean;
 	// fade: turn self face-down whenever this player performs a Strike
 	hasTurnSelfDownOnStrikePassive: boolean;
-	// discard stab active move: your crew/moves causing a discard adds a
-	// copy of Stab to hand, once per card discarded
+	// discard stab active move: your crew/moves causing a discard adds a copy of Stab to hand, once per card
 	hasDiscardStabPassive: boolean;
 	armorPerTurn: number;
 	// global move cost reduction; distinct from per-card costOverrides
@@ -162,7 +160,7 @@ const ALSO_CLASS_GRANTS: Partial<Record<EffectPrimitive["type"], CrewClass>> = {
 	become_also_collector: "collector",
 };
 
-// pruning is a side‑effect cleanup, not a formula recompute; kept out of derived subtree
+// pruning is a side-effect cleanup, not a formula recompute; kept out of derived subtree
 function pruneStaleIncomingPoison(
 	player: FaceturnServerPlayer,
 	state: FaceturnServerState,
@@ -197,7 +195,7 @@ function pruneStaleIncomingPoison(
 	}
 }
 
-// context‑free condition evaluator for passive recompute
+// context-free condition evaluator for passive recompute
 function evaluateConditionForRecompute(
 	condition: ConditionalEffect["condition"],
 	player: FaceturnServerPlayer,
@@ -249,8 +247,8 @@ function evaluateConditionForRecompute(
 	}
 }
 
-// cohesive switch mapping each passive‑source EffectPrimitive to a derived‑stat mutation
-// writes into in‑progress stats, not directly to player
+// cohesive switch mapping each passive-source EffectPrimitive to a derived-stat mutation
+// writes into in-progress stats, not directly to player
 function recomputePassiveSwitch(
 	effect: EffectPrimitive,
 	stats: FaceturnDerivedPlayerStats,
@@ -317,8 +315,7 @@ function recomputePassiveSwitch(
 			stats.hasFalseFlag = true;
 			break;
 		case "passive_extra_reserve_crew":
-			// draft-time only (see getReserveCrewSlotCount in game.ts); no
-			// live/recomputed stat needed here
+			// draft-time only (see getReserveCrewSlotCount in game.ts); no live/recomputed stat needed here
 			break;
 		case "passive_optional_discard_for_damage_per_turn":
 			stats.hasVoidLegsChoice = true;

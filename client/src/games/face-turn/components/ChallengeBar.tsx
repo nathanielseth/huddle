@@ -68,7 +68,7 @@ export function ChallengeBar() {
 			const canDefend = pending?.type === "class_action_strike";
 			const canBlockSteal = pending?.type === "class_action_steal";
 			const title = pending
-				? `${pending.actorId === playerId ? "You" : "Someone"} declared ${ACTION_LABEL[pending.type]} — respond`
+				? `${pending.actorId === playerId ? "You" : "Someone"} declared ${ACTION_LABEL[pending.type]}, respond`
 				: "Respond";
 			// wrong challenge executes the challenger if they are exposed
 			const challengeIsFatalIfWrong = isPlayerExposed(myPlayer);
@@ -76,7 +76,7 @@ export function ChallengeBar() {
 				<PromptShell title={title} tone="red">
 					{challengeIsFatalIfWrong && (
 						<p className="text-xs text-red-300/90 mb-1.5">
-							⚠️ Your Crew is fully exposed — if you challenge and they weren't
+							⚠️ Your Crew is fully exposed, if you challenge and they weren't
 							bluffing, you'll be executed.
 						</p>
 					)}
@@ -134,7 +134,7 @@ export function ChallengeBar() {
 		const targetId = pending?.targetPlayerId;
 		if (pending && targetId && isPlayerOrTeammate(ft, playerId, targetId)) {
 			content = (
-				<PromptShell title="Ambush incoming — defend it?" tone="sky">
+				<PromptShell title="Ambush incoming, defend it?" tone="sky">
 					<div className="flex gap-2 flex-wrap">
 						<ActionButton
 							label="Defend"
@@ -183,13 +183,13 @@ export function ChallengeBar() {
 					<PromptShell title={title} tone="violet">
 						{canChallengeDefend && challengeDefendIsFatalIfWrong && (
 							<p className="text-xs text-red-300/90 mb-1.5">
-								⚠️ Your Crew is fully exposed — if you challenge and it was
+								⚠️ Your Crew is fully exposed, if you challenge and it was
 								real, you'll be executed.
 							</p>
 						)}
 						{!canChallengeDefend && (
 							<p className="text-xs text-white/60 mb-1.5">
-								Ambush defends can't be challenged — accept it or let the timer
+								Ambush defends can't be challenged, accept it or let the timer
 								run out.
 							</p>
 						)}

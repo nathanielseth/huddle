@@ -82,7 +82,7 @@ export function applyAction(
 	// fail loudly if it ever becomes async
 	if (result instanceof Promise) {
 		throw new Error(
-			"[face-turn cpu] faceturnsEngine.onAction returned a Promise — " +
+			"[face-turn cpu] faceturnsEngine.onAction returned a Promise" +
 				"simulate.ts requires a synchronous engine for ISMCTS performance.",
 		);
 	}
@@ -100,7 +100,7 @@ export function applyTimerExpired(
 	const result = runInSimulationMode(() => faceturnsEngine.onTimerExpired(ctx));
 	if (result instanceof Promise) {
 		throw new Error(
-			"[face-turn cpu] faceturnsEngine.onTimerExpired returned a Promise — " +
+			"[face-turn cpu] faceturnsEngine.onTimerExpired returned a Promise" +
 				"simulate.ts requires a synchronous engine for ISMCTS performance.",
 		);
 	}

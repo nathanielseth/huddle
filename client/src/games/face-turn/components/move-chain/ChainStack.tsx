@@ -110,7 +110,7 @@ export function ChainStack({
 									zIndex: resolving ? entries.length + 1 : i,
 									opacity: resolving ? 0 : 1,
 								}}
-								title={`${i + 1}. ${move.name} — ${actorName}`}
+								title={`${i + 1}. ${move.name}, ${actorName}`}
 								onContextMenu={(e) => {
 									e.preventDefault();
 									inspect(cardProps);

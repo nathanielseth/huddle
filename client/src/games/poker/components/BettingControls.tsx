@@ -10,13 +10,13 @@ interface BettingControlsProps {
 	myPlayer: PokerPlayerView;
 	/**
 	 * When true, renders the same button grid (so the sheet never changes
-	 * shape/height) but visually inert and non-interactive — used while
+	 * shape/height) but visually inert and non-interactive, used while
 	 * waiting for another player so nothing above ever reflows.
 	 */
 	disabled?: boolean;
 }
 
-// Fix: prefer-module-scope-pure-function — emit() only closes over the
+// Fix: prefer-module-scope-pure-function, emit() only closes over the
 // module-level `socket` import and receives `action` as a param.
 // Moving it out of BettingControls means it is allocated once, not every render.
 function emit(action: object) {
@@ -48,7 +48,7 @@ export function BettingControls({
 
 	const potTotal = poker.pots.reduce((s, p) => s + p.amount, 0);
 
-	// ── Raise panel ──────────────────────────────────────────────────────────
+	// Raise panel
 	if (raiseOpen) {
 		return (
 			<AnimatePresence mode="wait">
@@ -151,14 +151,14 @@ export function BettingControls({
 		);
 	}
 
-	// ── Default action grid ──────────────────────────────────────────────────
+	// Default action grid
 	// Always exactly 4 buttons, fixed 2x2 grid: Fold, Call/Check, Raise, All In.
 	// Raise opens the slider panel; All In fires immediately without opening
 	// anything. These are kept as two separate, always-visible buttons rather
-	// than collapsing All In into Raise — do not re-merge them.
+	// than collapsing All In into Raise, do not re-merge them.
 	//
-	// `disabled` keeps all 4 slots mounted, same positions, just inert/dimmed
-	// — so the sheet's height and layout never change when it's not your turn.
+	// `disabled` keeps all 4 slots mounted, same positions, just inert/dimmed,
+	// so the sheet's height and layout never change when it's not your turn.
 	const secondLabel = canCheck ? "Check" : `Call ${callAmount}`;
 
 	return (
@@ -206,8 +206,8 @@ export function BettingControls({
 	);
 }
 
-// ── Shared button ─────────────────────────────────────────────────────────────
-// Flat pastel fills (no border) — mirrors a native action-sheet button rather
+// Shared button
+// Flat pastel fills (no border), mirrors a native action-sheet button rather
 // than a translucent outlined pill. Colors are deliberately soft/desaturated
 // so four of them sitting together read as calm, not alarming.
 

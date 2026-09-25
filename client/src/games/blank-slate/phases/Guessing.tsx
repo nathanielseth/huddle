@@ -7,7 +7,7 @@ import { Loading } from "./shared";
 import { MAX_GUESS_LENGTH, roundLabel } from "../constants";
 
 // The server broadcasts secretWord identically to every client, including
-// the guesser — hiding it from the guesser is a client-side honor-system
+// the guesser, hiding it from the guesser is a client-side honor-system
 // concern, same as the physical stand-cards in the board game this is
 // based on. Never render the guesser's own screen with the word visible.
 function CluesList({
@@ -66,7 +66,7 @@ function HostView() {
 				</p>
 				<CluesList
 					clues={state.survivingClues ?? []}
-					emptyLabel="No clues survived — every clue was a duplicate."
+					emptyLabel="No clues survived, every clue was a duplicate."
 				/>
 			</div>
 		</div>
@@ -117,12 +117,12 @@ function GuesserView() {
 					</p>
 					<CluesList
 						clues={clues}
-						emptyLabel="Every clue was a duplicate — nothing survived. Take your best shot."
+						emptyLabel="Every clue was a duplicate, nothing survived. Take your best shot."
 					/>
 				</div>
 
 				<div className="flex flex-col gap-3 mt-auto">
-					{/* Fix: control-has-associated-label — aria-label describes the field */}
+					{/* Fix: control-has-associated-label, aria-label describes the field */}
 					<input
 						type="text"
 						value={text}
@@ -137,7 +137,7 @@ function GuesserView() {
 					/>
 					{isOver && (
 						<p className="text-red-400 text-xs text-center">
-							Too long — keep it under {MAX_GUESS_LENGTH} characters.
+							Too long, keep it under {MAX_GUESS_LENGTH} characters.
 						</p>
 					)}
 					<button
@@ -186,7 +186,7 @@ function WriterWaitingView() {
 				</p>
 				<CluesList
 					clues={clues}
-					emptyLabel="No clues survived — every clue was a duplicate."
+					emptyLabel="No clues survived, every clue was a duplicate."
 				/>
 			</div>
 		</div>

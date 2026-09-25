@@ -17,7 +17,7 @@ export const TASK_DURATIONS_MS: Record<TaskType, number> = {
 	glitch_in_the_chat: 60_000,
 };
 
-// in hangout mode every selectable task is display-only — players react
+// in hangout mode every selectable task is display-only, players react
 // physically, no phone input required. glitch_in_the_chat always requires
 // written answers regardless of mode. derived from SELECTABLE_TASKS so they
 // can never diverge
@@ -25,9 +25,9 @@ export const HANGOUT_NO_SUBMIT_TASKS: ReadonlySet<TaskType> = new Set(
 	SELECTABLE_TASKS,
 );
 
-// SLEUTH — indexed by prior correct votes this round (0, 1, 2+)
-// CAUGHT — keyed by task number, then by prior correct vote tier
-// FAKER_SURVIVED — keyed by task number
+// SLEUTH, indexed by prior correct votes this round (0, 1, 2+)
+// CAUGHT, keyed by task number, then by prior correct vote tier
+// FAKER_SURVIVED, keyed by task number
 //
 // structured so natural keys (taskNumber, priorCorrect) map directly without
 // padding or off-by-one arithmetic at every call site

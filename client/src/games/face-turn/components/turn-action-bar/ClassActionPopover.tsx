@@ -154,7 +154,7 @@ export function ClassActionPopover({
 			)}
 			{!hasFaceDownCrew && (
 				<p className="text-[10px] text-amber-300/50">
-					No face-down Crew left — bluffed actions are disabled above.
+					No face-down Crew left, bluffed actions are disabled above.
 				</p>
 			)}
 		</PopoverShell>

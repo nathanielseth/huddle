@@ -59,7 +59,7 @@ export function ShowOfHandsTask() {
 					<ImpostorHeader />
 					<div className="flex-1 flex flex-col justify-end px-5 pb-8 gap-4">
 						<p className="text-xs text-white/30 text-center">
-							Pick one — make it convincing
+							Pick one, make it convincing
 						</p>
 						<div className="grid grid-cols-2 gap-3">
 							<ActionBtn

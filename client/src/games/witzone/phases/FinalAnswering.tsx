@@ -73,7 +73,7 @@ export function FinalAnswering() {
 	const [input, setInput] = useState("");
 	const [submitting, setSubmitting] = useState(false);
 
-	// Fix: no-autofocus — useRef + useEffect instead of autoFocus prop
+	// Fix: no-autofocus, useRef + useEffect instead of autoFocus prop
 	const inputRef = useRef<HTMLInputElement>(null);
 	useEffect(() => {
 		inputRef.current?.focus();
@@ -112,7 +112,7 @@ export function FinalAnswering() {
 			<div className="flex-1 flex flex-col justify-center gap-6">
 				<div className="bg-surface border border-border rounded-2xl px-6 py-5">
 					<p className="text-xs uppercase tracking-widest text-white/40 mb-2">
-						Final prompt — everyone answers this
+						Final prompt, everyone answers this
 					</p>
 					<p className="text-white text-xl font-medium leading-relaxed">
 						{promptText}
@@ -125,8 +125,8 @@ export function FinalAnswering() {
 					className="flex flex-col gap-2"
 				>
 					{/*
-					 * Fix: control-has-associated-label — aria-label on the input
-					 * Fix: no-autofocus — ref-driven focus via useEffect, no autoFocus prop
+					 * Fix: control-has-associated-label, aria-label on the input
+					 * Fix: no-autofocus, ref-driven focus via useEffect, no autoFocus prop
 					 */}
 					<input
 						ref={inputRef}
@@ -147,7 +147,7 @@ export function FinalAnswering() {
 						>
 							{charsLeft} left
 						</span>
-						{/* Fix: button-has-type — explicit type="button" */}
+						{/* Fix: button-has-type, explicit type="button" */}
 						<button
 							type="button"
 							onClick={handleSubmit}

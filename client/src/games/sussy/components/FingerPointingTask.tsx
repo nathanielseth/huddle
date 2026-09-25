@@ -67,7 +67,7 @@ export function FingerPointingTask() {
 					<>
 						<ImpostorHeader />
 						<p className="text-xs text-white/30 text-center">
-							Point at someone — make it look natural
+							Point at someone, make it look natural
 						</p>
 					</>
 				) : (

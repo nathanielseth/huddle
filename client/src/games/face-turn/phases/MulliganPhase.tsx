@@ -36,7 +36,7 @@ export function MulliganPhase() {
 	return (
 		<div className="ft-panel-ink flex flex-col gap-3 rounded-2xl border border-white/15 px-5 py-4">
 			<p className="ft-eyebrow text-[10px] text-white/50">
-				Mulligan — keep this hand?
+				Mulligan, keep this hand?
 			</p>
 			<div
 				className="flex flex-row flex-nowrap justify-center gap-2 py-1 overflow-x-auto"

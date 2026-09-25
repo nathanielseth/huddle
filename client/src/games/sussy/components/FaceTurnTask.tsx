@@ -45,7 +45,7 @@ export function FaceTurnTask() {
 							Make a convincing face.
 						</p>
 						<p className="text-white/40 text-sm">
-							Watch the group — mirror what makes sense.
+							Watch the group, mirror what makes sense.
 						</p>
 					</div>
 				) : (
@@ -63,7 +63,7 @@ export function FaceTurnTask() {
 		return (
 			<div className="flex flex-col items-center justify-center min-h-screen gap-4 px-8 text-center">
 				<span className="text-7xl">{selected ?? "😶"}</span>
-				<p className="text-white/40 text-sm">Locked in — waiting for others</p>
+				<p className="text-white/40 text-sm">Locked in, waiting for others</p>
 			</div>
 		);
 	}

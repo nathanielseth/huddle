@@ -47,7 +47,7 @@ export function getMajorityTarget(
 }
 
 // pure scoring for all non-thumb task votes. reads correctCount to determine
-// tier but never writes — mutation is the engine's responsibility
+// tier but never writes, mutation is the engine's responsibility
 export function scoreTaskVote(
 	outcome: VoteOutcome,
 	taskNumber: 1 | 2 | 3,
@@ -83,7 +83,7 @@ export function scoreTaskVote(
 }
 
 // pure scoring for thumb_shot votes. always ends the round after single vote
-// phase so correctCount tiers don't apply — all bonuses are flat
+// phase so correctCount tiers don't apply, all bonuses are flat
 export function scoreThumbVote(outcome: VoteOutcome): TaskScoreResult {
 	const { impostorId, votes, playerCount } = outcome;
 	const majority = getMajorityTarget(votes, playerCount);

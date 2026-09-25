@@ -13,7 +13,7 @@ const PHASE_LABEL: Record<BelievableLiesPhase, string> = {
 	finished: "Game over",
 };
 
-// ─── Shared host styles (TV/monitor scale) ────────────────────────────────────
+// Shared host styles (TV/monitor scale)
 
 const HOST_PROMPT: React.CSSProperties = {
 	width: "100%",
@@ -108,7 +108,7 @@ const CATEGORY_CHOICE: React.CSSProperties = {
 	cursor: "default",
 };
 
-// leaderboard row (LeaderboardHost) — background/color vary by rank,
+// leaderboard row (LeaderboardHost), background/color vary by rank,
 // everything else is fixed
 const LEADERBOARD_ROW_BASE: React.CSSProperties = {
 	display: "flex",
@@ -248,7 +248,7 @@ function PickingHost() {
 				alignItems: "flex-start",
 			}}
 		>
-			{/* Left: prompt + answers — clearly visible on the TV */}
+			{/* Left: prompt + answers, clearly visible on the TV */}
 			<div style={{ flex: 2 }}>
 				<div style={{ ...HOST_PROMPT, background: "var(--bl-surface)" }}>
 					<div
@@ -506,7 +506,7 @@ function LeaderboardHost() {
 	);
 }
 
-// ─── Host root ────────────────────────────────────────────────────────────────
+// Host root
 
 export function BelievableLiesHost() {
 	const { state, timer } = useBelievableLiesState();
@@ -519,7 +519,7 @@ export function BelievableLiesHost() {
 			: state.phase
 		: "no-state";
 
-	// notifyCategorySelected is intentionally unused here — see the doc
+	// notifyCategorySelected is intentionally unused here, see the doc
 	// comment on useHostPhaseNarration. There's no point in this
 	// component's render where "category X was just picked" is
 	// observable from state; that event only exists transiently on the
@@ -571,7 +571,7 @@ export function BelievableLiesHost() {
 				</div>
 			</div>
 
-			{/* Phase content — paddingBottom leaves room for the fixed 56px timer bar */}
+			{/* Phase content, paddingBottom leaves room for the fixed 56px timer bar */}
 			<div
 				style={{
 					flex: 1,
@@ -613,7 +613,7 @@ export function BelievableLiesHost() {
 				</AnimatePresence>
 			</div>
 
-			{/* Full-width bottom timer bar — shown for all timed phases */}
+			{/* Full-width bottom timer bar, shown for all timed phases */}
 			{timer &&
 				(state.phase === "question_select" ||
 					state.phase === "lie_input" ||

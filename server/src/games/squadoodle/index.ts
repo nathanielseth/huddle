@@ -25,13 +25,13 @@ import { shuffle } from "../lib/random";
 import { makeTimer } from "./../lib/timer";
 import { defined } from "../lib/assert";
 
-// ─── exhaustiveness helper ───────────────────────────────────────────────────
+// exhaustiveness helper
 
 function assertNever(x: never): never {
 	throw new Error(`Unhandled case: ${String(x)}`);
 }
 
-// ─── reaction helpers ────────────────────────────────────────────────────────
+// reaction helpers
 
 function getTally(
 	reactions: Map<number, Map<number, Map<string, ReactionType>>>,
@@ -80,7 +80,7 @@ function buildReactionMatrix(state: SquadoodleServerState): ReactionTally[][] {
 	);
 }
 
-// ─── public state builder ────────────────────────────────────────────────────
+// public state builder
 
 function buildPublicState(state: SquadoodleServerState): SquadoodleState {
 	const N = state.playerOrder.length;
@@ -101,7 +101,7 @@ function buildPublicState(state: SquadoodleServerState): SquadoodleState {
 	};
 }
 
-// ─── result factory ──────────────────────────────────────────────────────────
+// result factory
 
 function makeResult(
 	state: SquadoodleServerState,
@@ -118,7 +118,7 @@ function makeResult(
 	};
 }
 
-// ─── secret helpers ──────────────────────────────────────────────────────────
+// secret helpers
 
 function broadcastTask(
 	state: SquadoodleServerState,
@@ -131,7 +131,7 @@ function broadcastTask(
 	return map;
 }
 
-// ─── accolades ───────────────────────────────────────────────────────────────
+// accolades
 
 function computeAccolades(state: SquadoodleServerState): Accolade[] {
 	const accolades: Accolade[] = [];
@@ -213,7 +213,7 @@ function computeAccolades(state: SquadoodleServerState): Accolade[] {
 			);
 			const firstEntry = defined(
 				chain[0],
-				`chains[${String(bestC)}][0] missing — chain unexpectedly empty`,
+				`chains[${String(bestC)}][0] missing, chain unexpectedly empty`,
 			);
 			accolades.push({
 				kind: "most_chaotic_chain",
@@ -227,7 +227,7 @@ function computeAccolades(state: SquadoodleServerState): Accolade[] {
 	return accolades;
 }
 
-// ─── work secrets ────────────────────────────────────────────────────────────
+// work secrets
 
 function buildWorkSecrets(
 	state: SquadoodleServerState,
@@ -271,7 +271,7 @@ function buildWorkSecrets(
 	return map;
 }
 
-// ─── step & reveal advancement ───────────────────────────────────────────────
+// step & reveal advancement
 
 function advanceStep(state: SquadoodleServerState): EngineResult {
 	const N = state.playerOrder.length;
@@ -330,7 +330,7 @@ function enterAccolades(state: SquadoodleServerState): EngineResult {
 	return makeResult(state, makeTimer(C.ACCOLADES_MS));
 }
 
-// ─── submission handling ─────────────────────────────────────────────────────
+// submission handling
 
 function handleSubmit(
 	state: SquadoodleServerState,
@@ -387,7 +387,7 @@ function autoFillMissing(state: SquadoodleServerState): void {
 	}
 }
 
-// ─── engine export ───────────────────────────────────────────────────────────
+// engine export
 
 export const squadoodleEngine: GameEngine & GameEngineWithSecrets = {
 	gameId: "squadoodle",

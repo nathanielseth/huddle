@@ -91,22 +91,41 @@
 	position: relative;
 }
 
-/* reveal settling into a winner: the loser's plate collapses to zero width
-   (max-width and opacity) so the winner glides into the row's true center
-   instead of just fading in place. The "vs" divider collapses alongside it
-   so no dangling gap is left where the loser used to sit. */
+/* reveal settling into a winner, two beats after the flip (see
+   useRevealStage in RpsPhase.tsx — this only applies once "settled"):
+   the winner's plate steps in toward the row's center, the loser gets
+   knocked back out to its own side and fades. Direction is per-slot
+   (rps-plate-knockout-left/-right), set by the caller so the loser
+   always exits away from center, never toward it. The "vs" divider
+   collapses alongside so no dangling gap is left mid-row. */
 .rps-plate {
-	overflow: hidden;
-	max-width: 200px;
 	transition:
-		max-width 0.45s cubic-bezier(0.4, 0, 0.2, 1),
+		transform 0.4s cubic-bezier(0.4, 0, 0.2, 1),
 		opacity 0.35s ease;
 }
 
-.rps-plate-loser-exiting {
-	max-width: 0;
+.rps-plate-knockout-left {
+	transform: translateX(-28px);
 	opacity: 0;
 	pointer-events: none;
+}
+
+.rps-plate-knockout-right {
+	transform: translateX(28px);
+	opacity: 0;
+	pointer-events: none;
+}
+
+/* the winner's own step toward center, timed alongside the loser's
+   knockout above so both read as one hit rather than two unrelated
+   animations. Direction is the opposite of the loser sitting on that
+   side: a plate on the left steps right toward center, and vice versa. */
+.rps-plate-advance-left {
+	transform: translateX(18px);
+}
+
+.rps-plate-advance-right {
+	transform: translateX(-18px);
 }
 
 .rps-vs-divider {

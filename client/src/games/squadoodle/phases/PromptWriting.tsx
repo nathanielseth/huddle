@@ -6,7 +6,7 @@ import { socket } from "../../../lib/network/socket";
 import type { GameTimer } from "@shared/core/room";
 import type { SquadoodleState } from "@shared/games/squadoodle/index";
 
-// Reusing TimerBar from sabong — same interface, no game-specific logic.
+// Reusing TimerBar from sabong, same interface, no game-specific logic.
 import { TimerBar } from "../../sabong/components/TimerBar";
 
 const MAX_LENGTH = 120;
@@ -22,7 +22,7 @@ export function PromptWriting() {
 	);
 }
 
-// ─── Host ────────────────────────────────────────────────────────────────────
+// Host
 
 function HostView({
 	game,
@@ -42,7 +42,7 @@ function HostView({
 				Prompt
 			</h1>
 			<p className="text-white/40 text-center max-w-sm">
-				Every player is writing a secret phrase. Keep it creative — it's about
+				Every player is writing a secret phrase. Keep it creative, it's about
 				to get very lost in translation.
 			</p>
 			<ProgressPips submitted={game.submittedCount} total={game.totalCount} />
@@ -53,7 +53,7 @@ function HostView({
 	);
 }
 
-// ─── Player ──────────────────────────────────────────────────────────────────
+// Player
 
 function PlayerView({ timer }: { timer: GameTimer | null }) {
 	const [text, setText] = useState("");
@@ -61,8 +61,7 @@ function PlayerView({ timer }: { timer: GameTimer | null }) {
 	const textareaRef = useRef<HTMLTextAreaElement>(null);
 
 	// Focus the textarea after mount via ref+effect instead of autoFocus.
-	// autoFocus is a static HTML attribute that fires before React commits —
-	// it can steal focus from screen readers mid-page-read. useEffect gives
+	// autoFocus is a static HTML attribute that fires before React commits, 	// it can steal focus from screen readers mid-page-read. useEffect gives
 	// us intentional, post-commit focus management, which is the a11y-safe
 	// pattern for situations (like this game phase) where focus must move on mount.
 	useEffect(() => {
@@ -105,14 +104,14 @@ function PlayerView({ timer }: { timer: GameTimer | null }) {
 			) : (
 				<div className="flex flex-col gap-4 flex-1 justify-center">
 					<p className="text-sm text-white/50">
-						Write something that will be fun to draw — or impossible. Your
+						Write something that will be fun to draw, or impossible. Your
 						choice.
 					</p>
 					<div className="relative">
 						{/*
 						  aria-label gives the textarea an accessible name that screen
 						  readers announce on focus. Without it, a screen reader user
-						  hears nothing — they can't tell if it's a search box, a chat
+						  hears nothing, they can't tell if it's a search box, a chat
 						  field, or a submit form. The placeholder is NOT a label:
 						  many ATs don't read it, and it disappears once you type.
 						*/}

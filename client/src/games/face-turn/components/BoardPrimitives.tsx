@@ -180,7 +180,7 @@ export function BossPanel({
 				/>
 				{exposed && (
 					<span
-						title="No face-down Crew left — the next lost Strike or Challenge executes this Boss"
+						title="No face-down Crew left, the next lost Strike or Challenge executes this Boss"
 						className="absolute top-1 right-1 rounded bg-red-600/90 px-1 py-0.5 text-[8px] font-bold tracking-wide text-white pointer-events-none"
 					>
 						EXPOSED

@@ -209,7 +209,7 @@ function buildAnswerPool(
 		});
 	}
 
-	// truth is always present — enterResult depends on this invariant
+	// truth is always present, enterResult depends on this invariant
 	pool.push({
 		id: shortId(),
 		text: question.truth,
@@ -379,7 +379,7 @@ function enterResult(
 }
 
 // determines what follows the result phase: more questions → question_select,
-// last question of last round → finished, last question of rounds 1–2 → round_end
+// last question of last round → finished, last question of rounds 1-2 → round_end
 function resolveAfterResult(
 	state: BelievableLiesServerState,
 	room: Room,

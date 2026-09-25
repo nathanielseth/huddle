@@ -13,9 +13,8 @@ export const backgroundCheckGuessSpec: InteractionSpec<Interaction> = {
 	getResponderId: (interaction) => interaction.actorId,
 	actionType: "resolve_background_check_guess",
 
-	// this one chains straight into resolveChallenge/executePendingAction and
-	// every exit path returns a full EngineResult already, so it's modeled
-	// as "custom" rather than forced into the after_action/raw_result shape
+	// chains straight into resolveChallenge/executePendingAction and returns a full EngineResult already
+	// so it's modeled as "custom" rather than the after_action/raw_result shape
 	resolve(state, interaction, action, respondingPlayer) {
 		if (action.type !== "resolve_background_check_guess") return null;
 		const target = state.players.get(interaction.targetPlayerId);
@@ -30,9 +29,7 @@ export const backgroundCheckGuessSpec: InteractionSpec<Interaction> = {
 			interaction.eligibleSlots,
 		);
 
-		// clear before resolveChallenge
-		// its face‑up penalty may open a new pendingInteraction
-		// and later checks rely on that happening after this point
+		// clear before resolveChallenge: its face-up penalty may open a new pendingInteraction, and later checks rely on that
 		state.pendingInteraction = null;
 		const originalPending = state.pendingAction!;
 

@@ -278,7 +278,7 @@ export const blankSlateEngine: GameEngine = {
 		state.guesserIndex = 0;
 		state.roundNumber = 1;
 
-		// pre‑slice the deck to exactly totalRounds so it empties on the last round
+		// pre-slice the deck to exactly totalRounds so it empties on the last round
 		state.wordDeck = shuffle([...WORD_BANK]).slice(0, state.totalRounds);
 
 		enterClueWriting(state);

@@ -279,7 +279,7 @@ export class GameRunner {
 				"Host failed to reconnect. The game has been abandoned.",
 			);
 			store.delete(room.code);
-			logger.info("room abandoned — reconnect window expired", {
+			logger.info("room abandoned, reconnect window expired", {
 				roomCode: room.code,
 			});
 		}, GameRunner.HOST_RECONNECT_MS);

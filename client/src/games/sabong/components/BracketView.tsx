@@ -27,7 +27,7 @@ function getSlotStatus(
 	return "future";
 }
 
-// ─── Fighter row inside a slot card ──────────────────────────────────────────
+// Fighter row inside a slot card
 
 function FighterRow({
 	name,
@@ -68,7 +68,7 @@ function FighterRow({
 	);
 }
 
-// ─── Individual slot card ─────────────────────────────────────────────────────
+// Individual slot card
 
 interface SlotCardProps {
 	slot: BracketSlot;

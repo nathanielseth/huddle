@@ -33,24 +33,24 @@ export function describeChainResolutionStep(
 		case "executed": {
 			const move = getMoveDisplay(step.moveId);
 			return step.damageDealt
-				? `${move.name} — ${step.damageDealt} dmg`
+				? `${move.name}, ${step.damageDealt} dmg`
 				: move.name;
 		}
 		case "negated": {
 			const negator = getMoveDisplay(step.negatorMoveId);
-			if (!step.negatedMoveId) return `${negator.name} — nothing to negate`;
+			if (!step.negatedMoveId) return `${negator.name}, nothing to negate`;
 			const negated = getMoveDisplay(step.negatedMoveId);
 			return `${negator.name} negates ${negated.name}`;
 		}
 		case "reflected": {
 			const negator = getMoveDisplay(step.negatorMoveId);
-			if (!step.negatedMoveId) return `${negator.name} — nothing to reflect`;
+			if (!step.negatedMoveId) return `${negator.name}, nothing to reflect`;
 			const negated = getMoveDisplay(step.negatedMoveId);
 			const who = step.negatedActorId
 				? (nameOf(playerMap, step.negatedActorId) ?? "them")
 				: "them";
 			return step.reflectedDamage
-				? `${negator.name} reflects ${negated.name} — ${step.reflectedDamage} dmg back to ${who}`
+				? `${negator.name} reflects ${negated.name}, ${step.reflectedDamage} dmg back to ${who}`
 				: `${negator.name} reflects ${negated.name}`;
 		}
 	}
@@ -66,13 +66,13 @@ export function describeChainResolutionLog(
 			case "executed": {
 				const move = getMoveDisplay(step.moveId);
 				return step.damageDealt
-					? `${name(step.actorId)} played ${move.name} — ${step.damageDealt} dmg`
+					? `${name(step.actorId)} played ${move.name}, ${step.damageDealt} dmg`
 					: `${name(step.actorId)} played ${move.name}`;
 			}
 			case "negated": {
 				const negator = getMoveDisplay(step.negatorMoveId);
 				if (!step.negatedMoveId) {
-					return `${name(step.negatorActorId)} played ${negator.name} — nothing to negate`;
+					return `${name(step.negatorActorId)} played ${negator.name}, nothing to negate`;
 				}
 				const negated = getMoveDisplay(step.negatedMoveId);
 				return `${name(step.negatorActorId)} negated ${name(step.negatedActorId)}'s ${negated.name} with ${negator.name}`;
@@ -80,12 +80,12 @@ export function describeChainResolutionLog(
 			case "reflected": {
 				const negator = getMoveDisplay(step.negatorMoveId);
 				if (!step.negatedMoveId) {
-					return `${name(step.negatorActorId)} played ${negator.name} — nothing to reflect`;
+					return `${name(step.negatorActorId)} played ${negator.name}, nothing to reflect`;
 				}
 				const negated = getMoveDisplay(step.negatedMoveId);
 				const base = `${name(step.negatorActorId)} reflected ${name(step.negatedActorId)}'s ${negated.name} with ${negator.name}`;
 				return step.reflectedDamage
-					? `${base} — ${step.reflectedDamage} dmg back to ${name(step.negatedActorId)}`
+					? `${base}, ${step.reflectedDamage} dmg back to ${name(step.negatedActorId)}`
 					: base;
 			}
 		}
@@ -152,7 +152,7 @@ function describeCrewTurnCause(via: CrewTurnCause): string | null {
 		case "face_turn":
 			return "Face Turn";
 		case "class_action":
-			return null; // voluntary hide, always self-initiated — no cause to add
+			return null; // voluntary hide, always self-initiated, no cause to add
 		case "boss_command":
 		case "boss_passive":
 			return getBossDisplay(via.bossId).name;
@@ -170,7 +170,7 @@ export function describeLogEntry(
 	const name = (id: string | null) => nameOf(playerMap, id);
 	switch (entry.kind) {
 		case "turn_start":
-			return `Round ${entry.roundNumber} — ${name(entry.playerId)}'s turn`;
+			return `Round ${entry.roundNumber}, ${name(entry.playerId)}'s turn`;
 		case "move_played": {
 			const move = getMoveDisplay(entry.moveId);
 			return entry.targetPlayerId
@@ -234,8 +234,8 @@ export function describeLogEntry(
 				entry.succeeded === null
 					? ""
 					: entry.succeeded
-						? " — correct!"
-						: " — wrong.";
+						? ", correct!"
+						: ", wrong.";
 			return `${name(entry.actorId)} used ${boss}'s Boss Command${target}${result}`;
 		}
 		case "crew_reserve_swapped":

@@ -214,17 +214,13 @@ export const crewTurnHandlers = {
 		if (effect.type !== "trigger_random_crew_reveal_and_damage") return;
 		const actor = ctx.actor;
 
-		// entire card pool: draftable, undraftable, and crew not in either
-		// player's current deck — this is intentionally NOT scoped to the
-		// deck or draft pool
+		// entire card pool including undraftable crew, intentionally not scoped to the deck or draft pool
 		const allCrewIds = [...CREW_MAP.keys()];
 		const pickedId = pickRandom(allCrewIds, ctx.state.rng);
 		const pickedCrew = CREW_MAP.get(pickedId)!;
 
-		// the random crew isn't actually on anyone's board, so it has no
-		// real crew slot. if its revealed effect needs a target slot (e.g.
-		// "another ally crew"), supply a random one of the caster's own
-		// occupied slots; effects that don't need one simply ignore it.
+		// the random crew has no real board slot, if its revealed effect needs a target slot supply
+		// a random one of the caster's own occupied slots; effects that don't need one ignore it
 		const ownOccupiedSlots = ([0, 1] as const).filter(
 			(i) => actor.crewIds[i] !== null,
 		);

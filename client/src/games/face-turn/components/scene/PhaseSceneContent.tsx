@@ -4,7 +4,6 @@ import { isBoardClickInteractionType } from "../../lib/phaseScenePredicate";
 import { PhaseScene } from "./PhaseScene";
 import { MulliganPhase } from "../../phases/MulliganPhase";
 import { RpsPhase } from "../../phases/RpsPhase";
-import { RpsOrderChoicePhase } from "../../phases/RpsOrderChoicePhase";
 import { DraftingPhase } from "../../phases/DraftingPhase";
 import { FinishedPhase } from "../../phases/FinishedPhase";
 import { ChallengeBar } from "../ChallengeBar";
@@ -131,19 +130,14 @@ export function PlayerSceneContent({
 				</PhaseScene>
 			);
 		}
-		if (sceneKind.phase === "rps" || sceneKind.phase === "rps_reveal") {
-			// bare: rps border carries the amber accent meaning your turn
+		if (
+			sceneKind.phase === "rps" ||
+			sceneKind.phase === "rps_reveal" ||
+			sceneKind.phase === "rps_order_choice"
+		) {
 			return (
 				<PhaseScene bare isExiting={isExiting} panelRef={panelRef}>
 					<RpsPhase />
-				</PhaseScene>
-			);
-		}
-		if (sceneKind.phase === "rps_order_choice") {
-			// bare: same amber accent signal as rps
-			return (
-				<PhaseScene bare isExiting={isExiting} panelRef={panelRef}>
-					<RpsOrderChoicePhase />
 				</PhaseScene>
 			);
 		}
@@ -155,8 +149,6 @@ export function PlayerSceneContent({
 	}
 
 	if (sceneKind.kind === "challenge") {
-		// bare: challenge bar branches carry their own accent border
-		// light backdrop: quick prompt, keep the board legible underneath
 		return (
 			<PhaseScene
 				bare

@@ -118,11 +118,19 @@ export function sceneRecedeIntensity(
 	return "full";
 }
 
-// stable key for AnimatePresence, changes only when the moment changes
+// stable key for AnimatePresence, changes only when the moment changes.
+// rps / rps_reveal / rps_order_choice share one key so the whole
+// choose -> reveal -> order-choice beat plays inside a single continuous
+// panel instance instead of exiting and remounting a new one partway
+// through (see RpsPhase.tsx / RpsOrderChoicePhase.tsx, which now render
+// as one merged panel keyed off this).
 export function sceneKeyOf(sceneKind: PhaseSceneKind): string {
 	if (!sceneKind) return "none";
 	if (sceneKind.kind === "phase") {
-		const phase = sceneKind.phase === "rps_reveal" ? "rps" : sceneKind.phase;
+		const phase =
+			sceneKind.phase === "rps_reveal" || sceneKind.phase === "rps_order_choice"
+				? "rps"
+				: sceneKind.phase;
 		return `phase:${phase}`;
 	}
 	if (sceneKind.kind === "challenge") return `challenge:${sceneKind.phase}`;

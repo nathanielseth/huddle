@@ -26,7 +26,7 @@ export function TaskPerform() {
 	if (!sussy) return null;
 	if (role === "host") return <HostTaskView />;
 	const Task = TASK_COMPONENTS[sussy.taskType];
-	// GlitchInTheChatTask remounts per question via key — no useEffect setState needed
+	// GlitchInTheChatTask remounts per question via key, no useEffect setState needed
 	const taskKey =
 		sussy.taskType === "glitch_in_the_chat" ? sussy.taskNumber : undefined;
 	return <Task key={taskKey} />;

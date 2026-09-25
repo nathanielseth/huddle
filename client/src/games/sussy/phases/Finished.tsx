@@ -6,7 +6,7 @@ export function Finished() {
 	const { sussy, players } = useSussyState();
 	if (!sussy) return null;
 
-	// Fix: js-tosorted-immutable — toSorted() instead of [...players].sort()
+	// Fix: js-tosorted-immutable, toSorted() instead of [...players].sort()
 	const ranked = players.toSorted((a, b) => {
 		const sa = sussy.players[a.id]?.score ?? 0;
 		const sb = sussy.players[b.id]?.score ?? 0;

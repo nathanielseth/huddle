@@ -7,7 +7,7 @@ export const FINAL_VOTING_MS = 40_000;
 
 // points per vote received (R1), doubled in R2
 export const PTS_PER_VOTE = 10;
-// winner bonus — more votes than opponent (R1), doubled in R2
+// winner bonus, more votes than opponent (R1), doubled in R2
 export const WINNER_BONUS = 100;
 // "witty!",  ALL eligible votes went to you (R1), replaces winner bonus, doubled in R2
 export const WITTY_BONUS = 250;

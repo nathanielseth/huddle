@@ -44,7 +44,10 @@ export const GAME_REGISTRY: GameEntry[] = [
 	},
 	{
 		id: "breachpoint",
-		inGame: lazyNamed(() => import("@/games/cybersecs/Cybersecs"), "Cybersecs"),
+		inGame: lazyNamed(
+			() => import("@/games/breachpoint/Breachpoint"),
+			"Breachpoint",
+		),
 	},
 	{
 		id: "squadoodle",

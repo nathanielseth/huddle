@@ -6,7 +6,7 @@ import { socket } from "../../../lib/network/socket";
 import { cn } from "../../../lib/utils/cn";
 import type { ManokView, HideableStat } from "@shared/games/sabong/index";
 
-// ── Helpers ────────────────────────────────────────────────────────────────────
+// Helpers
 
 const STAT_LABELS: Record<string, string> = {
 	health: "HP",
@@ -58,7 +58,7 @@ function StatRow({
 	);
 }
 
-// ── Manok detail sheet ─────────────────────────────────────────────────────────
+// Manok detail sheet
 
 function ManokDetail({
 	manok,
@@ -266,7 +266,7 @@ function ManokDetail({
 	);
 }
 
-// ── Manok list item ────────────────────────────────────────────────────────────
+// Manok list item
 
 function ManokListItem({
 	manok,
@@ -322,7 +322,7 @@ function ManokListItem({
 	);
 }
 
-// ── Player ─────────────────────────────────────────────────────────────────────
+// Player
 
 export function ShopPlayer() {
 	const { sabong, privateData, myPlayer, manokList, timer } = useSabongState();
@@ -340,14 +340,14 @@ export function ShopPlayer() {
 			<div className="flex flex-col gap-3 px-5 pt-6 pb-4 border-b border-border">
 				<div className="flex items-center justify-between">
 					<span className="font-display text-xs font-bold tracking-[0.25em] uppercase text-white/40">
-						Round Break — Before {round}
+						Round Break, Before {round}
 					</span>
 					<span className="font-display text-sm font-black text-white tabular-nums">
 						₱{myPlayer.balance}
 					</span>
 				</div>
 
-				{/* ayuda banner — only shown when the server granted emergency funds */}
+				{/* ayuda banner, only shown when the server granted emergency funds */}
 				<AnimatePresence>
 					{privateData?.receivedAyuda && (
 						<m.div
@@ -359,7 +359,7 @@ export function ShopPlayer() {
 						>
 							<span className="text-sm">💸</span>
 							<span className="text-xs font-bold text-blue-300">
-								Ayuda granted — you were given emergency funds to keep playing.
+								Ayuda granted, you were given emergency funds to keep playing.
 							</span>
 						</m.div>
 					)}
@@ -455,7 +455,7 @@ export function ShopPlayer() {
 	);
 }
 
-// ── Host ───────────────────────────────────────────────────────────────────────
+// Host
 
 export function ShopHost() {
 	const { sabong, players, timer } = useSabongState();
@@ -469,7 +469,7 @@ export function ShopHost() {
 			<div className="flex items-end justify-between">
 				<div className="flex flex-col gap-1">
 					<span className="font-display text-xs font-bold tracking-[0.3em] uppercase text-white/30">
-						Round Break — Before {round}
+						Round Break, Before {round}
 					</span>
 					<h1 className="font-display text-5xl font-black uppercase leading-none text-white">
 						The Bazaar

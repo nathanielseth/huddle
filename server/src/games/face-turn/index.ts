@@ -189,7 +189,7 @@ export const faceturnsEngine: GameEngine &
 			}
 
 			case "rps_order_choice": {
-				// winner didn't choose in time — default to standard rules,
+				// winner didn't choose in time, default to standard rules,
 				// winner goes first
 				return resolveRpsOrderChoice(state, true);
 			}

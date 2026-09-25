@@ -1,7 +1,7 @@
 import type {
 	GameMode,
-	CybsecsRole,
-	CybsecsAlignment,
+	BreachpointRole,
+	BreachpointAlignment,
 } from "../../../../shared/games/breachpoint/index";
 
 export const C = {
@@ -38,7 +38,7 @@ export const MAX_TEAM_SIZE = Math.max(
 );
 
 // roles guaranteed at most once per game
-export const SINGLETON_ROLES = new Set<CybsecsRole>([
+export const SINGLETON_ROLES = new Set<BreachpointRole>([
 	"sysadmin",
 	"doxxer",
 	"analyst",
@@ -65,7 +65,7 @@ if (Math.abs(_weightSum - 1) > 1e-10) {
 	throw new Error(`MODE_WEIGHTS must sum to 1 (got ${_weightSum})`);
 }
 
-export const ROLE_ALIGNMENT: Record<CybsecsRole, CybsecsAlignment> = {
+export const ROLE_ALIGNMENT: Record<BreachpointRole, BreachpointAlignment> = {
 	agent: "agent",
 	sysadmin: "agent",
 	analyst: "agent",

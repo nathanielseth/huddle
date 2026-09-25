@@ -278,9 +278,7 @@ export function finalizeDraft(
 	player.bossMaxHp = boss.maxHp;
 	player.bossArmor = boss.startingArmor ?? 0;
 
-	// everyone drafts CREW_SLOTS face-up crew plus reserve crew (standard
-	// count from getReserveCrewSlotCount; the Dealer gets one extra reserve
-	// via passive_extra_reserve_crew)
+	// reserve count comes from getReserveCrewSlotCount, the Dealer gets one extra (see above)
 	for (let i = 0; i < Math.min(draft.crewIds.length, C.CREW_SLOTS); i++) {
 		player.crewIds[i as 0 | 1] = draft.crewIds[i]!;
 	}
@@ -780,11 +778,8 @@ export function computeChallengeEligible(
 	return enemies.map((e) => e.playerId);
 }
 
-// applies the rewards a player earns for winning a challenge (as the actor,
-// when the challenger's bluff-call fails, or as the challenger, when it
-// succeeds): the watcher's draw+hide offer, extortion's cash, and heel's
-// bonus move. skipped if resolving the strike already opened an interaction,
-// so it doesn't stomp on that pending state.
+// rewards for winning a challenge as actor or challenger: watcher's draw+hide, extortion cash, heel's bonus move
+// skipped if resolving the strike already opened an interaction, so it doesn't stomp on that pending state
 function grantChallengeWinRewards(
 	state: FaceturnServerState,
 	winner: FaceturnServerPlayer,
@@ -827,7 +822,7 @@ export function resolveChallenge(
 			{ reason: "challenge_loss" },
 		);
 
-		// challenger gets a face‑up penalty; if 2+ face‑down crew exist, resolveStrikeOrExecute opens a choose_crew_to_turn interaction
+		// challenger gets a face-up penalty; if 2+ face-down crew exist, resolveStrikeOrExecute opens a choose_crew_to_turn interaction
 		// tag it as pending, and dont run executePendingAction until it closes to avoid overwriting
 		if (
 			outcome.outcome === "pending" &&
@@ -1074,7 +1069,7 @@ export function executeMove(
 }
 
 // playing a slow move opens the chain and immediately hands priority to
-// the target — it's still the caster's turn, but the target now has the
+// the target, it's still the caster's turn, but the target now has the
 // only window to act (respond with their own slow move, or pass).
 export function openMoveChain(
 	state: FaceturnServerState,
@@ -1090,9 +1085,7 @@ export function openMoveChain(
 	state.phase = "move_chain_window";
 }
 
-// pushing a slow move always hands priority to the other participant —
-// you can't stack a second slow move on your own without them getting a
-// chance to respond first.
+// pushing a slow move always hands priority away, so you can't stack a second one without them responding first
 export function pushToMoveChain(
 	state: FaceturnServerState,
 	entry: MoveChainEntry,

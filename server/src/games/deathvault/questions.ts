@@ -1,14 +1,10 @@
-// ─────────────────────────────────────────────────────────────────────────────
-// server/src/games/deathvault/questions.ts
-//
-// Static question bank. Expand freely — the engine picks from this list
-// without replacement each game. Choices are lettered A–D; correctChoiceId
+// Static question bank. Expand freely, the engine picks from this list
+// without replacement each game. Choices are lettered A-D; correctChoiceId
 // always references a choice id present in the choices array.
-// ─────────────────────────────────────────────────────────────────────────────
 
 import type { DeathvaultServerQuestion } from "./types";
 
-// Stable auto-incrementing IDs — questions are module-level singletons so
+// Stable auto-incrementing IDs, questions are module-level singletons so
 // counters make logs easier to read than opaque hashes.
 let _qid = 0;
 function nextQid(): string {
@@ -18,7 +14,7 @@ function nextQid(): string {
 const CHOICE_IDS = ["a", "b", "c", "d"] as const;
 type ChoiceIndex = 0 | 1 | 2 | 3;
 
-/** Compact question factory — correct answer is always index 0 in source order
+/** Compact question factory, correct answer is always index 0 in source order
  *  so we never have to touch correctChoiceId by hand. */
 function q(
 	category: string,
@@ -44,7 +40,7 @@ function q(
 }
 
 const QUESTION_BANK: readonly DeathvaultServerQuestion[] = [
-	// ── Science ─────────────────────────────────────────────────────────────
+	// Science
 	q("Science", 1, "What is the chemical symbol for gold?", [
 		"Au",
 		"Ag",
@@ -100,7 +96,7 @@ const QUESTION_BANK: readonly DeathvaultServerQuestion[] = [
 		["Helicase", "Polymerase", "Ligase", "Topoisomerase"],
 	),
 
-	// ── History ─────────────────────────────────────────────────────────────
+	// History
 	q("History", 1, "In what year did World War II end?", [
 		"1945",
 		"1943",
@@ -155,7 +151,7 @@ const QUESTION_BANK: readonly DeathvaultServerQuestion[] = [
 		["HMS Beagle", "HMS Endeavour", "HMS Victory", "HMS Discovery"],
 	),
 
-	// ── Pop Culture ──────────────────────────────────────────────────────────
+	// Pop Culture
 	q("Pop Culture", 1, "Who played Iron Man in the Marvel Cinematic Universe?", [
 		"Robert Downey Jr.",
 		"Chris Evans",
@@ -205,7 +201,7 @@ const QUESTION_BANK: readonly DeathvaultServerQuestion[] = [
 		"Jay-Z",
 	]),
 
-	// ── Geography ───────────────────────────────────────────────────────────
+	// Geography
 	q("Geography", 1, "What is the capital of Australia?", [
 		"Canberra",
 		"Sydney",
@@ -249,7 +245,7 @@ const QUESTION_BANK: readonly DeathvaultServerQuestion[] = [
 		"Carpathians",
 	]),
 
-	// ── Sports ──────────────────────────────────────────────────────────────
+	// Sports
 	q("Sports", 1, "How many players are on a standard soccer team?", [
 		"11",
 		"9",
@@ -281,7 +277,7 @@ const QUESTION_BANK: readonly DeathvaultServerQuestion[] = [
 		["Novak Djokovic", "Rafael Nadal", "Roger Federer", "Pete Sampras"],
 	),
 
-	// ── Food & Drink ─────────────────────────────────────────────────────────
+	// Food & Drink
 	q("Food & Drink", 1, "What fruit is used to make guacamole?", [
 		"Avocado",
 		"Lime",
@@ -319,7 +315,7 @@ const QUESTION_BANK: readonly DeathvaultServerQuestion[] = [
 		"Ethiopia",
 	]),
 
-	// ── Tech ─────────────────────────────────────────────────────────────────
+	// Tech
 	q("Tech", 1, "What does 'HTTP' stand for?", [
 		"HyperText Transfer Protocol",
 		"High Transfer Text Protocol",

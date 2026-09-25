@@ -12,7 +12,7 @@ export function useHoleCards(handNumber: number): UseHoleCardsResult {
 	// N     = last peeked during hand N
 	const [peekHand, setPeekHand] = useState<number | null>(null);
 
-	// Derived — no effect needed. When handNumber changes, this is false.
+	// Derived, no effect needed. When handNumber changes, this is false.
 	const peeking = peekHand === handNumber;
 
 	return {

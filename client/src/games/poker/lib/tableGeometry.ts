@@ -1,5 +1,3 @@
-// client/src/games/poker/lib/tableGeometry.ts
-//
 // Pure seat-angle math, split out of TableSurface.tsx so that file can export
 // only the TableSurface component (react-refresh requires component files to
 // export components only).
@@ -20,7 +18,7 @@ const RY_FRAC: Record<TableOrientation, number> = {
 
 /**
  * Position for seat `index` of `total`, hugging the rail edge.
- * `rotationOffset` (radians) rotates the whole ring — pass an offset that
+ * `rotationOffset` (radians) rotates the whole ring, pass an offset that
  * puts a chosen seat at the bottom (Math.PI / 2) so "my" seat always reads
  * as the near/bottom position on a phone screen.
  */
@@ -53,13 +51,12 @@ export function getRotationOffsetForSeat(
 }
 
 /**
- * Position for a player's current-bet chip stack, just off their own seat —
- * NOT attached to the seat badge itself (so it still reads as a chip on the
+ * Position for a player's current-bet chip stack, just off their own seat,  * NOT attached to the seat badge itself (so it still reads as a chip on the
  * felt, not more text in the name plate), but close enough that ownership is
  * obvious without a connecting line.
  *
  * Same angle as the seat (radially aligned with its owner). `radiusPct`
- * controls how far inside the seat's own radius the chip sits — smaller
+ * controls how far inside the seat's own radius the chip sits, smaller
  * badges (mobile) can use a value close to the seat's own radius; larger
  * badges (host) need a smaller value so the chip clears the badge box
  * instead of overlapping its edge. Callers should tune this against their

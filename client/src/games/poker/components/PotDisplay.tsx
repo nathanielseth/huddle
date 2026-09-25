@@ -1,5 +1,3 @@
-// client/src/games/poker/components/PotDisplay.tsx
-//
 // Shows the total pot and side pots if more than one.
 // Shared between host and player views.
 

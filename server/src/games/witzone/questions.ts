@@ -1,6 +1,6 @@
 /**
  * Prompt bank.  All prompts are open-ended fill-in-the-blank questions.
- * Populate / expand this list freely — the engine only needs
+ * Populate / expand this list freely, the engine only needs
  * (players × 2) + 1 questions per game (worst case: 8×2+1 = 17).
  * 35 here gives comfortable variety.
  */

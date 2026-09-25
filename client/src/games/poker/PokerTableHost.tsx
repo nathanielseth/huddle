@@ -1,5 +1,3 @@
-// client/src/games/poker/PokerTableHost.tsx
-//
 // Fixed-viewport host table. 100dvh, zero scroll.
 // Table surface + seat geometry come from ./components/TableSurface, shared
 // with PokerTablePlayer so the two views never visually drift apart.
@@ -16,8 +14,8 @@ import { TableSurface } from "./components/TableSurface";
 import { getSeatPosition, getBetChipPosition } from "./lib/tableGeometry";
 import type { PokerPlayerView, PokerState } from "@shared/games/poker/index";
 
-// ── Stacking order ─────────────────────────────────────────────────────────
-// Same scale as PokerTablePlayer.tsx — kept numerically identical across
+// Stacking order
+// Same scale as PokerTablePlayer.tsx, kept numerically identical across
 // both files on purpose, even though they don't share overlays, so a
 // developer moving between the two never has to re-learn what a given tier
 // means. See PokerTablePlayer.tsx for the incident this prevents.
@@ -28,17 +26,12 @@ const Z = {
 	blockingOverlay: 50,
 } as const;
 
-// ─────────────────────────────────────────────────────────────────────────────
-// SEAT CARD
-//
-// Redesigned as: cards on top (as if dealt out from the felt into the seat),
-// then a single info plate below with a subtle gradient footer — name small
-// and muted, stack large and dominant, since stack size is the number that
-// actually matters at a glance. Dealer button is a small corner badge on the
-// plate rather than an inline glyph competing with the name. Current-turn
-// state glows the whole seat (cards + plate) as one unit instead of just the
-// plate's border.
-// ─────────────────────────────────────────────────────────────────────────────
+// Seat card: cards sit on top (as if dealt from the felt into the seat),
+// with a single info plate below. Stack size is large and dominant since
+// it's the number that matters at a glance; name is small and muted. The
+// dealer button is a small corner badge on the plate, not a competing
+// inline glyph. Current-turn state glows the whole seat as one unit
+// instead of just the plate's border.
 
 interface HostSeatProps {
 	player: PokerPlayerView;
@@ -68,14 +61,14 @@ function HostSeat({
 			)}
 			style={{ width: "clamp(8rem, 15cqw, 12rem)" }}
 		>
-			{/* dealer button — corner badge, not competing with the name line */}
+			{/* dealer button, corner badge, not competing with the name line */}
 			{isDealer && (
 				<span className="absolute -top-2 -left-2 z-10 w-6 h-6 rounded-full bg-white border-2 border-black/40 flex items-center justify-center text-[10px] font-black text-black shadow-md">
 					D
 				</span>
 			)}
 
-			{/* cards — sit above the plate, as if just dealt to the seat */}
+			{/* cards, sit above the plate, as if just dealt to the seat */}
 			{!faded && (
 				<div className="flex gap-1 mb-[-0.6rem] z-1">
 					{showCards ? (
@@ -103,8 +96,7 @@ function HostSeat({
 				)}
 				style={{ backdropFilter: "blur(8px)" }}
 			>
-				{/* gradient footer fill instead of a flat single-alpha block —
-				    reads as a lit plaque rather than a debug rectangle */}
+				{/* gradient footer fill instead of a flat single-alpha block, 				    reads as a lit plaque rather than a debug rectangle */}
 				<div
 					className="absolute inset-0"
 					style={{
@@ -165,9 +157,7 @@ function HostSeat({
 	);
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// OVAL TABLE COMPOSITE
-// ─────────────────────────────────────────────────────────────────────────────
+// Oval table composite
 
 interface OvalTableProps {
 	poker: PokerState;
@@ -238,7 +228,7 @@ function OvalTable({ poker, playerMap, showCards }: OvalTableProps) {
 				);
 			})}
 
-			{/* bet chips — on the felt between each seat and the pot, not part
+			{/* bet chips, on the felt between each seat and the pot, not part
 			    of the seat badge itself */}
 			{activeSeatIds.map((id, seatIdx) => {
 				const player = players[id];
@@ -272,9 +262,7 @@ function BetChip({ amount }: { amount: number }) {
 	);
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// HELPERS
-// ─────────────────────────────────────────────────────────────────────────────
+// Helpers
 
 function phaseLabel(phase: string): string {
 	const labels: Record<string, string> = {
@@ -307,9 +295,7 @@ function formatLastAction(action: { type: string; amount?: number }): string {
 	}
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// PHASE OVERLAYS
-// ─────────────────────────────────────────────────────────────────────────────
+// Phase overlays
 
 function WaitingOverlay() {
 	return (
@@ -465,9 +451,7 @@ function FinishedOverlay({
 	);
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// ROOT
-// ─────────────────────────────────────────────────────────────────────────────
+// Root
 
 export function PokerTableHost() {
 	const { poker, playerMap, timer } = usePokerState();

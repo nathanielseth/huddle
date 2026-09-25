@@ -1,25 +1,25 @@
 import type {
-	CybsecsPhase,
+	BreachpointPhase,
 	GameMode,
-	CybsecsRole,
-	CybsecsAlignment,
+	BreachpointRole,
+	BreachpointAlignment,
 	MissionAction,
 	VoteChoice,
 	MissionResult,
 	ObfuscatorIntel,
 	WinReason,
 	EhIntel,
-	CybsecsAction,
+	BreachpointAction,
 } from "../../../../shared/games/breachpoint/index";
 
 // engine mutates state in place. readonly on identity fields prevents reassignment
 // phase-scoped fields reset to null on each phase entry
-export interface CybsecsServerPlayer {
+export interface BreachpointServerPlayer {
 	readonly playerId: string;
-	readonly role: CybsecsRole;
-	readonly alignment: CybsecsAlignment;
+	readonly role: BreachpointRole;
+	readonly alignment: BreachpointAlignment;
 
-	// role knowledge — written once by assignRoles, never mutated after
+	// role knowledge, written once by assignRoles, never mutated after
 	knownHackerIds: readonly string[];
 	knownEthicalHackerId: string | null;
 	// analyst only: two IDs in randomized order (one sysadmin, one spoofer), null otherwise
@@ -42,7 +42,7 @@ export interface CybsecsServerPlayer {
 	obfuscatorIntelMissionIndex: number | null; // mission when intel was set, for UI gating
 }
 
-// Discriminated union — kind is the authoritative signal at the type level.
+// discriminated union, kind is the authoritative signal at the type level
 // block:    usesLeft decremented; ehIntel NOT written (mission was neutralized, no new info).
 // backfire: usesLeft decremented; intel written to EH's secret.
 export type EhOutcome =
@@ -65,7 +65,7 @@ export interface ObfuscatorEffect {
 }
 
 export interface MissionResolution {
-	// pushed to state.missionResults — obfuscated variant when ability active
+	// pushed to state.missionResults, obfuscated variant when ability active
 	readonly publicResult: MissionResult;
 	// drives win detection, always non-obfuscated
 	readonly trueResult: Extract<MissionResult, { obfuscated: false }>;
@@ -73,8 +73,8 @@ export interface MissionResolution {
 	readonly obfuscatorEffect?: ObfuscatorEffect;
 }
 
-export interface CybsecsServerState {
-	phase: CybsecsPhase;
+export interface BreachpointServerState {
+	phase: BreachpointPhase;
 	mode: GameMode;
 	missionIndex: number;
 	playerOrder: string[];
@@ -83,12 +83,12 @@ export interface CybsecsServerState {
 	nominatedTeam: string[];
 	teamSize: number;
 	passedPlayerIds: string[];
-	players: Map<string, CybsecsServerPlayer>;
-	roleIndex: Map<CybsecsRole, string>;
+	players: Map<string, BreachpointServerPlayer>;
+	roleIndex: Map<BreachpointRole, string>;
 	missionResults: MissionResult[];
 	trueMissionResults: Extract<MissionResult, { obfuscated: false }>[];
-	winner: CybsecsAlignment | null;
+	winner: BreachpointAlignment | null;
 	winReason: WinReason | null;
 }
 
-export type CybsecsServerAction = CybsecsAction;
+export type BreachpointServerAction = BreachpointAction;

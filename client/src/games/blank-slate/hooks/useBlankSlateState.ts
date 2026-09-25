@@ -19,7 +19,7 @@ export interface BlankSlateStateResult {
 	sendAction: (action: BlankSlateAction) => void;
 }
 
-// Hoisted: closes over nothing — socket is a module-level singleton.
+// Hoisted: closes over nothing, socket is a module-level singleton.
 function sendAction(action: BlankSlateAction): void {
 	socket.emit("player_action", action);
 }
@@ -34,7 +34,7 @@ export function useBlankSlateState(): BlankSlateStateResult {
 	const myView = state?.players[playerId] ?? null;
 	const amGuesser = state?.guesserPlayerId === playerId;
 
-	// Cannot hoist — closes over `players` from the store subscription above.
+	// Cannot hoist, closes over `players` from the store subscription above.
 	function getName(id: string) {
 		return players.find((p) => p.id === id)?.name ?? id;
 	}

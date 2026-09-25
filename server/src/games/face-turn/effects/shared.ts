@@ -83,8 +83,7 @@ export function getEnemies(
 	return getLivingPlayers(state).filter((p) => p.teamIndex !== teamIdx);
 }
 
-// derived from cards.ts EFFECT_TARGETING and EFFECT_REQUIRES_CREW
-// single source of truth
+// derived from cards.ts EFFECT_TARGETING and EFFECT_REQUIRES_CREW, single source of truth
 function requiresOwnFaceDownCrew(move: MoveCard): boolean {
 	return move.effects.some(
 		(e) => EFFECT_REQUIRES_CREW[unwrapEffect(e).type] === "own_face_down",
@@ -232,8 +231,7 @@ export function moveHasLegalTarget(
 
 	if (requiresOwnNonEmptyHand(move)) {
 		const actor = state.players.get(actorId);
-		// hand still contains this move card itself at legality-check time
-		// (it's removed just before effects resolve), so require > 1
+		// hand still contains this move card at legality-check time (removed just before effects resolve), so require > 1
 		if (!actor || actor.hand.length <= 1) return false;
 	}
 
@@ -279,7 +277,7 @@ export function validateMoveTargetScope(
 					ok: false,
 					reason: selfAllowed
 						? "This move can only target an ally."
-						: "This move needs a teammate — it can't target yourself.",
+						: "This move needs a teammate. It can't target yourself.",
 				};
 	}
 

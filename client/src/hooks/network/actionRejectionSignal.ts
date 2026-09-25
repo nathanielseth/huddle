@@ -19,7 +19,7 @@ export function subscribeToActionRejection(listener: Listener): () => void {
 }
 
 // called once from useSocketInit.ts's action_rejected handler. Deliberately
-// takes no payload — the toast in useSocketInit already shows the reason,
+// takes no payload, the toast in useSocketInit already shows the reason,
 // this channel only needs to say "something you sent just got rejected,
 // stop waiting."
 export function pulseActionRejection(): void {

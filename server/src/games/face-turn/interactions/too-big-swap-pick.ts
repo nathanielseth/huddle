@@ -21,7 +21,7 @@ export const tooBigSwapPickSpec: InteractionSpec<Interaction> = {
 		return { kind: "after_action" };
 	},
 
-	// mandatory turned‑effect
+	// mandatory turned-effect
 	applyTimeoutDefault(state, interaction) {
 		const actor = state.players.get(interaction.actorId)!;
 		const firstTarget = interaction.eligibleTargets[0];

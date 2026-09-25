@@ -1,13 +1,7 @@
-// client/src/games/poker/PokerTablePlayer.tsx
-//
-// Phone player view. Renders the *same* oval table graphic as the host
-// (see ./components/TableSurface), rotated so "my" seat always sits at the
-// bottom of the ring — but seats on the felt are small badges only (name,
-// stack, bet chip), same size for everyone including me. My actual hole
-// cards are NOT part of the rotating ring: they dock in a fixed strip right
-// above the action sheet, so they never move, never get huge, and never
-// visually detach from "You ₱X" the way they did when both lived inside the
-// same absolutely-positioned seat column.
+// Phone player view. Renders the same oval table as the host (see
+// ./components/TableSurface), rotated so "my" seat sits at the bottom.
+// My hole cards dock in a fixed strip above the action sheet instead of
+// living in the rotating seat ring, so they never move or resize with it.
 
 import type { ReactNode } from "react";
 import { useCallback, useRef, useSyncExternalStore } from "react";
@@ -32,29 +26,24 @@ import type {
 	PokerState,
 } from "@shared/games/poker/index";
 
-// ── Stacking order ─────────────────────────────────────────────────────────
-//
-// One explicit scale for every z-indexed element in this view. The bug this
-// prevents: bet chips were bumped to z-30 to clear seat badges (z-20), but
-// WaitingOverlay/HandResultOverlay were ALSO z-20 — nobody had reconciled the
-// two scales, so chips ended up rendering on top of a full-screen dimming
-// overlay that was supposed to cover the whole table. Anything added later
-// should pick a tier from here rather than a fresh ad-hoc number.
+// Stacking order: one explicit scale for every z-indexed element in this
+// view, so chips, seats, and overlays can't collide on an ad-hoc z-index
+// again (chips at z-30 once ended up under a same-z-20 dimming overlay).
 const Z = {
 	/** Seat badge for an opponent. */
 	seatOpponent: 10,
-	/** Seat badge for "me" — sits slightly above opponents. */
+	/** Seat badge for "me", sits slightly above opponents. */
 	seatMe: 20,
-	/** Bet chips on the felt — above all seats, still part of the table. */
+	/** Bet chips on the felt, above all seats, still part of the table. */
 	betChip: 25,
-	/** Full-table overlays (waiting/hand-result banners) — above everything
+	/** Full-table overlays (waiting/hand-result banners), above everything
 	 *  on the table, since they're meant to dim/replace it. */
 	tableOverlay: 40,
-	/** Terminal/blocking overlays (game finished) — above table overlays. */
+	/** Terminal/blocking overlays (game finished), above table overlays. */
 	blockingOverlay: 50,
 } as const;
 
-// ── Phase helpers ─────────────────────────────────────────────────────────────
+// Phase helpers
 
 function isBettingPhase(phase: string) {
 	return ["pre_flop", "flop", "turn", "river"].includes(phase);
@@ -74,13 +63,10 @@ function phaseLabel(phase: string): string {
 	return labels[phase] ?? phase;
 }
 
-// ── Seat badge — small, identical shape for every seat; mine reveals cards ──
-//
-// Every seat shows card BACKS by default. "Me" is the one seat that can show
-// FACE-UP cards, because I'm the only client that has my own hole cards —
-// they render right here at the seat, same spot the backs would occupy, just
-// larger and face up. This is the one and only place my cards render: there
-// is no separate detached "dock" duplicating them below the table.
+// Seat badge: identical shape for every seat, but mine reveals face-up
+// cards since I'm the only client with my own hole cards. This is the one
+// and only place my cards render, there's no separate "dock" duplicating
+// them elsewhere.
 
 interface SeatBadgeProps {
 	player: PokerPlayerView;
@@ -132,7 +118,7 @@ function SeatBadge({
 				className={cn(
 					"relative z-0 flex items-center gap-1.5 px-2 py-1 rounded-lg shrink-0",
 					// Faded seats get a flatter, more opaque fill instead of stacking
-					// opacity on top of an already-translucent background — layering
+					// opacity on top of an already-translucent background, layering
 					// two alphas (bg-black/75 * opacity-40 ≈ 0.3) is what made folded
 					// seats nearly disappear against the felt.
 					isMe ? "bg-black" : faded ? "bg-black/55" : "bg-black/75",
@@ -189,27 +175,14 @@ function SeatBadge({
 	);
 }
 
-// ── Responsive orientation ────────────────────────────────────────────────
+// The oval table has two shapes: portrait and landscape. Measure the actual
+// container and pick whichever orientation fits, rather than assuming
+// portrait and correcting later.
 //
-// The oval table has two real shapes: portrait (tall phone) and landscape
-// (wide window / tablet-in-landscape / desktop browser resized short).
-// Previously this view always used the portrait TableSurface + geometry,
-// sized via cqw/cqh — fine on an actual tall phone, but on a wide-short
-// window (e.g. a desktop browser resized down) the height-driven side of
-// that min() collapses to almost nothing, shrinking the whole table into a
-// tiny floating blob. Instead we measure the actual available box and pick
-// whichever orientation fits it, the same way the table would be drawn if
-// you physically rotated it to fit the space.
-//
-// Orientation is read via useSyncExternalStore rather than
-// useState+useEffect. The old version always mounted with a hardcoded
-// "portrait" default and only measured the real container size inside a
-// mount effect — so on a landscape window every load painted one throwaway
-// frame in the wrong orientation before snapping to the right one. There's
-// no server-rendered HTML here to hydrate against, so there's no reason to
-// wait for an effect: useSyncExternalStore's getSnapshot runs during render
-// itself, which lets the *first* paint already reflect the container's real
-// shape.
+// Read via useSyncExternalStore instead of useState+useEffect: getSnapshot
+// runs during render, so the first paint already reflects the real
+// container shape instead of a hardcoded default that snaps to correct
+// one frame later.
 
 type Orientation = "portrait" | "landscape";
 
@@ -251,7 +224,7 @@ function useContainerOrientation() {
 	return { ref, orientation };
 }
 
-// ── Oval table — adapts portrait/landscape to the space it's actually given ─
+// Oval table, adapts portrait/landscape to the space it's actually given
 
 interface MobileOvalTableProps {
 	poker: PokerState;
@@ -294,7 +267,7 @@ function MobileOvalTable({
 					aspectRatio: `${w} / ${h}`,
 					// 88% reserves margin on all sides for seat badges that sit
 					// slightly outside the felt edge by design (getSeatPosition's
-					// ~1.076x push) — without this margin those badges clip
+					// ~1.076x push), without this margin those badges clip
 					// against the viewport on narrow windows.
 					width: `min(88cqw, 88cqh * (${w} / ${h}))`,
 					height: `min(88cqh, 88cqw * (${h} / ${w}))`,
@@ -314,7 +287,7 @@ function MobileOvalTable({
 					/>
 				</div>
 
-				{/* seats — every seat (mine included) is the same badge shape */}
+				{/* seats, every seat (mine included) is the same badge shape */}
 				{activeSeatIds.map((id, seatIdx) => {
 					const player = players[id];
 					if (!player) return null;
@@ -340,11 +313,11 @@ function MobileOvalTable({
 					);
 				})}
 
-				{/* bet chips — on the felt between each seat and the pot, not
+				{/* bet chips, on the felt between each seat and the pot, not
 				    part of the seat badge itself. radiusPct pulled in further than
 				    the default (65 vs 85): mobile seats stack cards ABOVE the
 				    badge, so the seat's combined visual footprint is taller than
-				    the badge alone — the default clearance wasn't enough and
+				    the badge alone, the default clearance wasn't enough and
 				    chips were landing under the card corners. */}
 				{activeSeatIds.map((id, seatIdx) => {
 					const player = players[id];
@@ -385,7 +358,7 @@ function BetChip({ amount }: { amount: number }) {
 	);
 }
 
-// ── Overlays ───────────────────────────────────────────────────────────────
+// Overlays
 
 function WaitingOverlay() {
 	return (
@@ -574,7 +547,7 @@ function FinishedOverlay() {
 	);
 }
 
-// ── Top status bar ────────────────────────────────────────────────────────────
+// Top status bar
 
 function StatusBar({ poker }: { poker: PokerState }) {
 	return (
@@ -589,15 +562,10 @@ function StatusBar({ poker }: { poker: PokerState }) {
 	);
 }
 
-// ── Sticky bottom action sheet ────────────────────────────────────────────────
-//
-// Always mounted with the SAME shape — status line, timer, button grid — for
-// every phase/turn combination. Only the status text and the grid's
-// `disabled` flag change; nothing here ever unmounts or resizes, so the
-// table above never reflows when the phase changes or turns pass around.
-// (Previously this component returned null outside betting phases and swapped
-// between differently-shaped fragments, which is what caused the table and
-// hole-card dock to visibly jump.)
+// Sticky bottom action sheet: always mounted with the same shape for every
+// phase, only the status text and disabled flag change, so the table above
+// never reflows (it used to return null outside betting phases, which made
+// the table visibly jump).
 
 function StickyBottom() {
 	const { poker, myPlayer, isMyTurn, timer, playerMap } = usePokerState();
@@ -616,7 +584,7 @@ function StickyBottom() {
 			"Someone")
 		: null;
 
-	// One status line, one slot — text changes, layout doesn't.
+	// One status line, one slot, text changes, layout doesn't.
 	let statusNode: ReactNode;
 	if (out) {
 		statusNode = (
@@ -648,7 +616,7 @@ function StickyBottom() {
 				Your turn
 				{poker.betToCall > myPlayer.currentBet && (
 					<span className="ml-2 text-white/60">
-						— call ₱
+, call ₱
 						{Math.min(poker.betToCall - myPlayer.currentBet, myPlayer.stack)} to
 						stay
 					</span>
@@ -686,7 +654,7 @@ function StickyBottom() {
 	);
 }
 
-// ── Main component ────────────────────────────────────────────────────────────
+// Main component
 
 export function PokerTablePlayer() {
 	const { poker, myPlayer, holeCards, playerMap, playerId } = usePokerState();

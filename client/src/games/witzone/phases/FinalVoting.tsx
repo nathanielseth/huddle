@@ -114,7 +114,7 @@ export function FinalVoting() {
 
 			<div className="flex items-center justify-between mt-4 mb-8">
 				<div className="text-xs font-semibold tracking-widest uppercase text-white/40">
-					Final Round — Vote
+					Final Round, Vote
 				</div>
 				<div className="text-xs text-white/40">
 					{state.finalVotedCount}/{state.totalPlayers} voted

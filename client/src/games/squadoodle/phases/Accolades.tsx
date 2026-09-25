@@ -47,7 +47,7 @@ export function Accolades() {
 	);
 }
 
-// ─── Host ────────────────────────────────────────────────────────────────────
+// Host
 
 function HostView({ game }: { game: SquadoodleState }) {
 	const { accolades, chains } = game;
@@ -154,14 +154,14 @@ function AccoladeCard({
 	);
 }
 
-// ─── Player ──────────────────────────────────────────────────────────────────
+// Player
 
 function PlayerView({ game }: { game: SquadoodleState }) {
-	// During accolades the TV is static — let players react to whatever's showing.
+	// During accolades the TV is static, let players react to whatever's showing.
 	// We point reactions at chain 0 / entry 0 as a best-effort; the server will
 	// ignore out-of-bounds reactions gracefully (revealEntryIndex is always
 	// past the last entry at this point, so no react action goes through in the
-	// reveal phase's bounds check — but accolades phase doesn't gate reactions).
+	// reveal phase's bounds check, but accolades phase doesn't gate reactions).
 	return (
 		<div className="flex flex-col min-h-screen px-5 py-8 gap-6 items-center justify-center text-center">
 			<span className="text-xs font-bold tracking-[0.3em] uppercase text-white/30">

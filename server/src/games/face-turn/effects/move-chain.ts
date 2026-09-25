@@ -11,10 +11,8 @@ export const moveChainHandlers = {
 	reflect_slow_move_base_damage() {},
 } satisfies Partial<Record<EffectPrimitive["type"], Handler>>;
 
-// reversal: reflects first deal_damage from a slow move back to caster, through caster's defenses, skipping damage bonus.
-// returns the actual damage dealt (applyDamage's post-armor/reduction
-// return value), or null if there was nothing to reflect (caster gone,
-// or the reflected move has no deal_damage effect).
+// reversal: reflects first deal_damage from a slow move back to caster, through caster's defenses, skipping damage bonus
+// returns the actual damage dealt (post-armor/reduction), or null if there was nothing to reflect
 export function resolveReflectedSlowMoveDamage(
 	state: FaceturnServerState,
 	reflectedMoveId: string,

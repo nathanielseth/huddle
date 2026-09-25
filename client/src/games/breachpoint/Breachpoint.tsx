@@ -1,5 +1,5 @@
 import { AnimatePresence, m } from "motion/react";
-import { useCybsecsState } from "./hooks/useCybsecsState";
+import { useBreachpointState } from "./hooks/useBreachpointState";
 import { RoleHud } from "./components/RoleHud";
 import { RoleReveal } from "./phases/RoleReveal";
 import { Talking } from "./phases/Talking";
@@ -9,10 +9,10 @@ import { Mission } from "./phases/Mission";
 import { MissionResult } from "./phases/MissionResult";
 import { Doxxing } from "./phases/Doxxing";
 import { GameOver } from "./phases/GameOver";
-import type { CybsecsPhase } from "@shared/games/breachpoint/index";
+import type { BreachpointPhase } from "@shared/games/breachpoint/index";
 import type { FC } from "react";
 
-const PHASES: Record<CybsecsPhase, FC> = {
+const PHASES: Record<BreachpointPhase, FC> = {
 	role_reveal: RoleReveal,
 	talking: Talking,
 	nominating: Nominating,
@@ -23,10 +23,10 @@ const PHASES: Record<CybsecsPhase, FC> = {
 	game_over: GameOver,
 };
 
-const HIDE_HUD: Set<CybsecsPhase> = new Set(["role_reveal", "game_over"]);
+const HIDE_HUD: Set<BreachpointPhase> = new Set(["role_reveal", "game_over"]);
 
-export function Cybersecs() {
-	const { game, role, secret, getName } = useCybsecsState();
+export function Breachpoint() {
+	const { game, role, secret, getName } = useBreachpointState();
 
 	if (!game) {
 		return (

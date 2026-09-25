@@ -197,8 +197,7 @@ function consumeOne(pinCounts: Map<string, number>, id: string): boolean {
 	return true;
 }
 
-// assign hidden face-down crew identities from a pool of unobserved draftable crew
-// intentionally overcounts the pool to avoid leaking information the observer didn't have
+// assign hidden face-down crew identities from a pool of unobserved draftable crew, intentionally overcounting to avoid leaking info the observer didn't have
 function redealFaceDownCrew(
 	state: FaceturnServerState,
 	observerSeat: string,

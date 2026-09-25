@@ -1,4 +1,3 @@
-// client/src/games/poker/components/PlayingCard.tsx
 
 import { cn } from "../../../lib/utils/cn";
 import type { Card } from "@shared/games/poker/index";
@@ -21,7 +20,7 @@ const IS_RED: Record<Suit, boolean> = {
 export type CardSize = "sm" | "md" | "lg" | "xl";
 
 // Overall card footprint (kept identical to the old component so layouts
-// elsewhere — OpponentsStrip, CommunityCards, HoleCards — don't shift)
+// elsewhere, OpponentsStrip, CommunityCards, HoleCards, don't shift)
 const BACK_SIZE: Record<CardSize, string> = {
 	sm: "w-9 h-14",
 	md: "w-12 h-[4.5rem]",
@@ -30,7 +29,7 @@ const BACK_SIZE: Record<CardSize, string> = {
 };
 const FACE_SIZE = BACK_SIZE;
 
-// Corner rank/suit sizing — deliberately small so the pip grid has room
+// Corner rank/suit sizing, deliberately small so the pip grid has room
 const CORNER_RANK_TEXT: Record<CardSize, string> = {
 	sm: "text-[7px]",
 	md: "text-[9px]",
@@ -72,12 +71,11 @@ const CENTER_TEXT: Record<CardSize, string> = {
 };
 
 interface Pip {
-	// Stable identity for this pip *within a given rank's pattern* (e.g.
-	// "center", "topLeft", "extraCenter") rather than its position in the
-	// array. Rank never changes without the whole PlayingCard remounting —
-	// callers key each PlayingCard on the card string itself — so these ids
-	// are stable across re-renders and safe as React keys, unlike the array
-	// index they replace.
+	// Stable identity for this pip within a given rank's pattern (e.g.
+	// "center", "topLeft", "extraCenter"), not its position in the array.
+	// Callers key each PlayingCard on the card string itself, so these ids
+	// stay stable across re-renders and are safe as React keys, unlike the
+	// array index they replace.
 	id: string;
 	left: string;
 	top: string;
@@ -211,7 +209,7 @@ export function PlayingCard({
 	size = "md",
 	className,
 }: PlayingCardProps) {
-	// ── Face-down ────────────────────────────────────────────────────────────
+	// Face-down
 	// Layered diamond lattice + border/inner-rim + subtle shadow so backs read
 	// as an actual card object sitting on the felt, not a flat gray rectangle.
 	if (faceDown || !card) {
@@ -248,7 +246,7 @@ export function PlayingCard({
 		);
 	}
 
-	// ── Face-up ──────────────────────────────────────────────────────────────
+	// Face-up
 	// Card format is always 2 chars: rank char + suit char ('A', 'T', '2', ...)
 	const rankChar = card[0];
 	const suitChar = card[1] as Suit;
@@ -325,9 +323,9 @@ export function PlayingCard({
 	);
 }
 
-// ── Blank card slot (empty board position) ────────────────────────────────────
+// Blank card slot (empty board position)
 // Needs enough contrast to read as "a card goes here" rather than an
-// invisible ghost — a dashed inset outline plus a faint fill does that
+// invisible ghost, a dashed inset outline plus a faint fill does that
 // without competing visually with real cards once they're dealt.
 export function CardSlot({ size = "md" }: { size?: CardSize }) {
 	return (

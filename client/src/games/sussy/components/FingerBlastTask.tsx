@@ -59,7 +59,7 @@ export function FingerBlastTask() {
 					<>
 						<ImpostorHeader />
 						<p className="text-xs text-white/30 text-center">
-							Pick a number — look convincing
+							Pick a number, look convincing
 						</p>
 					</>
 				) : (

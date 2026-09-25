@@ -71,7 +71,7 @@ interface TurnResult {
 	defenderHp: number;
 }
 
-// pure function — all state passed in and returned, no mutations
+// pure function, all state passed in and returned, no mutations
 function execMove(
 	turn: number,
 	attacker: FighterStats,

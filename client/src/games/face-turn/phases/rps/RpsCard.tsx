@@ -15,8 +15,7 @@ export interface RpsCardProps {
 	size?: number;
 	tone?: "neutral" | "selected" | "win" | "lose";
 	className?: string;
-	// when set, the card is rendered as a motion element sharing this id —
-	// used to fly the picked option card into its reveal slot (see RpsPhase)
+	// when set, the card is rendered as a motion element sharing this id, 	// used to fly the picked option card into its reveal slot (see RpsPhase)
 	layoutId?: string;
 }
 
@@ -53,7 +52,7 @@ export function RpsCard({
 			{...wrapperProps}
 		>
 			<div className="rps-flip-inner">
-				{/* back: face-down, always the "unrevealed" state — same card back art as everywhere else */}
+				{/* back: face-down, always the "unrevealed" state, same card back art as everywhere else */}
 				<div
 					className={cn(
 						"rps-face-back overflow-hidden",
@@ -69,7 +68,7 @@ export function RpsCard({
 						/>
 					</div>
 				</div>
-				{/* front: real card frame, minus badge/title/text — team-colored
+				{/* front: real card frame, minus badge/title/text, team-colored
 				    "art" area holds the revealed hand-sign */}
 				<div
 					className={cn(

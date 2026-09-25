@@ -89,9 +89,7 @@ export function turnCrewAtSlot(
 	});
 }
 
-// turns a crew face up, recomputes passives, and fires its turned-effects —
-// the common sequence for a voluntary or move-triggered turn (as opposed to
-// resolveStrikeOrExecute's own turn branches, which need the outcome union)
+// the common voluntary/move-triggered turn sequence, distinct from resolveStrikeOrExecute's own turn branches
 export function turnCrewAndTriggerEffects(
 	state: FaceturnServerState,
 	player: FaceturnServerPlayer,
@@ -116,7 +114,7 @@ export function hideCrewAtSlot(
 	if (!crewId) return;
 	player.crewTurned[slot] = false;
 	player.disabledPassiveSlots.delete(slot);
-	triggerKamileonOnSelfTurnDown(state, player, slot, crewId);
+	triggerChameliaOnSelfTurnDown(state, player, slot, crewId);
 	pushLog(state, {
 		kind: "crew_hidden",
 		playerId: player.playerId,
@@ -128,16 +126,14 @@ export function hideCrewAtSlot(
 	triggerAllyTurnReactions(state, player, causedByEnemy);
 }
 
-// kamileon: rerolls which class it counts as, to a different class than its
-// current one, persisting until the next reroll (survives the face-up/down
-// cycle, unlike derived.crewClassOverrides)
-function triggerKamileonOnSelfTurnDown(
+// chamelia: rerolls to a different class than its current one, persists across face-up/down (unlike derived.crewClassOverrides)
+function triggerChameliaOnSelfTurnDown(
 	state: FaceturnServerState,
 	player: FaceturnServerPlayer,
 	slot: 0 | 1,
 	crewId: string,
 ): void {
-	if (crewId !== CARD_IDS.CREW.KAMILEON) return;
+	if (crewId !== CARD_IDS.CREW.CHAMELIA) return;
 	if (player.disabledPassiveSlots.has(slot)) return;
 
 	const currentClass =
@@ -229,11 +225,8 @@ export function resolveStrikeOrExecute(
 	via: CrewTurnCause,
 	preSelectedSlot?: 0 | 1,
 ): StrikeOrExecuteOutcome {
-	// challenge_loss turns crew but never escalates to a kill/execute-adjacent
-	// consequence (redirects, kills, stab grants); face_turn is an actual
-	// Strike per its own card text ("Unstoppable Strike") and gets full
-	// Strike treatment, distinguished from a class-action strike only by
-	// `via.reason` for logging/crew-turn-cause purposes
+	// challenge_loss turns crew but never escalates to a kill/redirect/stab-grant consequence
+	// face_turn ("Unstoppable Strike") gets full Strike treatment, distinguished only by via.reason
 	const isStrike = via.reason === "strike" || via.reason === "face_turn";
 	if (isStrikeDefendedByTerminal(target)) {
 		return { outcome: "negated", negatedBy: "terminal" };

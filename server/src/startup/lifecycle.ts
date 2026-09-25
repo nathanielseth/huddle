@@ -41,7 +41,7 @@ export function registerShutdownHandlers(
 		clearInterval(cleanupTimer);
 
 		const forceExit = setTimeout(() => {
-			logger.error("shutdown timed out — forcing exit");
+			logger.error("shutdown timed out, forcing exit");
 			process.exit(1);
 		}, SHUTDOWN_TIMEOUT_MS).unref();
 

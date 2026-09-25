@@ -245,7 +245,7 @@ function FilterPanel({
 	);
 }
 
-// clear confirmation as a popover, consistent with sort/filter — no modal
+// clear confirmation as a popover, consistent with sort/filter, no modal
 function ClearPopover({
 	disabled,
 	onConfirm,

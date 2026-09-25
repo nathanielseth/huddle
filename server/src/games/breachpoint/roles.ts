@@ -1,8 +1,8 @@
 import type {
 	GameMode,
-	CybsecsRole,
+	BreachpointRole,
 } from "../../../../shared/games/breachpoint/index";
-import type { CybsecsServerPlayer } from "./types";
+import type { BreachpointServerPlayer } from "./types";
 import { ROLE_ALIGNMENT, MODE_WEIGHTS, SINGLETON_ROLES } from "./constants";
 import { shuffle } from "../lib/random";
 import { invariant } from "../lib/assert";
@@ -22,8 +22,8 @@ export function pickMode(playerCount: number): GameMode {
 	return "override";
 }
 
-function getRoleList(playerCount: number, mode: GameMode): CybsecsRole[] {
-	let roles: CybsecsRole[];
+function getRoleList(playerCount: number, mode: GameMode): BreachpointRole[] {
+	let roles: BreachpointRole[];
 
 	if (mode === "baseline") {
 		const composition: Record<number, [agents: number, hackers: number]> = {
@@ -36,11 +36,11 @@ function getRoleList(playerCount: number, mode: GameMode): CybsecsRole[] {
 		};
 		const [a, h] = composition[playerCount]!;
 		roles = [
-			...Array<CybsecsRole>(a).fill("agent"),
-			...Array<CybsecsRole>(h).fill("hacker"),
+			...Array<BreachpointRole>(a).fill("agent"),
+			...Array<BreachpointRole>(h).fill("hacker"),
 		];
 	} else if (mode === "exposure") {
-		const table: Record<number, CybsecsRole[]> = {
+		const table: Record<number, BreachpointRole[]> = {
 			6: ["sysadmin", "agent", "agent", "agent", "doxxer", "hacker"],
 			7: [
 				"sysadmin",
@@ -87,7 +87,7 @@ function getRoleList(playerCount: number, mode: GameMode): CybsecsRole[] {
 		};
 		roles = [...table[playerCount]!];
 	} else {
-		const table: Record<number, CybsecsRole[]> = {
+		const table: Record<number, BreachpointRole[]> = {
 			6: ["ethical_hacker", "agent", "agent", "agent", "black_hat", "hacker"],
 			7: [
 				"ethical_hacker",
@@ -155,7 +155,7 @@ const EMPTY_KNOWLEDGE: KnowledgeResult = {
 	knownEthicalHackerId: null,
 };
 
-const HACKER_RING_ROLES = new Set<CybsecsRole>([
+const HACKER_RING_ROLES = new Set<BreachpointRole>([
 	"hacker",
 	"doxxer",
 	"spoofer",
@@ -165,8 +165,8 @@ const HACKER_RING_ROLES = new Set<CybsecsRole>([
 ]);
 
 function collectIds(
-	others: [string, CybsecsServerPlayer][],
-	roleSet: Set<CybsecsRole>,
+	others: [string, BreachpointServerPlayer][],
+	roleSet: Set<BreachpointRole>,
 ): string[] {
 	const ids: string[] = [];
 	for (const [id, p] of others) {
@@ -177,8 +177,8 @@ function collectIds(
 
 function buildKnowledge(
 	playerId: string,
-	role: CybsecsRole,
-	allPlayers: Map<string, CybsecsServerPlayer>,
+	role: BreachpointRole,
+	allPlayers: Map<string, BreachpointServerPlayer>,
 ): KnowledgeResult {
 	const others = [...allPlayers.entries()].filter(([id]) => id !== playerId);
 
@@ -227,7 +227,7 @@ function buildKnowledge(
 
 // sysadmin/spoofer pair for analyst in exposure 7+
 function buildCandidatePair(
-	allPlayers: Map<string, CybsecsServerPlayer>,
+	allPlayers: Map<string, BreachpointServerPlayer>,
 ): readonly [string, string] {
 	const sysadmin = [...allPlayers.values()].find((p) => p.role === "sysadmin");
 	const spoofer = [...allPlayers.values()].find((p) => p.role === "spoofer");
@@ -243,9 +243,9 @@ function buildCandidatePair(
 export function assignRoles(
 	playerOrder: string[],
 	mode: GameMode,
-): Map<string, CybsecsServerPlayer> {
+): Map<string, BreachpointServerPlayer> {
 	const roles = shuffle(getRoleList(playerOrder.length, mode));
-	const playerMap = new Map<string, CybsecsServerPlayer>();
+	const playerMap = new Map<string, BreachpointServerPlayer>();
 
 	// pass 1 - assign roles, alignments, and per-role defaults
 	for (let i = 0; i < playerOrder.length; i++) {
@@ -295,9 +295,9 @@ export function assignRoles(
 
 // only singleton roles indexed, agent/hacker excluded
 export function buildRoleIndex(
-	players: Map<string, CybsecsServerPlayer>,
-): Map<CybsecsRole, string> {
-	const index = new Map<CybsecsRole, string>();
+	players: Map<string, BreachpointServerPlayer>,
+): Map<BreachpointRole, string> {
+	const index = new Map<BreachpointRole, string>();
 	for (const [id, p] of players) {
 		if (SINGLETON_ROLES.has(p.role)) {
 			index.set(p.role, id);

@@ -174,7 +174,7 @@ function dealNewHand(state: PokerServerState): Map<string, PokerSecret> | null {
 
 	const dealerId = defined(
 		state.seatOrder[state.dealerIndex],
-		`seatOrder[${String(state.dealerIndex)}] missing — no dealer seat`,
+		`seatOrder[${String(state.dealerIndex)}] missing, no dealer seat`,
 	);
 	defined(
 		state.players.get(dealerId),
@@ -417,7 +417,7 @@ export const pokerEngine: GameEngine & GameEngineWithSecrets = {
 	validateStart(_configPayload: unknown, playerIds: string[]): string | null {
 		const count = playerIds.length;
 		if (count < C.MIN_PLAYERS) {
-			return `Poker needs at least ${String(C.MIN_PLAYERS)} players — add a CPU or invite a friend.`;
+			return `Poker needs at least ${String(C.MIN_PLAYERS)} players, add a CPU or invite a friend.`;
 		}
 		if (count > C.MAX_PLAYERS) {
 			return `Poker tables seat at most ${String(C.MAX_PLAYERS)} players.`;

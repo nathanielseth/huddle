@@ -4,16 +4,12 @@ import { socket } from "../../../lib/network/socket";
 import { useSussyState } from "../hooks/useSussyState";
 import { TimerBar } from "../../sabong/components/TimerBar";
 
-// ─────────────────────────────────────────────────────────────────────────────
 // Constants
-// ─────────────────────────────────────────────────────────────────────────────
 
 const Q_DISPLAY_MS = 7_000;
 const Q_COUNT = 3;
 
-// ─────────────────────────────────────────────────────────────────────────────
 // State Machine
-// ─────────────────────────────────────────────────────────────────────────────
 
 type GameState = {
 	qIndex: number;
@@ -46,9 +42,7 @@ function gameReducer(state: GameState, action: GameAction): GameState {
 	return { qIndex: nextIndex, choices: nextChoices, done: false };
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
 // Component
-// ─────────────────────────────────────────────────────────────────────────────
 
 export function ThumbShotTask() {
 	const { sussy, secret, isImpostor, timer } = useSussyState();
@@ -88,7 +82,7 @@ export function ThumbShotTask() {
 
 	if (!sussy) return null;
 
-	// ── Hangout mode ─────────────────────────────────────────────────────────
+	// Hangout mode
 	if (isHangout) {
 		return (
 			<div className="flex flex-col min-h-screen px-5 py-10 gap-8">
@@ -106,7 +100,7 @@ export function ThumbShotTask() {
 				) : (
 					<div className="flex flex-col gap-4">
 						{questions?.map((q, i) => (
-							// Fix: no-array-index-as-key — questions are unique strings,
+							// Fix: no-array-index-as-key, questions are unique strings,
 							// use the question text as the key.
 							<div
 								key={q}
@@ -126,17 +120,17 @@ export function ThumbShotTask() {
 		);
 	}
 
-	// ── Done screen ──────────────────────────────────────────────────────────
+	// Done screen
 	if (done) {
 		return (
 			<div className="flex flex-col items-center justify-center min-h-screen gap-4 px-8 text-center">
 				<span className="text-5xl">✅</span>
 				<p className="text-white/60 text-sm">
-					All answered — waiting for others
+					All answered, waiting for others
 				</p>
 				<div className="flex gap-3 mt-2">
 					{choices.map((c, i) => (
-						// Fix: no-array-index-as-key — choices are positional ordinals;
+						// Fix: no-array-index-as-key, choices are positional ordinals;
 						// use a semantic prefix so the key is not a bare index.
 						<div
 							key={`choice-${i}`}
@@ -151,7 +145,7 @@ export function ThumbShotTask() {
 		);
 	}
 
-	// ── Impostor ─────────────────────────────────────────────────────────────
+	// Impostor
 	if (isImpostor) {
 		return (
 			<div className="flex flex-col min-h-screen relative">
@@ -191,7 +185,7 @@ export function ThumbShotTask() {
 		);
 	}
 
-	// ── Crew ─────────────────────────────────────────────────────────────────
+	// Crew
 	return (
 		<div className="flex flex-col min-h-screen px-5 py-8 gap-8">
 			<div>
@@ -227,9 +221,7 @@ export function ThumbShotTask() {
 	);
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
 // Sub-components
-// ─────────────────────────────────────────────────────────────────────────────
 
 function ThumbBtn({
 	emoji,
@@ -258,7 +250,7 @@ function ProgressDots({ active, total }: { active: number; total: number }) {
 	return (
 		<div className="flex gap-2">
 			{Array.from({ length: total }, (_, i) => (
-				// Fix: no-array-index-as-key — progress dots are positional;
+				// Fix: no-array-index-as-key, progress dots are positional;
 				// use a semantic prefix.
 				<div
 					key={`dot-${i}`}

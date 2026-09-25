@@ -142,7 +142,7 @@ function rafTick(
 	start: number,
 ) {
 	const state = glStateRef.current;
-	if (!state) return; // unmounted — exit cleanly
+	if (!state) return; // unmounted, exit cleanly
 
 	if (!document.hidden) {
 		const { gl, res, u } = state;

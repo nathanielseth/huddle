@@ -141,7 +141,7 @@ function HostVotingView() {
 		state.currentPrompt;
 	const label = `${roundLabel(state.round)} · ${state.currentPromptIndex + 1} of ${state.totalPromptsThisRound}`;
 
-	// Fix: js-combine-iterations — single reduce() pass instead of filter().map()
+	// Fix: js-combine-iterations, single reduce() pass instead of filter().map()
 	const voterPips = Object.values(state.players).reduce<React.ReactNode[]>(
 		(acc, p) => {
 			if (!authorIds.includes(p.id)) {
@@ -259,7 +259,7 @@ function VoterView() {
 	const hasVoted = state.players[playerId]?.hasVoted ?? false;
 	const label = `${roundLabel(state.round)} · ${state.currentPromptIndex + 1} of ${state.totalPromptsThisRound}`;
 
-	// Fix: js-combine-iterations — single reduce() pass instead of filter().map()
+	// Fix: js-combine-iterations, single reduce() pass instead of filter().map()
 	const waitDots = Object.values(state.players).reduce<React.ReactNode[]>(
 		(acc, p) => {
 			if (!state.currentPrompt!.authorIds.includes(p.id)) {

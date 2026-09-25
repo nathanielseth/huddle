@@ -36,8 +36,7 @@ function HostView() {
 					{guesserName} must look away
 				</p>
 				<p className="text-white/50 text-sm">
-					Everyone else, write a one-word clue that points to the secret word —
-					without using the word itself.
+					Everyone else, write a one-word clue that points to the secret word, 					without using the word itself.
 				</p>
 			</div>
 
@@ -176,8 +175,8 @@ function WriterView() {
 								cancel each other out.
 							</p>
 							{/*
-							 * Fix: control-has-associated-label — aria-label names the field
-							 * Fix: no-autofocus — ref-based focus only, no autoFocus prop
+							 * Fix: control-has-associated-label, aria-label names the field
+							 * Fix: no-autofocus, ref-based focus only, no autoFocus prop
 							 */}
 							<input
 								ref={inputRef}
@@ -194,12 +193,12 @@ function WriterView() {
 							/>
 							{isMultiWord && (
 								<p className="text-red-400 text-xs text-center">
-									One word only — no spaces.
+									One word only, no spaces.
 								</p>
 							)}
 							{isOver && !isMultiWord && (
 								<p className="text-red-400 text-xs text-center">
-									Too long — keep it under {MAX_CLUE_LENGTH} characters.
+									Too long, keep it under {MAX_CLUE_LENGTH} characters.
 								</p>
 							)}
 							<button

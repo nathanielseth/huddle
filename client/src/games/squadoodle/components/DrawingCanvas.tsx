@@ -6,9 +6,7 @@ import { CANVAS_WIDTH, CANVAS_HEIGHT } from "@shared/games/squadoodle/index";
 import type { Stroke, InputPoint } from "@shared/games/squadoodle/index";
 import { cn } from "../../../lib/utils/cn";
 
-// ---------------------------------------------------------------------------
 // Palette + sizes
-// ---------------------------------------------------------------------------
 
 const PALETTE = [
 	"#111111", // black  (default)
@@ -24,9 +22,7 @@ const PALETTE = [
 
 const SIZES = [4, 10, 20, 36] as const;
 
-// ---------------------------------------------------------------------------
 // Types
-// ---------------------------------------------------------------------------
 
 interface LiveStroke {
 	points: InputPoint[];
@@ -41,14 +37,11 @@ interface Props {
 	prompt: string;
 }
 
-// ---------------------------------------------------------------------------
-// Fix: prefer-useReducer — merge strokes, liveStroke, and submitted into one
-// reducer. These three are tightly coupled drawing-lifecycle state: committing
-// a stroke moves points from liveStroke into strokes; submitting locks both.
-// color and size are independent tool preferences and stay as useState — they
-// have no causal relationship to stroke state and changing one never needs to
-// atomically change the other.
-// ---------------------------------------------------------------------------
+// strokes, liveStroke, and submitted are one reducer because they're
+// tightly coupled drawing-lifecycle state: committing a stroke moves points
+// from liveStroke into strokes; submitting locks both. color and size are
+// independent tool preferences and stay as useState, changing one never
+// needs to atomically change the other.
 
 type DrawingState = {
 	strokes: Stroke[];
@@ -113,16 +106,14 @@ function drawingReducer(
 	}
 }
 
-// ---------------------------------------------------------------------------
 // Coordinate mapping
-// ---------------------------------------------------------------------------
 
 /**
  * Maps a PointerEvent client coordinate into the logical 800×600 canvas space.
  *
  * Uses getScreenCTM().inverse() rather than getBoundingClientRect() arithmetic
  * because preserveAspectRatio="xMidYMid meet" letterboxes the viewBox inside
- * the SVG element — the actual drawing area is smaller than the element and
+ * the SVG element, the actual drawing area is smaller than the element and
  * centred within it. getBoundingClientRect() gives element dimensions, not
  * content dimensions, so the mapping is wrong. getScreenCTM() returns the
  * exact matrix the browser used to position the viewBox, so inverting it
@@ -150,18 +141,16 @@ function toLogical(
 	};
 }
 
-// ---------------------------------------------------------------------------
 // Component
-// ---------------------------------------------------------------------------
 
 export function DrawingCanvas({ onSubmit, prompt }: Props) {
 	const svgRef = useRef<SVGSVGElement | null>(null);
 
-	// Fix: prefer-useReducer — drawing lifecycle state in one reducer.
+	// Fix: prefer-useReducer, drawing lifecycle state in one reducer.
 	const [drawing, dispatch] = useReducer(drawingReducer, INITIAL_DRAWING);
 	const { strokes, liveStroke, submitted } = drawing;
 
-	// color and size are independent tool preferences — left as useState.
+	// color and size are independent tool preferences, left as useState.
 	const [color, setColor] = useState<string>(PALETTE[0]);
 	const [size, setSize] = useState<number>(SIZES[1]);
 
@@ -169,9 +158,7 @@ export function DrawingCanvas({ onSubmit, prompt }: Props) {
 	// over the latest value without needing it in their dep arrays.
 	const liveRef = useRef<LiveStroke | null>(null);
 
-	// ---------------------------------------------------------------------------
 	// Pointer handlers
-	// ---------------------------------------------------------------------------
 
 	function handlePointerDown(e: React.PointerEvent<SVGSVGElement>) {
 		if (submitted) return;
@@ -205,9 +192,7 @@ export function DrawingCanvas({ onSubmit, prompt }: Props) {
 		dispatch({ type: "COMMIT_STROKE" });
 	}
 
-	// ---------------------------------------------------------------------------
 	// Toolbar actions
-	// ---------------------------------------------------------------------------
 
 	function undo() {
 		dispatch({ type: "UNDO" });
@@ -223,9 +208,7 @@ export function DrawingCanvas({ onSubmit, prompt }: Props) {
 		onSubmit(strokes);
 	}
 
-	// ---------------------------------------------------------------------------
 	// Live path for StrokeRenderer
-	// ---------------------------------------------------------------------------
 
 	const livePath = liveStroke
 		? {
@@ -235,9 +218,7 @@ export function DrawingCanvas({ onSubmit, prompt }: Props) {
 			}
 		: null;
 
-	// ---------------------------------------------------------------------------
 	// Render
-	// ---------------------------------------------------------------------------
 
 	return (
 		<div className="flex flex-col h-full gap-3 select-none">

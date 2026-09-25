@@ -62,7 +62,7 @@ export function toAnnouncement(
 					return {
 						id: `log-${entry.seq}`,
 						headline: "Strike Negated",
-						subline: `${target} — ${entry.negatedBy}`,
+						subline: `${target}, ${entry.negatedBy}`,
 						tone: "neutral",
 					};
 				case "crew_killed":
@@ -112,7 +112,7 @@ export function toAnnouncement(
 			return {
 				id: `log-${entry.seq}`,
 				headline: "Chain Resolved",
-				subline: `${who(p1)} vs ${who(p2)} — ${n} step${n === 1 ? "" : "s"}`,
+				subline: `${who(p1)} vs ${who(p2)}, ${n} step${n === 1 ? "" : "s"}`,
 				tone: "neutral",
 			};
 		}

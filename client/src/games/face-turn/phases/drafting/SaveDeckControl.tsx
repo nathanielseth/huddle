@@ -34,7 +34,7 @@ function SaveDeckForm({
 	function handleSave() {
 		const saved = save(name, selections, thumbnailArtSrc);
 		if (!saved) {
-			toast.error("Couldn't save — local storage is full or unavailable.");
+			toast.error("Couldn't save, local storage is full or unavailable.");
 			return;
 		}
 		toast.success(`Saved "${saved.name}"`);

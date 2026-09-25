@@ -41,9 +41,8 @@ export function discardFromHand(
 	return toDiscard;
 }
 
-// resolves a card's onDiscardEffects (if any) as though it had just been
-// played, with the discarding player as actor. runs only from the
-// discardFromHand pipeline (self-initiated discards).
+// resolves a card's onDiscardEffects as though it had just been played, with the discarding player as
+// actor. runs only from the discardFromHand pipeline (self-initiated discards)
 function maybeTriggerOnDiscardEffects(
 	cardId: string,
 	player: FaceturnServerPlayer,
@@ -74,8 +73,7 @@ function maybeTriggerDoctorNorman(
 	player.hasArmoredBossThisGame = true;
 }
 
-// discard stab active move: adds a copy of Stab to hand for each card
-// discarded by the player's own crew/moves, up to the hand limit
+// discard stab active move: adds a copy of Stab to hand for each card discarded by the player's own crew/moves, up to the hand limit
 function maybeTriggerDiscardStabGrant(
 	player: FaceturnServerPlayer,
 	cardsDiscarded: number,
@@ -190,9 +188,8 @@ export const drawDiscardHandlers = {
 		target.totalCardsDiscarded += discarded.length;
 		for (const id of discarded) target.costOverrides.delete(id);
 		ctx.state.lastEnemyHandDiscardCount = discarded.length;
-		// doctor norman does not trigger on enemy-forced discards to the
-		// enemy's own hand, but the caster is the one doing the discarding
-		// here, so it counts as a self-triggered discard for the caster
+		// doctor norman doesn't trigger on enemy-forced discards to the enemy's own hand, but the caster
+		// is doing the discarding here, so it counts as self-triggered for the caster
 		if (discarded.length > 0) {
 			checkRatQueenDrawTrigger(target, ctx.state);
 			maybeTriggerDoctorNorman(ctx.actor, discarded.length);

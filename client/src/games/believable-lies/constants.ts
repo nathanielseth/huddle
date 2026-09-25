@@ -1,6 +1,6 @@
 // Client-side mirror of server/games/believable-lies/constants.ts
 // These are used for display-only purposes (timers, progress bars).
-// They do NOT affect game logic — the server is authoritative.
+// They do NOT affect game logic, the server is authoritative.
 // Update here if you change the server constants.
 
 import type { BelievableLiesPhase } from "@shared/games/believable-lies/index";

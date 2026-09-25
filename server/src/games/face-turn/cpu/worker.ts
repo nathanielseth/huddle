@@ -23,7 +23,7 @@ if (!parentPort) {
 
 parentPort.on("message", (req: CpuSearchRequest) => {
 	try {
-		// rng is reconstructed here n not sent from the main thread
+		// rng is reconstructed here, not sent from the main thread
 		const state: FaceturnServerState = { ...req.state, rng: Math.random };
 		const action = decideAction(state, req.seat, Math.random);
 

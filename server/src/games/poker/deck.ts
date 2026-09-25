@@ -23,7 +23,7 @@ export function dealOne(deck: Card[]): Card {
 	const card = deck.pop();
 	if (card === undefined) {
 		throw new Error(
-			"[poker/deck] Deck exhausted — this is a bug in hand setup.",
+			"[poker/deck] Deck exhausted, this is a bug in hand setup.",
 		);
 	}
 	return card;

@@ -68,17 +68,14 @@ function maybeTriggerMonkeyManCashSteal(
 	sourceActor.cash += stolen;
 }
 
-// the razor: adds a copy of Stab to the actor's hand, if under the hand limit.
-// used both when this player strikes and when they deal damage with a move
-// other than Stab itself.
+// the razor: adds a copy of Stab to hand (if under the limit) when this player strikes or deals damage with a non-Stab move
 export function maybeTriggerRazorStabGrant(actor: FaceturnServerPlayer): void {
 	if (!actor.derived.hasRazorStabPassive) return;
 	if (actor.hand.length >= C.HAND_LIMIT) return;
 	actor.hand.push(CARD_IDS.MOVE.STAB);
 }
 
-// blood money: your team gains cash whenever your team deals boss damage
-// via a move or a strike (including a killing-blow execution)
+// blood money: your team gains cash whenever your team deals boss damage, via move, strike, or killing-blow execution
 export function maybeTriggerBloodMoneyOnTeamDamage(
 	state: FaceturnServerState,
 	sourceActor: FaceturnServerPlayer,

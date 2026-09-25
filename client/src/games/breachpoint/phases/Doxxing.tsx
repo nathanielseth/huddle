@@ -1,14 +1,14 @@
 import { useState } from "react";
 import { m } from "motion/react";
-import { useCybsecsState } from "../hooks/useCybsecsState";
+import { useBreachpointState } from "../hooks/useBreachpointState";
 import { TimerBar } from "../../sabong/components/TimerBar";
 import { socket } from "../../../lib/network/socket";
 import { cn } from "../../../lib/utils/cn";
-import type { CybsecsState } from "@shared/games/breachpoint/index";
+import type { BreachpointState } from "@shared/games/breachpoint/index";
 import type { GameTimer } from "@shared/core/room";
 
 export function Doxxing() {
-	const { game, secret, role, timer, playerId, getName } = useCybsecsState();
+	const { game, secret, role, timer, playerId, getName } = useBreachpointState();
 	if (!game) return null;
 
 	const isDoxxer = secret?.role === "doxxer";
@@ -34,7 +34,7 @@ function HostView({
 	timer,
 	getName,
 }: {
-	game: CybsecsState;
+	game: BreachpointState;
 	timer: GameTimer | null;
 	getName: (id: string) => string;
 }) {
@@ -80,7 +80,7 @@ function DoxxerView({
 	playerId,
 	getName,
 }: {
-	game: CybsecsState;
+	game: BreachpointState;
 	timer: GameTimer | null;
 	playerId: string;
 	getName: (id: string) => string;
@@ -109,7 +109,7 @@ function DoxxerView({
 			</div>
 
 			<p className="text-white/50 text-sm">
-				Pick the Sysadmin — hackers win. Pick wrong — agents win. Choose
+				Pick the Sysadmin, hackers win. Pick wrong, agents win. Choose
 				carefully.
 			</p>
 

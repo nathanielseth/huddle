@@ -1,14 +1,14 @@
 import { m } from "motion/react";
-import { useCybsecsState } from "../hooks/useCybsecsState";
+import { useBreachpointState } from "../hooks/useBreachpointState";
 import { TimerBar } from "../../sabong/components/TimerBar";
 import { MissionTrack } from "../components/MissionTrack";
 import { socket } from "../../../lib/network/socket";
 import { cn } from "../../../lib/utils/cn";
-import type { CybsecsState } from "@shared/games/breachpoint/index";
+import type { BreachpointState } from "@shared/games/breachpoint/index";
 import type { GameTimer, Player } from "@shared/core/room";
 
 export function Talking() {
-	const { game, role, timer, players, playerId, getName } = useCybsecsState();
+	const { game, role, timer, players, playerId, getName } = useBreachpointState();
 	if (!game) return null;
 
 	if (role === "host") {
@@ -24,7 +24,7 @@ function HostView({
 	timer,
 	getName,
 }: {
-	game: CybsecsState;
+	game: BreachpointState;
 	timer: GameTimer | null;
 	players: Player[];
 	getName: (id: string) => string;
@@ -106,7 +106,7 @@ function PlayerView({
 	timer,
 	playerId,
 }: {
-	game: CybsecsState;
+	game: BreachpointState;
 	timer: GameTimer | null;
 	playerId: string;
 }) {

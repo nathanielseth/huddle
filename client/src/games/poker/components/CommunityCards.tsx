@@ -1,5 +1,3 @@
-// client/src/games/poker/components/CommunityCards.tsx
-//
 // Community board with two selectable layouts:
 //  - "row": flat [][][][][], for wide/landscape views (host/TV) where there's
 //    horizontal room and a single row reads clearly at a glance.
@@ -8,7 +6,7 @@
 //    tiny card sizes.
 //
 // Both host and player views share this component but pass different
-// `layout` values — don't hardcode one shape here again, that's exactly what
+// `layout` values, don't hardcode one shape here again, that's exactly what
 // broke the host view last time (mobile's stagger silently became the only
 // option and host inherited it with no way to opt back into a flat row).
 
@@ -57,7 +55,7 @@ export function CommunityCards({
 		);
 	}
 
-	// ── Stagger: 3-over-2, for narrow/portrait views ──────────────────────────
+	// Stagger: 3-over-2, for narrow/portrait views
 	const flopCount = Math.min(shown.length, 3);
 	const turnRiverCount = Math.max(0, shown.length - 3);
 
@@ -92,7 +90,7 @@ export function CommunityCards({
 				))}
 			</div>
 
-			{/* Row 2: turn + river (2 slots) — always rendered, even pre-flop with
+			{/* Row 2: turn + river (2 slots), always rendered, even pre-flop with
 			    zero cards dealt, so the board's 3-over-2 shape is visible from
 			    the start instead of popping in only once the flop lands. */}
 			<div className="flex gap-1.5">

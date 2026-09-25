@@ -1,14 +1,14 @@
 import { useState } from "react";
 import { m } from "motion/react";
-import { useCybsecsState } from "../hooks/useCybsecsState";
+import { useBreachpointState } from "../hooks/useBreachpointState";
 import { TimerBar } from "../../sabong/components/TimerBar";
 import { MissionTrack } from "../components/MissionTrack";
 import { ObfuscatorToggle } from "../components/ObfuscatorToggle";
 import { socket } from "../../../lib/network/socket";
 import { cn } from "../../../lib/utils/cn";
 import type {
-	CybsecsState,
-	CybsecsSecret,
+	BreachpointState,
+	BreachpointSecret,
 } from "@shared/games/breachpoint/index";
 import type { GameTimer } from "@shared/core/room";
 
@@ -18,7 +18,7 @@ function passLeadership() {
 
 export function Nominating() {
 	const { game, secret, role, timer, playerId, amLeader, getName } =
-		useCybsecsState();
+		useBreachpointState();
 	if (!game) return null;
 
 	if (role === "host") {
@@ -45,7 +45,7 @@ function HostView({
 	timer,
 	getName,
 }: {
-	game: CybsecsState;
+	game: BreachpointState;
 	timer: GameTimer | null;
 	getName: (id: string) => string;
 }) {
@@ -124,10 +124,10 @@ function LeaderView({
 	secret,
 	getName,
 }: {
-	game: CybsecsState;
+	game: BreachpointState;
 	timer: GameTimer | null;
 	playerId: string;
-	secret: CybsecsSecret | null;
+	secret: BreachpointSecret | null;
 	getName: (id: string) => string;
 }) {
 	const [selected, setSelected] = useState<string[]>([]);
@@ -277,9 +277,9 @@ function WaiterView({
 	secret,
 	getName,
 }: {
-	game: CybsecsState;
+	game: BreachpointState;
 	timer: GameTimer | null;
-	secret: CybsecsSecret | null;
+	secret: BreachpointSecret | null;
 	getName: (id: string) => string;
 }) {
 	const leaderName = getName(game.playerOrder[game.leaderIndex]);

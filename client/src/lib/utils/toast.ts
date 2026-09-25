@@ -13,7 +13,7 @@ export interface Toast {
 	variant: ToastVariant;
 	message: string;
 	action?: ToastAction;
-	duration: number; // ms — 0 means persistent (no auto-dismiss)
+	duration: number; // ms, 0 means persistent (no auto-dismiss)
 	createdAt: number; // used to trigger timer resets on dedup updates
 }
 

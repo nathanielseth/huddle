@@ -498,7 +498,7 @@ function BoardFooter({
 					"inline-flex items-center gap-1",
 					handFull && "text-amber-300/70",
 				)}
-				title={handFull ? "Hand full — further draws are wasted" : undefined}
+				title={handFull ? "Hand full, further draws are wasted" : undefined}
 			>
 				<HandIcon className="w-3 h-3" />
 				{player.handSize}

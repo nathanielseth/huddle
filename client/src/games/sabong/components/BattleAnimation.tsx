@@ -13,7 +13,7 @@ interface BattleAnimationProps {
 	compact?: boolean;
 }
 
-// ─── Reducer ─────────────────────────────────────────────────────────────────
+// Reducer
 // Consolidating the three setState calls that used to live inside the timer
 // callbacks into a single dispatch eliminates the cascading render problem:
 // one action → one render, no intermediate flicker.
@@ -41,7 +41,7 @@ function battleReducer(state: BattleState, action: BattleAction): BattleState {
 			const hp = action.hpUpdate
 				? { ...state.hp, [action.hpUpdate.id]: action.hpUpdate.value }
 				: state.hp;
-			// lineCounter lives in a ref outside — we just append the line here
+			// lineCounter lives in a ref outside, we just append the line here
 			return {
 				hp,
 				currentEvent: action.eventIndex,
@@ -60,7 +60,7 @@ function battleReducer(state: BattleState, action: BattleAction): BattleState {
 	}
 }
 
-// ─── Helpers ──────────────────────────────────────────────────────────────────
+// Helpers
 
 function buildEventText(
 	event: BattleEvent,
@@ -94,7 +94,7 @@ function buildEventText(
 	}
 }
 
-// ─── Component ────────────────────────────────────────────────────────────────
+// Component
 
 export function BattleAnimation({
 	fighter1,
@@ -130,7 +130,7 @@ export function BattleAnimation({
 		if (!battleLog.length) return;
 
 		// getName is defined here, inside the effect, so it closes over
-		// fighter1/fighter2 from this render — no stale capture, no dep to declare.
+		// fighter1/fighter2 from this render, no stale capture, no dep to declare.
 		function getName(id: string) {
 			return id === fighter1.id ? fighter1.name : fighter2.name;
 		}

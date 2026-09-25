@@ -1,5 +1,5 @@
 // locks fire-and-forget actions until resetToken changes, an explicit
-// rejection signal fires, or timeout — since socket has no per-action ack
+// rejection signal fires, or timeout, since socket has no per-action ack
 // and state sync latency allows double submit.
 
 import { useEffect, useRef, useState } from "react";
@@ -19,8 +19,7 @@ export function useActionLock(
 	// when true, an "action_rejected" event from the server (see
 	// actionRejectionSignal.ts) releases the lock immediately instead of
 	// waiting out timeoutMs. Opt-in and defaulted false so existing callers
-	// that don't expect a mid-wait release keep their current behavior —
-	// only turn this on where runLocked wraps an action that can actually
+	// that don't expect a mid-wait release keep their current behavior, 	// only turn this on where runLocked wraps an action that can actually
 	// produce a targeted rejection (play_move and friends), not e.g. a
 	// generic "end turn" where a stray rejection for something else
 	// shouldn't release an unrelated lock.

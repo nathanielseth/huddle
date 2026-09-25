@@ -6,7 +6,7 @@ function fmtCard(c: string): string {
 }
 
 function fmtCards(arr: unknown): string {
-	if (!Array.isArray(arr) || arr.length === 0) return "——";
+	if (!Array.isArray(arr) || arr.length === 0) return ", ";
 	return arr.map((c) => fmtCard(String(c))).join(" ");
 }
 
@@ -50,7 +50,7 @@ interface BufferedAI {
 export class PokerLogger {
 	private readonly room: string;
 
-	// per-hand caches — cleared at hand_start
+	// per-hand caches, cleared at hand_start
 	private readonly hc = new Map<string, string>(); // "K♥ Q♠"
 	private readonly lbl = new Map<string, string>(); // display label
 	private readonly stk = new Map<string, number>(); // last known stack
@@ -63,7 +63,7 @@ export class PokerLogger {
 		this.room = roomCode;
 	}
 
-	// "[KUH7  #1]" — consistent 11-char prefix
+	// "[KUH7  #1]", consistent 11-char prefix
 	private tag(hand: number | null): string {
 		const r = this.room.substring(0, 4).padEnd(4);
 		const h = hand !== null ? `#${hand}` : "  ";
@@ -135,7 +135,7 @@ export class PokerLogger {
 				break;
 			}
 
-			// buffered — merged into hand_start
+			// buffered, merged into hand_start
 			case "blinds_posted": {
 				const sb = payload["sb"] as
 					| { playerId: string; posted: number }
@@ -248,7 +248,7 @@ export class PokerLogger {
 				break;
 			}
 
-			// buffered — merged into next player_action for same player
+			// buffered, merged into next player_action for same player
 			case "ai_action": {
 				this.aiBuf = {
 					playerId: asStr(payload["playerId"]),
@@ -323,9 +323,9 @@ export class PokerLogger {
 					const p = rpad(fmtPid(id), 10);
 					const star = this.ai.has(id) ? "★" : " ";
 					const c = rpad(this.hc.get(id) ?? "?? ??", 6);
-					const desc = rpad(info.hand ?? "——", 22);
+					const desc = rpad(info.hand ?? ", ", 22);
 					const won =
-						info.won > 0 ? `${lpad(fmtChips(info.won), 9)}  ✓` : rpad("——", 9);
+						info.won > 0 ? `${lpad(fmtChips(info.won), 9)}  ✓` : rpad(", ", 9);
 					this.out(hand, `  ${p}  ${star}  ${c}   ${desc}  ${won}`);
 				}
 

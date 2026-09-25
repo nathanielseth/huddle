@@ -56,8 +56,7 @@ export interface FaceturnServerPlayer {
 	crewIds: [string | null, string | null];
 	crewTurned: [boolean, boolean];
 
-	// reserve slots, in draft order; standard players have C.RESERVE_CREW_SLOTS
-	// (1), the Dealer has one extra via passive_extra_reserve_crew
+	// reserve slots, in draft order; the Dealer gets one extra via passive_extra_reserve_crew
 	reserveCrewIds: (string | null)[];
 
 	hand: string[];
@@ -80,21 +79,16 @@ export interface FaceturnServerPlayer {
 
 	mulliganDecided: boolean;
 
-	// warrant of arrest: marks this player has placed on enemy crew,
-	// keyed by this player's own active-move slot. see WarrantOfArrestMark.
+	// warrant of arrest: marks this player placed on enemy crew, keyed by this player's own active-move slot
 	warrantMarks: Map<0 | 1 | 2, WarrantOfArrestMark>;
-	// red herring: this player's own pending redirect, if any. see
-	// RedHerringMark. not a derived/recomputed field — set at cast time,
-	// cleared on consumption or invalidation.
+	// red herring: this player's own pending redirect, set at cast time, cleared on consumption or invalidation
 	redHerringMark: RedHerringMark | null;
 
 	// maps active slot to protected ally; locked at cast time
 	lifeInsuranceTargets: Map<0 | 1 | 2, string>;
 	// maps active slot to watched enemy; read live by applyTrickleDownOnCollect
 	trickleDownTargets: Map<0 | 1 | 2, string>;
-	// kamileon: rerolled class per crew slot, persists across face-down/up
-	// unlike derived.crewClassOverrides (rebuilt from face-up crew only).
-	// set when the crew turns face-down, read by resolveCrewClass/playerHasClass
+	// chamelia: rerolled class per crew slot, persists across face-down/up (unlike derived.crewClassOverrides)
 	crewClassMutations: Map<0 | 1, CrewClass>;
 	// per-turn flag; reset in startTurn.
 	ratQueenDrawUsedThisTurn: boolean;
@@ -153,19 +147,16 @@ export interface FaceturnServerState {
 	// pending card effect requiring a player choice.
 	pendingInteraction: PendingInteraction | null;
 
-	// turned‑effect strikes (e.g. Shrike) queue if pendingAction is busy, drained by afterAction once state is clean, reusing Ambush’s card_strike/defend_window flow
+	// turned-effect strikes (e.g. Shrike) queue if pendingAction is busy, drained by afterAction once state is clean
 	pendingDefendableStrikes: PendingDefendableStrike[];
 
 	lastResolution: ResolutionResult | null;
-	// mirrors lastResolution's lifecycle: just gets overwritten by whoever
-	// resolves a move chain next. written inside resolveMoveChainFull so
-	// none of its callers need to change.
+	// mirrors lastResolution's lifecycle: overwritten by whoever resolves a move chain next
 	lastChainResolution: MoveChainResolutionView | null;
 
-	// append-only match log — see ./log.ts for pushLog and the cap.
+	// append-only match log, see ./log.ts for pushLog and the cap
 	log: LogEntry[];
-	// next seq to assign; monotonic for the life of the game, never
-	// reused even as old entries get evicted past the cap.
+	// next seq to assign, monotonic for the life of the game, never reused even as old entries get evicted
 	_nextLogSeq: number;
 
 	// one-shot private hand reveal; cleared after next state build
@@ -174,10 +165,8 @@ export interface FaceturnServerState {
 	rpsChoices: Map<string, RpsChoice>;
 	// ties resolved by coinflip; a first mover always exists
 	rpsResult: "player1" | "player2" | null;
-	// set once rpsResult resolves, survives into phase "rps_order_choice"
-	// (state.rps itself goes null once the phase leaves "rps"/"rps_reveal",
-	// so this is the only place the winner is still recorded there). cleared
-	// once order is chosen and we move on to "mulligan".
+	// set once rpsResult resolves, survives into "rps_order_choice" since state.rps goes null there
+	// cleared once order is chosen and play moves to "mulligan"
 	rpsOrderChoiceWinnerId: string | null;
 
 	winnerId: string | null;

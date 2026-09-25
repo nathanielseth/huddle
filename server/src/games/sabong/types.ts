@@ -25,7 +25,7 @@ export interface ManokStats {
 	defense: number;
 	speed: number;
 	critRate: number;
-	// hidden combat stat — reduces effective opponent defense per hit
+	// hidden combat stat, reduces effective opponent defense per hit
 	determination: number;
 	// randomised set of stats hidden from public view
 	hiddenStats: Set<HideableStat>;
@@ -57,7 +57,7 @@ export interface SabongServerPlayer {
 	bracketPickId: string | null;
 	bracketPickLocked: boolean;
 
-	// shop intelligence — private, never in public state
+	// shop intelligence, private, never in public state
 	sabotageTargets: Set<string>; // persists across all shop phases
 	revealedStats: Map<string, Set<HideableStat>>; // persists across all shop phases
 	shopSpyUsed: number; // reset each shop phase by openShop
@@ -81,14 +81,14 @@ export interface SabongServerState {
 
 	// counts of players who have confirmed their action this phase.
 	// quorum (allPicksLocked/allBetsLocked) is checked against state.players.size, a
-	// snapshot taken at onStart — not room.players.size (live connected count). A
+	// snapshot taken at onStart, not room.players.size (live connected count). A
 	// player who disconnects still counts toward quorum; phase timers are what
 	// prevent the room from hanging on an absent player.
 	lockedPickCount: number;
 	lockedBetCount: number;
 	matchCount: number;
 
-	// public state cache — invalidated by markDirty on any mutation
+	// public state cache, invalidated by markDirty on any mutation
 	_publicStateCacheValid: boolean;
 	_cachedPublicState: SabongState | null;
 }

@@ -11,13 +11,11 @@ export const bearBonesBonusStrikeSpec: InteractionSpec<Interaction> = {
 	getResponderId: (interaction) => interaction.actorId,
 	actionType: "resolve_bear_bones_bonus_strike",
 
-	// chains into finalizeResolvedChallenge, which itself returns a full
-	// EngineResult, so this is "custom" like background_check_guess
+	// chains into finalizeResolvedChallenge, which returns a full EngineResult, so this is "custom" like background_check_guess
 	resolve(state, interaction, action, respondingPlayer) {
 		if (action.type !== "resolve_bear_bones_bonus_strike") return null;
 		const defeatedPlayerId = state.pendingAction?.actorId ?? null;
-		// clear before resolveBearBonesBonusStrike
-		// it may chain into resolveStrikeOrExecute and open a new pendingInteraction; clearing later would wipe it
+		// clear before resolveBearBonesBonusStrike, it may open a new pendingInteraction and clearing later would wipe it
 		state.pendingInteraction = null;
 		const bonusOutcome = resolveBearBonesBonusStrike(
 			state,

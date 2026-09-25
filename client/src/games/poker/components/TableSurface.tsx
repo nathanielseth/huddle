@@ -1,14 +1,12 @@
-// client/src/games/poker/components/TableSurface.tsx
-//
 // Shared SVG felt/rail graphic. Both PokerTableHost (TV/big-screen) and
 // PokerTablePlayer (phone) render the same physical table, but at different
 // proportions: the host is landscape (wide TV), the phone table is portrait
-// (tall, narrow — like a real table rotated to face you). Passing the wrong
+// (tall, narrow, like a real table rotated to face you). Passing the wrong
 // orientation's viewBox into a differently-shaped container just squishes the
 // oval into a squat band with dead space around it, which is the bug this
 // prop exists to prevent.
 //
-// Seat-angle math lives in ../lib/tableGeometry — import it from there
+// Seat-angle math lives in ../lib/tableGeometry, import it from there
 // directly (e.g. `import { getSeatPosition } from "./lib/tableGeometry"`).
 // This file must export ONLY the component, or react-refresh breaks.
 
@@ -20,7 +18,7 @@ interface TableSurfaceProps {
 const DIMENSIONS = {
 	landscape: { width: 1000, height: 560, rx: 418, ry: 218 },
 	// Portrait: width/height ≈ 0.66, matching a real table turned to face the
-	// player — tall enough that seats read as "around" rather than "beside".
+	// player, tall enough that seats read as "around" rather than "beside".
 	portrait: { width: 640, height: 970, rx: 290, ry: 430 },
 } as const;
 

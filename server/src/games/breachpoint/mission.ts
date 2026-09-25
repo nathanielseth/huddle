@@ -4,8 +4,8 @@ import type {
 	EhIntel,
 } from "../../../../shared/games/breachpoint/index";
 import type {
-	CybsecsServerState,
-	CybsecsServerPlayer,
+	BreachpointServerState,
+	BreachpointServerPlayer,
 	MissionResolution,
 	EhOutcome,
 	ObfuscatorEffect,
@@ -13,7 +13,7 @@ import type {
 import { requiredHacksFor } from "./constants";
 
 function countHacks(
-	teamPlayers: CybsecsServerPlayer[],
+	teamPlayers: BreachpointServerPlayer[],
 	mode: GameMode,
 ): number {
 	if (mode !== "override") {
@@ -26,7 +26,7 @@ function countHacks(
 }
 
 function resolveEhOverride(
-	teamPlayers: CybsecsServerPlayer[],
+	teamPlayers: BreachpointServerPlayer[],
 	realHackCount: number,
 	reqHacks: number,
 ): { trueHackCount: number; ehOutcome?: EhOutcome } {
@@ -68,7 +68,7 @@ function resolveEhOverride(
 }
 
 function resolveObfuscation(
-	state: CybsecsServerState,
+	state: BreachpointServerState,
 	trueResult: Extract<MissionResult, { obfuscated: false }>,
 ): { publicResult: MissionResult; obfuscatorEffect?: ObfuscatorEffect } {
 	const obfuscatorId = state.roleIndex.get("obfuscator");
@@ -99,7 +99,7 @@ function resolveObfuscation(
 	};
 }
 
-export function resolveMission(state: CybsecsServerState): MissionResolution {
+export function resolveMission(state: BreachpointServerState): MissionResolution {
 	const { missionIndex, nominatedTeam, players, mode, playerOrder } = state;
 	const teamPlayers = nominatedTeam.map((id) => players.get(id)!);
 	const reqHacks = requiredHacksFor(playerOrder.length, missionIndex);
@@ -135,11 +135,11 @@ export function resolveMission(state: CybsecsServerState): MissionResolution {
 // result logs, advances phase to mission_result. returns player IDs whose
 // secrets changed so caller can build private payloads.
 //
-// EH block:    usesLeft decremented, ehIntel NOT written (kind === "block")
-// EH backfire: usesLeft decremented, ehIntel + ehIntelMissionIndex written
-// Obfuscator:  usesLeft decremented, disarmed, trueResult delivered to recipient
+// eh block:    usesLeft decremented, ehIntel not written (kind === "block")
+// eh backfire: usesLeft decremented, ehIntel + ehIntelMissionIndex written
+// obfuscator:  usesLeft decremented, disarmed, trueResult delivered to recipient
 export function commitMissionResult(
-	state: CybsecsServerState,
+	state: BreachpointServerState,
 	{ publicResult, trueResult, ehOutcome, obfuscatorEffect }: MissionResolution,
 ): Set<string> {
 	state.missionResults.push(publicResult);
@@ -183,7 +183,7 @@ export function commitMissionResult(
 }
 
 // derives true secured/hacked counts from trueMissionResults
-export function getWinCounts(state: CybsecsServerState): {
+export function getWinCounts(state: BreachpointServerState): {
 	secureds: number;
 	hacked: number;
 } {

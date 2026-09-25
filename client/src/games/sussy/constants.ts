@@ -6,7 +6,7 @@ export interface TaskMeta {
 	desc: string;
 }
 
-// Defined locally — runtime constants from @shared cause nodenext CJS issues
+// Defined locally, runtime constants from @shared cause nodenext CJS issues
 export const SELECTABLE_TASKS = [
 	"show_of_hands",
 	"finger_pointing",
@@ -15,7 +15,7 @@ export const SELECTABLE_TASKS = [
 	"face_turn",
 ] as const;
 
-// derive the type from the const — single source of truth
+// derive the type from the const, single source of truth
 export type SelectableTask = (typeof SELECTABLE_TASKS)[number];
 
 export const TASK_META: Record<
@@ -40,7 +40,7 @@ export const TASK_META: Record<
 	thumb_shot: {
 		label: "Thumb Shot",
 		icon: "👍",
-		desc: "Up or down — three times",
+		desc: "Up or down, three times",
 	},
 	face_turn: { label: "Face Turn", icon: "😶", desc: "Show your reaction" },
 };

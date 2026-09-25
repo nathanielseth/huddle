@@ -1,6 +1,6 @@
 import type { RpsChoice } from "@shared/games/face-turn/types";
 
-// glyphs render in a fixed neutral tone — the card's color identity now
+// glyphs render in a fixed neutral tone, the card's color identity now
 // comes from the team accent background, not the individual hand-sign
 const RPS_GLYPH_COLOR = "#F4F6F8";
 

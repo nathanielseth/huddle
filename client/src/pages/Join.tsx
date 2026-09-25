@@ -89,7 +89,7 @@ export function Join() {
 							animate={{ x: shake ? SHAKE : 0 }}
 							transition={{ type: "tween", duration: 0.4 }}
 						>
-							{/* autoFocus removed — screen reader / keyboard users navigate here
+							{/* autoFocus removed, screen reader / keyboard users navigate here
 							    themselves; stealing focus on load disorients them mid-page-read. */}
 							<input
 								id="join-name"

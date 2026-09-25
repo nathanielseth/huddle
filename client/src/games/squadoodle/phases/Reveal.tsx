@@ -20,7 +20,7 @@ export function Reveal() {
 	);
 }
 
-// ─── Host ────────────────────────────────────────────────────────────────────
+// Host
 
 function HostView({ game }: { game: SquadoodleState }) {
 	const { chains, revealChainIndex, revealEntryIndex, reactions, playerOrder } =
@@ -64,7 +64,7 @@ function HostView({ game }: { game: SquadoodleState }) {
 				{chain.slice(0, revealEntryIndex).map((entry, i) => {
 					const isCurrent = i === currentEntryIndex;
 					return (
-						// Fix: no-array-index-as-key — entries have no id field; use a
+						// Fix: no-array-index-as-key, entries have no id field; use a
 						// composite of type + position which is stable within a revealed
 						// chain (entries are append-only, never reordered).
 						<m.div
@@ -245,7 +245,7 @@ function FinalComparison({ chain }: { chain: readonly ChainEntry[] }) {
 	);
 }
 
-// ─── Player ──────────────────────────────────────────────────────────────────
+// Player
 
 function PlayerView({ game }: { game: SquadoodleState }) {
 	const { revealChainIndex, revealEntryIndex } = game;

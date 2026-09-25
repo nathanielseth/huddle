@@ -1,5 +1,3 @@
-// client/src/games/poker/components/OpponentsStrip.tsx
-//
 // Horizontal scrolling row of opponent seats.
 // Used in the player view to show all other players at a glance.
 

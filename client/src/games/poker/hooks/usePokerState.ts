@@ -13,7 +13,7 @@ export interface PokerStateResult {
 	/** Hole cards from the last player_secret event. Null between hands. */
 	holeCards: PokerSecret["holeCards"] | null;
 	playerId: string;
-	/** Room players array — use for display names. */
+	/** Room players array, use for display names. */
 	players: { id: string; name: string; score: number }[];
 	/** Room players keyed by id for O(1) name lookup. */
 	playerMap: Record<string, { id: string; name: string; score: number }>;

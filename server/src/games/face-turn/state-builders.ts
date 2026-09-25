@@ -36,8 +36,7 @@ export function runInSimulationMode<T>(fn: () => T): T {
 	}
 }
 
-// hand cards the player could legally play right now: affordable, has a
-// free active-move slot if the move is "active", and has a legal target.
+// hand cards the player could legally play right now: affordable, has a free active-move slot if needed, has a legal target
 function computePlayableMoveIds(
 	state: FaceturnServerState,
 	player: FaceturnServerPlayer,
@@ -57,13 +56,8 @@ function computePlayableMoveIds(
 	return playable;
 }
 
-// server is the sole authority on move-chain legality — this is the exact
-// same gating actions/challenge-and-chain.ts enforces for chain_play_burst
-// and chain_play_slow, kept in lockstep so the client can just render
-// whatever's in chainPlayableMoveIds instead of re-deriving priority rules
-// itself: only whoever currently holds priority (chain.responderId) may
-// play anything, burst or slow — the other participant is locked out
-// until priority comes back to them.
+// mirrors the exact gating actions/challenge-and-chain.ts enforces for chain_play_burst/slow, kept in lockstep
+// so the client can render chainPlayableMoveIds directly: only whoever holds priority may play anything
 export function computeChainPlayableMoveIds(
 	state: FaceturnServerState,
 	player: FaceturnServerPlayer,
@@ -278,7 +272,9 @@ function buildPublicState(state: FaceturnServerState): FaceturnsState {
 
 	const rps: RpsState | null =
 		state.mode !== "ffa" &&
-		(state.phase === "rps" || state.phase === "rps_reveal")
+		(state.phase === "rps" ||
+			state.phase === "rps_reveal" ||
+			state.phase === "rps_order_choice")
 			? {
 					player1Choice: state.rpsChoices.get(state.playerOrder[0]) ?? null,
 					player2Choice: state.rpsChoices.get(state.playerOrder[1]) ?? null,
@@ -343,8 +339,7 @@ export function getCachedPublicState(
 	return state._cachedPublicState as FaceturnsState;
 }
 
-// builds the secret payload for a single player: hand, crew assignments,
-// draft picks, and any reveal tied to a pending interaction they own
+// builds the secret payload for a single player: hand, crew assignments, draft picks, and any pending reveal
 export function buildSecretForPlayer(
 	state: FaceturnServerState,
 	player: FaceturnServerPlayer,

@@ -147,14 +147,14 @@ function handleDisconnect(
 		if (isHostSeated(room)) markDisconnected(room, socket.id);
 
 		if (room.phase === "in_game" || room.phase === "paused") {
-			logger.info("host disconnected — pausing game", {
+			logger.info("host disconnected, pausing game", {
 				roomCode: room.code,
 				reason,
 				reconnectWindowMs: HOST_GRACE_MS,
 			});
 			runner.onHostDisconnect(room, io, store);
 		} else {
-			logger.info("host disconnected — starting grace period", {
+			logger.info("host disconnected, starting grace period", {
 				roomCode: room.code,
 				reason,
 				graceMs: HOST_GRACE_MS,
@@ -175,7 +175,7 @@ function handleDisconnect(
 
 	const found = store.findPlayerBySocket(socket.id);
 	if (!found) {
-		logger.info("ignoring stale disconnect — player already rejoined", {
+		logger.info("ignoring stale disconnect, player already rejoined", {
 			socketId: socket.id,
 			roomCode: room.code,
 		});
@@ -213,7 +213,7 @@ export function registerHandlers(
 
 		if (store.size >= MAX_ROOMS) {
 			socket.emit("room_error", "Server is full right now. Try again later.");
-			logger.warn("create_room rejected — at capacity", {
+			logger.warn("create_room rejected, at capacity", {
 				maxRooms: MAX_ROOMS,
 			});
 			return;
@@ -363,7 +363,7 @@ export function registerHandlers(
 
 			if (room.phase === "paused" && room.pauseReason === "host_disconnected") {
 				runner.onHostReconnect(room, io, store);
-				logger.info("host reconnected — resuming", { roomCode: code });
+				logger.info("host reconnected, resuming", { roomCode: code });
 			} else {
 				broadcast(io, room);
 			}

@@ -99,7 +99,7 @@ export function validateStart(
 		const modeLabel =
 			config.mode === "duel" ? "Duel" : config.mode === "teams" ? "Teams" : "FFA";
 		const range = min === max ? `exactly ${String(min)}` : `${String(min)}–${String(max)}`;
-		return `${modeLabel} needs ${range} players — currently ${String(count)}. Add CPUs or change the mode.`;
+		return `${modeLabel} needs ${range} players, currently ${String(count)}. Add CPUs or change the mode.`;
 	}
 
 	if (config.mode === "teams") {

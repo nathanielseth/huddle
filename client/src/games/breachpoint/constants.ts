@@ -1,11 +1,11 @@
 import type {
-	CybsecsRole,
+	BreachpointRole,
 	WinReason,
 	GameMode,
 } from "@shared/games/breachpoint/index";
 
 export const ROLE_META: Record<
-	CybsecsRole,
+	BreachpointRole,
 	{ label: string; desc: string; alignment: "agent" | "hacker" }
 > = {
 	agent: {
@@ -20,7 +20,7 @@ export const ROLE_META: Record<
 	},
 	sysadmin: {
 		label: "Sysadmin",
-		desc: "You know all hackers. Stay covert — the Doxxer targets you if agents win.",
+		desc: "You know all hackers. Stay covert, the Doxxer targets you if agents win.",
 		alignment: "agent",
 	},
 	doxxer: {
@@ -30,7 +30,7 @@ export const ROLE_META: Record<
 	},
 	intern: {
 		label: "Intern",
-		desc: "Lone hacker — other hackers don't know you exist.",
+		desc: "Lone hacker, other hackers don't know you exist.",
 		alignment: "hacker",
 	},
 	analyst: {
@@ -74,9 +74,9 @@ export const MODE_LABELS: Record<GameMode, string> = {
 export const WIN_REASON_TEXT: Record<WinReason, string> = {
 	agents_secured_three: "Agents secured 3 missions",
 	hackers_hacked_three: "Hackers compromised 3 missions",
-	five_rejections: "5 consecutive rejections — Hackers win by default",
+	five_rejections: "5 consecutive rejections, Hackers win by default",
 	doxx_sysadmin: "Sysadmin was identified and doxxed",
-	doxx_failed: "Doxx attempt failed — Sysadmin survives",
+	doxx_failed: "Doxx attempt failed, Sysadmin survives",
 };
 
 export const MISSION_TEAM_SIZES: Record<number, readonly number[]> = {

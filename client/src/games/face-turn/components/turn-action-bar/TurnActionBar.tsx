@@ -150,7 +150,7 @@ export function TurnActionBar() {
 	}
 
 	// strike/face-turn target: every enemy's occupied crew slots plus their
-	// boss if exposed, all in one picker session — clicking any lit-up card
+	// boss if exposed, all in one picker session, clicking any lit-up card
 	// across any opponent's board resolves both which opponent and which slot
 	const enemyPlayers =
 		ft && (armedAction === "strike" || armedAction === "face_turn")
@@ -184,7 +184,7 @@ export function TurnActionBar() {
 		},
 	);
 
-	// steal target: a whole enemy player, not a specific crew slot — the
+	// steal target: a whole enemy player, not a specific crew slot, the
 	// only sensible pick is their boss cell, which is the one board element
 	// that always represents "this player" regardless of crew exposure
 	const stealTargetPlayers =

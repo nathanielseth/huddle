@@ -21,7 +21,7 @@ export function Guessing() {
 	);
 }
 
-// ─── Host ────────────────────────────────────────────────────────────────────
+// Host
 
 function HostView({
 	game,
@@ -50,7 +50,7 @@ function HostView({
 	);
 }
 
-// ─── Player ──────────────────────────────────────────────────────────────────
+// Player
 
 function PlayerView({
 	game,
@@ -114,7 +114,7 @@ function PlayerView({
 				<TimerBar timer={timer} />
 			</div>
 
-			{/* Drawing to caption — takes up roughly half the screen */}
+			{/* Drawing to caption, takes up roughly half the screen */}
 			<div className="flex-1 min-h-0 rounded-2xl overflow-hidden border border-black/10 bg-white">
 				<StrokeRenderer strokes={strokes} className="w-full h-full" />
 			</div>

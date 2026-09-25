@@ -53,9 +53,9 @@ export function useFaceturnState(): FaceturnStateResult {
 
 	const isChainParticipant =
 		ft?.moveChain?.participants.includes(playerId) ?? false;
-	// holds priority right now — only relevant for pushing/passing slow moves
+	// holds priority right now, only relevant for pushing/passing slow moves
 	const isChainResponder = ft?.moveChain?.responderId === playerId;
-	// started the chain (turn player) — only relevant for playing burst
+	// started the chain (turn player), only relevant for playing burst
 	// moves. Not gated on phase since ft.turn persists through the chain
 	// window; the actual legality check lives server-side either way, this
 	// is only used for display copy.

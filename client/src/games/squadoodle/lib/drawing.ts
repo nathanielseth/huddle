@@ -2,9 +2,7 @@ import { getStroke } from "perfect-freehand";
 import type { StrokeOptions } from "perfect-freehand";
 import type { InputPoint, Stroke } from "@shared/games/squadoodle/index";
 
-// ---------------------------------------------------------------------------
 // Stroke rendering options
-// ---------------------------------------------------------------------------
 
 /**
  * Base options passed to getStroke(). Size is overridden per-stroke from
@@ -25,9 +23,7 @@ function strokeOptions(size: number): StrokeOptions {
 	return { ...BASE_OPTIONS, size };
 }
 
-// ---------------------------------------------------------------------------
 // SVG path generation
-// ---------------------------------------------------------------------------
 
 /**
  * Converts a perfect-freehand outline point array into an SVG path `d` string.
@@ -63,9 +59,7 @@ function getSvgPathFromStroke(outlinePoints: number[][]): string {
 	return d + "Z";
 }
 
-// ---------------------------------------------------------------------------
-// Public helper — convert one Stroke to a renderable SVG path string
-// ---------------------------------------------------------------------------
+// Public helper, convert one Stroke to a renderable SVG path string
 
 /**
  * Runs a Stroke's InputPoints through perfect-freehand and returns the SVG

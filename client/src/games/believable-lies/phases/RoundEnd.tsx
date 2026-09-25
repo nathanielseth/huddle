@@ -42,7 +42,7 @@ export function RoundEnd() {
 						className="bl-muted"
 						style={{ marginTop: 6, color: "var(--bl-pink)" }}
 					>
-						Final round — points tripled 👀
+						Final round, points tripled 👀
 					</m.p>
 				)}
 			</div>

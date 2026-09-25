@@ -41,7 +41,7 @@ export function LieInput() {
 			{/* Timer */}
 			<div className="bl-timer">
 				<div className="bl-timer-track">
-					{/* width driven by parent — HostTimerBar handles host; player sees the raw bar */}
+					{/* width driven by parent, HostTimerBar handles host; player sees the raw bar */}
 					<div className="bl-timer-fill" style={{ width: "100%" }} />
 				</div>
 			</div>

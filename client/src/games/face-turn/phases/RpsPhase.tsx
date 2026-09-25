@@ -11,29 +11,32 @@ import { RpsCard } from "./rps/RpsCard";
 import { RpsOutcomeLabel } from "./rps/RpsOutcomeLabel";
 import { RPS_LABEL } from "./rps/rpsLabels";
 import { rpsTeamColorForIndex, type RpsTeamColor } from "./rps/rpsTeamColors";
+import { ConfirmButton } from "../components/interaction-prompts/SimplePrompts";
 import { cn } from "../../../lib/utils/cn";
 
 const CHOICES: RpsChoice[] = ["rock", "paper", "scissors"];
 const OPTION_SIZE = 92;
 const REVEAL_SIZE = 150;
 
-// once both choices are in, wait a beat before the cards flip — a dead-flat
-// simultaneous flip with zero anticipation reads as a glitch, not a reveal
-const REVEAL_HOLD_MS = 350;
+// Tag Force-style reveal beat: both cards flip together, THEN — after a
+// beat where both hands are just sitting there revealed — the winner
+// slides in toward center and the loser gets knocked out to its own side
+// and fades. Flip and knockout are deliberately two separate moments, 	// never the same frame, or it reads as a glitch instead of a reveal.
+const FLIP_DELAY_MS = 350;
+const SETTLE_DELAY_MS = 500;
 
-// Who-goes-first suspense lives on the order-choice screen now
-// (RpsOrderChoicePhase.tsx), not here — this phase just picks and reveals.
-
-// tie-only suspense: alternates the displayed "goes first" name a few times
-// before settling on the server's real answer. Pure show — the outcome is
-// already decided server-side by the time this plays, so nothing here can
-// change or "choose" it.
+// "go first / go second" is a genuine free pick by the rps winner (see
+// beginRpsOrderChoice server-side, ties are coinflipped immediately so
+// there's never a tie state to dramatize on the reveal itself). The
+// randomizer/suspense flicker plays here instead, on the order-choice
+// prompt, while everyone's waiting to see who actually gets the pick —
+// not on the card reveal, which already has its own flip+settle beat.
 const FLICKER_STEPS = 8;
 const FLICKER_STEP_MS = 160;
 
-function useTieFlicker(active: boolean, reducedMotion: boolean) {
-	const [flickering, setFlickering] = useState(active);
-	const [favorsRepA, setFavorsRepA] = useState(true);
+function useOrderChoiceFlicker(active: boolean, reducedMotion: boolean) {
+	const [flickering, setFlickering] = useState(false);
+	const [showWinner, setShowWinner] = useState(true);
 	const timersRef = useRef<ReturnType<typeof setTimeout>[]>([]);
 
 	const start = useEffectEvent((shouldFlicker: boolean, noMotion: boolean) => {
@@ -48,14 +51,14 @@ function useTieFlicker(active: boolean, reducedMotion: boolean) {
 		timersRef.current.push(setTimeout(() => setFlickering(true), 0));
 		for (let i = 0; i < FLICKER_STEPS; i++) {
 			timersRef.current.push(
-				setTimeout(
-					() => setFavorsRepA((prev) => !prev),
-					i * FLICKER_STEP_MS,
-				),
+				setTimeout(() => setShowWinner((prev) => !prev), i * FLICKER_STEP_MS),
 			);
 		}
 		timersRef.current.push(
-			setTimeout(() => setFlickering(false), FLICKER_STEPS * FLICKER_STEP_MS),
+			setTimeout(() => {
+				setFlickering(false);
+				setShowWinner(true);
+			}, FLICKER_STEPS * FLICKER_STEP_MS),
 		);
 	});
 
@@ -66,44 +69,44 @@ function useTieFlicker(active: boolean, reducedMotion: boolean) {
 		};
 	}, [active, reducedMotion]);
 
-	return { flickering, favorsRepA };
+	return { flickering, showWinner };
 }
 
-// true once the hold beat has passed and both cards should show their face
-function useShowFaces(resolved: boolean, reducedMotion: boolean) {
-	const [showFaces, setShowFaces] = useState(false);
-	const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+// drives the flip -> hold -> settle sequence off `resolved` alone, one
+// state machine instead of two separately-timed booleans, so "both cards
+// visible" and "winner attacks" can never land on the same frame
+function useRevealStage(resolved: boolean, reducedMotion: boolean) {
+	const [stage, setStage] = useState<"hidden" | "flipped" | "settled">("hidden");
+	const timersRef = useRef<ReturnType<typeof setTimeout>[]>([]);
 
 	const start = useEffectEvent((nowResolved: boolean, noMotion: boolean) => {
-		if (timerRef.current) clearTimeout(timerRef.current);
+		for (const t of timersRef.current) clearTimeout(t);
+		timersRef.current = [];
 
 		if (!nowResolved) {
-			timerRef.current = setTimeout(() => {
-				setShowFaces(false);
-			}, 0);
+			timersRef.current.push(setTimeout(() => setStage("hidden"), 0));
 			return;
 		}
 
 		if (noMotion) {
-			timerRef.current = setTimeout(() => {
-				setShowFaces(true);
-			}, 0);
+			timersRef.current.push(setTimeout(() => setStage("settled"), 0));
 			return;
 		}
 
-		timerRef.current = setTimeout(() => {
-			setShowFaces(true);
-		}, REVEAL_HOLD_MS);
+		timersRef.current.push(setTimeout(() => setStage("flipped"), FLIP_DELAY_MS));
+		timersRef.current.push(
+			setTimeout(() => setStage("settled"), FLIP_DELAY_MS + SETTLE_DELAY_MS),
+		);
 	});
 
 	useEffect(() => {
 		start(resolved, reducedMotion);
 		return () => {
-			if (timerRef.current) clearTimeout(timerRef.current);
+			for (const t of timersRef.current) clearTimeout(t);
 		};
 	}, [resolved, reducedMotion]);
 
-	return showFaces;
+	return stage;
 }
 
 export function RpsPhase() {
@@ -128,7 +131,7 @@ export function RpsPhase() {
 				: null;
 
 	// optimistic: set the instant you click, before the server round-trip
-	// confirms it as myChoice — this is what lets the picked card fly into
+	// confirms it as myChoice, this is what lets the picked card fly into
 	// the reveal slot immediately instead of waiting on network latency.
 	// Cleared on a rejection, or once a real round starts fresh.
 	const [pendingChoice, setPendingChoice] = useState<RpsChoice | null>(null);
@@ -138,18 +141,28 @@ export function RpsPhase() {
 	const displayChoice = myChoice ?? pendingChoice;
 
 	const resolved = Boolean(ft?.rps && ft.rps.result !== null);
-	const showFaces = useShowFaces(resolved, reducedMotion);
+	const revealStage = useRevealStage(resolved, reducedMotion);
+	const showFaces = revealStage !== "hidden";
+	const settled = revealStage === "settled";
 
-	const settled = resolved && showFaces;
+	const inOrderChoice = ft?.phase === "rps_order_choice";
 
-	const wasTie = Boolean(
-		ft?.rps &&
-			ft.rps.player1Choice !== null &&
-			ft.rps.player1Choice === ft.rps.player2Choice,
-	);
-	const { flickering, favorsRepA } = useTieFlicker(
-		resolved && wasTie && showFaces,
+	// order-choice winner, once the phase actually gets there (server-authoritative, see beginRpsOrderChoice)
+	const winnerId = ft?.rpsOrderChoice?.winnerId ?? null;
+	// only a real tie (equal/missing choices, coinflipped server-side) gets
+	// the suspense flicker — a genuine rock-paper-scissors win already told
+	// you who won on the reveal beat, flickering over a result you already
+	// saw would just be noise
+	const wasTie = ft?.rpsOrderChoice?.wasTie ?? false;
+	// hooks must run every render regardless of the early-return guard
+	// below (ft/phase/rps can all go missing between rounds), so these
+	// live up here with the rest, not after the bail-out
+	const { flickering, showWinner } = useOrderChoiceFlicker(
+		inOrderChoice && wasTie,
 		reducedMotion,
+	);
+	const { locked: orderLocked, runLocked: runOrderLocked } = useActionLock(
+		ft?.phase,
 	);
 
 	// fresh round (rps object identity/choices both cleared server-side):
@@ -165,12 +178,16 @@ export function RpsPhase() {
 		handleFreshRound(ft?.rps ?? null);
 	}, [ft?.rps]);
 
-	if (!ft || (ft.phase !== "rps" && ft.phase !== "rps_reveal") || !ft.rps)
+	if (
+		!ft ||
+		(ft.phase !== "rps" && ft.phase !== "rps_reveal" && ft.phase !== "rps_order_choice") ||
+		!ft.rps
+	)
 		return null;
 
 	// playerOrder[0]/[1] always land on teamIndex 0/1 respectively in every
 	// mode (see buildTeamsAndTurnOrder), so this is server-derived, not a
-	// client guess — and it lines up with real team color when mode is teams
+	// client guess, and it lines up with real team color when mode is teams
 	const repATeamColor = rpsTeamColorForIndex(ft.players[repA]?.teamIndex ?? 0);
 	const repBTeamColor = rpsTeamColorForIndex(ft.players[repB]?.teamIndex ?? 1);
 	const myTeamColor = playerId === repA ? repATeamColor : repBTeamColor;
@@ -179,6 +196,9 @@ export function RpsPhase() {
 	const iWon =
 		resolved && ft.rps.result === (playerId === repA ? "player1" : "player2");
 	const p1Won = ft.rps.result === "player1";
+
+	const winnerName = winnerId ? (playerMap[winnerId]?.name ?? "Winner") : null;
+	const opponentName = playerMap[opponentId]?.name ?? "Opponent";
 
 	if (!isRep) {
 		const bothPicked =
@@ -191,16 +211,24 @@ export function RpsPhase() {
 						flickering && "rps-status-flicker",
 					)}
 				>
-					{resolved
+					{inOrderChoice
 						? flickering
-							? `${playerMap[favorsRepA ? repA : repB]?.name ?? "?"} goes first`
-							: p1Won
-								? `${playerMap[repA]?.name ?? repA} goes first`
-								: `${playerMap[repB]?.name ?? repB} goes first`
+							? `${(showWinner ? winnerName : opponentName) ?? "?"} won the roll`
+							: `${winnerName ?? "Winner"} is deciding who goes first…`
 						: "Rock Paper Scissors"}
 				</p>
 				<AnimatePresence mode="wait" initial={false}>
-					{bothPicked ? (
+					{inOrderChoice ? (
+						<m.p
+							key="order-choice"
+							className="text-sm text-white/60"
+							initial={reducedMotion ? undefined : { opacity: 0 }}
+							animate={{ opacity: 1 }}
+							transition={{ duration: reducedMotion ? 0 : 0.2 }}
+						>
+							Waiting for {winnerName} to choose…
+						</m.p>
+					) : bothPicked ? (
 						<m.div
 							key="revealing"
 							className="rps-vs-row flex items-end justify-center"
@@ -212,10 +240,11 @@ export function RpsPhase() {
 								name={playerMap[repA]?.name ?? repA}
 								choice={ft.rps.player1Choice}
 								showFace={showFaces}
-								settled={resolved}
+								settled={settled}
 								teamColor={repATeamColor}
-								outcome={resolved ? (p1Won ? "win" : "lose") : null}
-								className={cn(settled && !p1Won && "rps-plate-loser-exiting")}
+								outcome={settled ? (p1Won ? "win" : "lose") : null}
+								knockout={settled && !p1Won ? "left" : null}
+								advance={settled && p1Won ? "left" : null}
 							/>
 							<p
 								className={cn(
@@ -229,10 +258,11 @@ export function RpsPhase() {
 								name={playerMap[repB]?.name ?? repB}
 								choice={ft.rps.player2Choice}
 								showFace={showFaces}
-								settled={resolved}
+								settled={settled}
 								teamColor={repBTeamColor}
-								outcome={resolved ? (!p1Won ? "win" : "lose") : null}
-								className={cn(settled && p1Won && "rps-plate-loser-exiting")}
+								outcome={settled ? (!p1Won ? "win" : "lose") : null}
+								knockout={settled && p1Won ? "right" : null}
+								advance={settled && !p1Won ? "right" : null}
 							/>
 						</m.div>
 					) : (
@@ -252,6 +282,8 @@ export function RpsPhase() {
 		);
 	}
 
+	const isOrderChoiceWinner = inOrderChoice && playerId === winnerId;
+
 	return (
 		<div className="ft-panel-ink flex flex-col items-center gap-5 rounded-2xl border border-amber-400/40 px-6 py-7">
 			<p
@@ -260,24 +292,67 @@ export function RpsPhase() {
 					flickering && "rps-status-flicker",
 				)}
 			>
-				{resolved
+				{inOrderChoice
 					? flickering
-						? (favorsRepA ? repA : repB) === playerId
-							? "You go first"
-							: "Opponent goes first"
-						: iWon
-							? "You go first"
-							: "Opponent goes first"
+						? (showWinner ? winnerId : opponentId) === playerId
+							? "You won the roll"
+							: "Opponent won the roll"
+						: isOrderChoiceWinner
+							? "You won! Go first or second?"
+							: `${winnerName} is deciding who goes first…`
 					: displayChoice
 						? "Waiting for opponent…"
-						: "Choose — winner goes first"}
+						: "Choose, winner goes first"}
 			</p>
 
-			{/* single switch: picking <-> revealing, never both on screen at
-			    once — mode="wait" holds the exiting child until it's fully
-			    gone before the next one mounts */}
+			{/* single switch: picking <-> revealing <-> order-choice, never
+			    more than one on screen at once, mode="wait" holds the exiting
+			    child until it's fully gone before the next one mounts */}
 			<AnimatePresence mode="wait" initial={false}>
-				{!displayChoice ? (
+				{inOrderChoice ? (
+					isOrderChoiceWinner ? (
+						<m.div
+							key="order-choice-buttons"
+							className="flex gap-4"
+							initial={reducedMotion ? undefined : { opacity: 0, y: 6 }}
+							animate={{ opacity: 1, y: 0 }}
+							transition={{ duration: reducedMotion ? 0 : 0.2 }}
+						>
+							<ConfirmButton
+								label="Go first"
+								ready
+								locked={orderLocked}
+								size="lg"
+								onClick={() => {
+									runOrderLocked(() => {
+										sendFaceturnAction({ type: "rps_order_choice", goFirst: true });
+									});
+								}}
+							/>
+							<ConfirmButton
+								label="Go second"
+								ready
+								locked={orderLocked}
+								size="lg"
+								onClick={() => {
+									runOrderLocked(() => {
+										sendFaceturnAction({ type: "rps_order_choice", goFirst: false });
+									});
+								}}
+							/>
+						</m.div>
+					) : (
+						<m.p
+							key="order-choice-waiting"
+							className="text-sm text-white/60"
+							initial={reducedMotion ? undefined : { opacity: 0 }}
+							animate={{ opacity: 1 }}
+							transition={{ duration: reducedMotion ? 0 : 0.2 }}
+						>
+							Waiting for {winnerName}…
+						</m.p>
+					)
+				) : !displayChoice ? (
 					<m.div
 						key="picking"
 						className="flex gap-3"
@@ -332,11 +407,12 @@ export function RpsPhase() {
 									revealed={showFaces}
 									teamColor={opponentTeamColor}
 									size={REVEAL_SIZE}
-									tone={resolved ? (iWon ? "lose" : "win") : "neutral"}
+									tone={settled ? (iWon ? "lose" : "win") : "neutral"}
 								/>
 							}
-							outcome={resolved ? (iWon ? "lose" : "win") : null}
-							className={cn(settled && iWon && "rps-plate-loser-exiting")}
+							outcome={settled ? (iWon ? "lose" : "win") : null}
+							knockout={settled && iWon ? "left" : null}
+							advance={settled && !iWon ? "left" : null}
 						/>
 
 						<p
@@ -359,11 +435,12 @@ export function RpsPhase() {
 									revealed={showFaces}
 									teamColor={myTeamColor}
 									size={REVEAL_SIZE}
-									tone={resolved ? (iWon ? "win" : "lose") : "selected"}
+									tone={settled ? (iWon ? "win" : "lose") : "selected"}
 								/>
 							}
-							outcome={resolved ? (iWon ? "win" : "lose") : null}
-							className={cn(settled && !iWon && "rps-plate-loser-exiting")}
+							outcome={settled ? (iWon ? "win" : "lose") : null}
+							knockout={settled && !iWon ? "right" : null}
+							advance={settled && iWon ? "right" : null}
 						/>
 					</m.div>
 				)}
@@ -376,15 +453,30 @@ function RepSlot({
 	label,
 	card,
 	outcome,
-	className,
+	knockout,
+	advance,
 }: {
 	label: string;
 	card: React.ReactNode;
 	outcome: "win" | "lose" | null;
-	className?: string;
+	// which side this plate exits toward when it loses: "left"/"right" are
+	// screen directions, not team-relative, set per-slot by the caller so
+	// the loser always flies off away from center rather than toward it
+	knockout: "left" | "right" | null;
+	// which side this plate is sitting on when it wins, so it steps toward
+	// the opposite (center) direction — the winner's half of the same hit
+	advance?: "left" | "right" | null;
 }) {
 	return (
-		<div className={cn("rps-plate flex flex-col items-center gap-2.5", className)}>
+		<div
+			className={cn(
+				"rps-plate flex flex-col items-center gap-2.5",
+				knockout === "left" && "rps-plate-knockout-left",
+				knockout === "right" && "rps-plate-knockout-right",
+				advance === "left" && "rps-plate-advance-left",
+				advance === "right" && "rps-plate-advance-right",
+			)}
+		>
 			<span className="ft-eyebrow text-xs text-white/40">{label}</span>
 			{card}
 			<div className="h-6 flex items-center">
@@ -401,7 +493,8 @@ function SpectatorSide({
 	settled,
 	teamColor,
 	outcome,
-	className,
+	knockout,
+	advance,
 }: {
 	name: string;
 	choice: RpsChoice | null;
@@ -409,13 +502,15 @@ function SpectatorSide({
 	settled: boolean;
 	teamColor: RpsTeamColor;
 	outcome: "win" | "lose" | null;
-	className?: string;
+	knockout: "left" | "right" | null;
+	advance?: "left" | "right" | null;
 }) {
 	return (
 		<RepSlot
 			label={name}
 			outcome={outcome}
-			className={className}
+			knockout={knockout}
+			advance={advance}
 			card={
 				<RpsCard
 					choice={choice ?? undefined}

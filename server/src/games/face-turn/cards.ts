@@ -300,7 +300,7 @@ export type EffectPrimitive =
 	| {
 			type: "passive_turn_self_down_on_strike";
 	  }
-	// kamileon: fires whenever holder's own slot turns face-down (for any
+	// chamelia: fires whenever holder's own slot turns face-down (for any
 	// reason), rerolling which class the crew counts as while hidden
 	| {
 			type: "passive_randomize_class_on_self_turn_down";
@@ -930,7 +930,7 @@ const CREW_MECHANICS: Record<
 		turnedEffects: [{ type: "heal_boss", amount: 20 }],
 		passiveEffects: [{ type: "destroy_enemy_active_move" }],
 	},
-	kamileon: {
+	chamelia: {
 		turnedEffects: [],
 		passiveEffects: [{ type: "passive_randomize_class_on_self_turn_down" }],
 	},
@@ -1407,7 +1407,7 @@ export const CARD_IDS = {
 		HEEL: "heel",
 		SONG: "song",
 		DENIER: "denier",
-		KAMILEON: "kamileon",
+		CHAMELIA: "chamelia",
 	},
 	MOVE: {
 		POISON_BREATH: "poison-breath",

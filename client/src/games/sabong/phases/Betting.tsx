@@ -256,7 +256,7 @@ export function BettingPlayer() {
 							initial={{ opacity: 0 }}
 							animate={{ opacity: 1 }}
 						>
-							{selectedId ? `Lock Bet — ₱${amount}` : "Pick a Side First"}
+							{selectedId ? `Lock Bet, ₱${amount}` : "Pick a Side First"}
 						</m.button>
 					)}
 				</AnimatePresence>

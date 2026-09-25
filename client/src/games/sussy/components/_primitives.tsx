@@ -1,5 +1,5 @@
 // Private primitives shared across the three SimpleTasks screens.
-// Not part of the public export surface — import from the individual task files.
+// Not part of the public export surface, import from the individual task files.
 
 import { cn } from "../../../lib/utils/cn";
 
@@ -25,7 +25,7 @@ export function ImpostorHeader() {
 export function SubmittedState({ label }: { label: string }) {
 	return (
 		<div className="flex items-center justify-center flex-1 gap-2 text-white/40 text-sm">
-			✓ {label} — waiting for others
+			✓ {label}, waiting for others
 		</div>
 	);
 }

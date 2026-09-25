@@ -55,8 +55,7 @@ export const miscHandlers = {
 		destroyActiveMoveAtSlot(ctx.state, target, slot as 0 | 1 | 2);
 	},
 
-	// crew reveal has no client-supplied target: auto-pick when there's only
-	// one enemy active move, otherwise let the actor choose
+	// crew reveal has no client-supplied target: auto-pick if only one enemy active move, else let the actor choose
 	destroy_enemy_active_move(_effect, ctx) {
 		const eligibleTargets: { playerId: string; slot: 0 | 1 | 2; moveId: string }[] =
 			[];
@@ -226,9 +225,8 @@ export const miscHandlers = {
 	become_also_defender() {},
 	become_also_collector() {},
 	command_guess_crew_class_turn_if_correct() {},
-	// dealer command: discard the whole hand, gain cashPerCard per card
-	// discarded. routed through discardFromHand so it triggers the same
-	// discard-synergy effects (doctor norman, rat queen) as any other discard.
+	// dealer command: discard the whole hand, gain cashPerCard per card, routed through discardFromHand
+	// so it triggers the same discard-synergy effects (doctor norman, rat queen) as any other discard
 	command_discard_hand_for_cash(effect, ctx) {
 		if (effect.type !== "command_discard_hand_for_cash") return;
 		const handSize = ctx.actor.hand.length;
@@ -599,10 +597,8 @@ export function maybeGrantHeelTurnOnChallengeWin(
 	actor.costOverrides.set(CARD_IDS.MOVE.HEEL_TURN, 0);
 }
 
-// raid: strikes a random enemy player at the end of the holder's own turn.
-// picks both the enemy and, if they have 2 unturned crew, the slot randomly —
-// this keeps the strike fully synchronous instead of opening a picker
-// interaction mid-swapTurn, which would clobber the next player's turn-start
+// raid: strikes a random enemy at the holder's turn end, picking enemy and slot randomly to stay synchronous
+// instead of opening a picker mid-swapTurn, which would clobber the next player's turn-start
 export function triggerRaidStrikeOnTurnEnd(
 	state: FaceturnServerState,
 	actor: FaceturnServerPlayer,

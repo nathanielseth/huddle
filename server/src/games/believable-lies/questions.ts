@@ -1,7 +1,7 @@
 import type { BelievableLiesQuestion } from "./types";
 
 export const QUESTION_BANK: BelievableLiesQuestion[] = [
-	// ── History ────────────────────────────────────────────────────────────────
+	// History
 	{
 		id: "h01",
 		category: "History",
@@ -53,7 +53,7 @@ export const QUESTION_BANK: BelievableLiesQuestion[] = [
 		game_lies: ["calendar", "language", "religion", "alphabet"],
 	},
 
-	// ── Science & Nature ───────────────────────────────────────────────────────
+	// Science & Nature
 	{
 		id: "s01",
 		category: "Science",
@@ -104,7 +104,7 @@ export const QUESTION_BANK: BelievableLiesQuestion[] = [
 		game_lies: ["spirals", "pellets", "cylinders", "stars"],
 	},
 
-	// ── Food & Drink ───────────────────────────────────────────────────────────
+	// Food & Drink
 	{
 		id: "f01",
 		category: "Food",
@@ -138,7 +138,7 @@ export const QUESTION_BANK: BelievableLiesQuestion[] = [
 		game_lies: ["pistachios", "almonds", "avocados", "peanuts"],
 	},
 
-	// ── Pop Culture ────────────────────────────────────────────────────────────
+	// Pop Culture
 	{
 		id: "p01",
 		category: "Pop Culture",
@@ -165,7 +165,7 @@ export const QUESTION_BANK: BelievableLiesQuestion[] = [
 		game_lies: ["Aragorn", "Saruman", "Frodo", "Boromir"],
 	},
 
-	// ── Filipino / Local ───────────────────────────────────────────────────────
+	// Filipino / Local
 	{
 		id: "ph01",
 		category: "Filipino",
@@ -201,7 +201,7 @@ export const QUESTION_BANK: BelievableLiesQuestion[] = [
 		game_lies: ["3", "1.5", "2.5", "1.2"],
 	},
 
-	// ── Weird Facts ────────────────────────────────────────────────────────────
+	// Weird Facts
 	{
 		id: "w01",
 		category: "Weird",

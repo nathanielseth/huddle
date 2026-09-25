@@ -35,8 +35,8 @@ export function evaluate(state: FaceturnServerState, seat: string): StateScore {
 	const allyScore = teamScore(state, allies);
 	const enemyScore = teamScore(state, enemies);
 
-	// use tanh to squash into (‑1,1)
-	// avoids mid‑game heuristics outranking true win/loss scores
+	// use tanh to squash into (-1,1)
+	// avoids mid-game heuristics outranking true win/loss scores
 	return Math.tanh(allyScore - enemyScore);
 }
 
@@ -138,8 +138,8 @@ function poisonExposureValue(
 	return player.bossMaxHp > 0 ? Math.min(1, total / player.bossMaxHp) : 0;
 }
 
-// scores current Active Moves via recomputePassives fields, ignoring situational passives to avoid double‑counting
-// constants are rough card‑based estimates, not tuned
+// scores current Active Moves via recomputePassives fields, ignoring situational passives to avoid double-counting
+// constants are rough card-based estimates, not tuned
 function activeEngineValue(player: FaceturnServerPlayer): number {
 	let v = 0;
 	v += softNormalize(player.derived.cashGainPerTurn, 3) * 0.4;

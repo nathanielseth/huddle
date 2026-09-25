@@ -4,7 +4,7 @@ import type { FaceturnsAction } from "../schemas";
 import { makeResult } from "../action-results";
 
 // signature all phase onAction handlers implement
-// player is already looked up by dispatcher, so phase handlers don’t re‑check presence
+// player is already looked up by dispatcher, so phase handlers don't re-check presence
 export type PhaseActionHandler = (
 	state: FaceturnServerState,
 	player: FaceturnServerPlayer,
@@ -13,13 +13,8 @@ export type PhaseActionHandler = (
 	ctx: GameContext,
 ) => EngineResult;
 
-// no‑op branch shape: returns state unchanged, only refreshes timer window if
-// present. Pass rejectedFor/reason when this no-op is the direct result of
-// rejecting a specific player's action (illegal target, insufficient cash,
-// wrong phase, etc) — this surfaces a real "action_rejected" event to that
-// player instead of leaving them staring at a UI that silently did nothing
-// and guessing why. Omit both for no-ops that aren't actually a rejection
-// (e.g. a phase handler that legitimately has nothing to do).
+// no-op branch: returns state unchanged, refreshing only the timer window if present
+// pass rejectedFor/reason for a direct rejection so the player gets an "action_rejected" event instead of silence
 export function noOpResult(
 	state: FaceturnServerState,
 	ctx: GameContext,

@@ -1,7 +1,7 @@
 import { m } from "motion/react";
 import { useWitzoneState } from "../hooks/useWitzoneState";
 
-// Shared waiting screen — answering phases use hasAnswered, voting phases use hasVoted.
+// Shared waiting screen, answering phases use hasAnswered, voting phases use hasVoted.
 export function WaitingView({
 	message,
 	dotField = "hasAnswered",

@@ -1,19 +1,19 @@
 import { useState, useRef, useEffect } from "react";
-import { useCybsecsState } from "../hooks/useCybsecsState";
+import { useBreachpointState } from "../hooks/useBreachpointState";
 import { TimerBar } from "../../sabong/components/TimerBar";
 import { MissionTrack } from "../components/MissionTrack";
 import { ObfuscatorToggle } from "../components/ObfuscatorToggle";
 import { socket } from "../../../lib/network/socket";
 import { cn } from "../../../lib/utils/cn";
 import type {
-	CybsecsState,
-	CybsecsSecret,
+	BreachpointState,
+	BreachpointSecret,
 } from "@shared/games/breachpoint/index";
 import type { GameTimer } from "@shared/core/room";
 
 export function Mission() {
 	const { game, secret, role, timer, myPlayer, amNominated, canHack, getName } =
-		useCybsecsState();
+		useBreachpointState();
 	if (!game) return null;
 
 	if (role === "host") {
@@ -38,7 +38,7 @@ function HostView({
 	timer,
 	getName,
 }: {
-	game: CybsecsState;
+	game: BreachpointState;
 	timer: GameTimer | null;
 	getName: (id: string) => string;
 }) {
@@ -104,8 +104,8 @@ function OnTeamView({
 	hasSubmitted,
 	canHack,
 }: {
-	game: CybsecsState;
-	secret: CybsecsSecret | null;
+	game: BreachpointState;
+	secret: BreachpointSecret | null;
 	timer: GameTimer | null;
 	hasSubmitted: boolean;
 	canHack: boolean;
@@ -288,7 +288,7 @@ function OffTeamView({
 	timer,
 	getName,
 }: {
-	game: CybsecsState;
+	game: BreachpointState;
 	timer: GameTimer | null;
 	getName: (id: string) => string;
 }) {

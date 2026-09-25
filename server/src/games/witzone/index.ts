@@ -30,7 +30,7 @@ import type { Room } from "../../room/registry";
 import { shuffle, shortId } from "../lib/random";
 import { defined } from "../lib/assert";
 
-// ─── helpers ─────────────────────────────────────────────────────────────────
+// helpers
 
 function normalize(s: string): string {
 	return s
@@ -46,7 +46,7 @@ function drawQuestions(state: WitzoneServerState, n: number): string[] {
 	return state.questionPool.splice(0, n);
 }
 
-// ─── public-state cache ──────────────────────────────────────────────────────
+// public-state cache
 
 function markDirty(state: WitzoneServerState): void {
 	state._publicStateDirty = true;
@@ -61,7 +61,7 @@ function getPublicState(state: WitzoneServerState, room: Room): WitzoneState {
 	return state._cachedPublicState;
 }
 
-// ─── public state builder ────────────────────────────────────────────────────
+// public state builder
 
 function buildPublicState(state: WitzoneServerState, room: Room): WitzoneState {
 	const players: Record<string, WitzonePlayerView> = {};
@@ -143,7 +143,7 @@ function buildPublicState(state: WitzoneServerState, room: Room): WitzoneState {
 	};
 }
 
-// ─── secret builder ──────────────────────────────────────────────────────────
+// secret builder
 
 function buildPlayerSecret(
 	state: WitzoneServerState,
@@ -187,7 +187,7 @@ function buildAllSecrets(state: WitzoneServerState): Map<string, unknown> {
 	return secrets;
 }
 
-// ─── round setup ─────────────────────────────────────────────────────────────
+// round setup
 
 function setupRound(state: WitzoneServerState): void {
 	const playerIds = shuffle([...state.playerIds]);
@@ -241,7 +241,7 @@ function setupFinalRound(state: WitzoneServerState): void {
 	state.finalReveal = null;
 }
 
-// ─── phase transitions ───────────────────────────────────────────────────────
+// phase transitions
 
 function enterVotingForCurrentPrompt(
 	state: WitzoneServerState,
@@ -412,7 +412,7 @@ function enterFinished(state: WitzoneServerState, room: Room): EngineResult {
 	};
 }
 
-// ─── engine export ───────────────────────────────────────────────────────────
+// engine export
 
 export const witzoneEngine: GameEngineWithSecrets = {
 	gameId: "witzone",
@@ -475,7 +475,7 @@ export const witzoneEngine: GameEngineWithSecrets = {
 		if (!action) return noOp();
 		if (!state.playerIds.has(playerId)) return noOp();
 
-		// ── submit_answer ────────────────────────────────────────────────────────
+		// submit_answer
 
 		if (action.type === "submit_answer") {
 			if (state.phase === "answering") {
@@ -535,7 +535,7 @@ export const witzoneEngine: GameEngineWithSecrets = {
 			return noOp();
 		}
 
-		// ── cast_vote ────────────────────────────────────────────────────────────
+		// cast_vote
 
 		if (action.type === "cast_vote") {
 			if (state.phase !== "voting_prompt" || state.promptStage !== "voting")
@@ -558,7 +558,7 @@ export const witzoneEngine: GameEngineWithSecrets = {
 			return noOp();
 		}
 
-		// ── cast_final_votes ─────────────────────────────────────────────────────
+		// cast_final_votes
 
 		if (action.type === "cast_final_votes") {
 			if (state.phase !== "final_voting") return noOp();

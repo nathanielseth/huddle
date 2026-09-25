@@ -241,7 +241,7 @@ function handleVsOpen(
 	return { type: "fold" };
 }
 
-// facing 3-bet. short stacks skip the 4-bet–then–fold line for the same
+// facing 3-bet. short stacks skip the 4-bet-then-fold line for the same
 function handleVs3Bet(
 	ctx: AIDecisionContext,
 	personality: AIPersonality,

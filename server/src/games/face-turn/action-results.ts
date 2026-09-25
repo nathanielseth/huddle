@@ -17,12 +17,7 @@ import {
 } from "./state-builders";
 import { pushLog } from "./log";
 
-// builds the public ResolutionResult AND logs the outcome — every one of
-// this function's ~11 call sites across actions/interactions already has
-// attackerId/targetPlayerId/via on hand (they're the ones initiating the
-// strike/execute), so funneling the log push through here means those
-// call sites don't each need their own pushLog, and outcome.outcome can't
-// drift from what gets logged.
+// builds the public result and logs the outcome in one place so the two can't drift
 export function buildStrikeResolution(
 	state: FaceturnServerState,
 	outcome: StrikeOrExecuteOutcome,
@@ -32,7 +27,7 @@ export function buildStrikeResolution(
 ): ResolutionResult {
 	if (outcome.outcome === "pending") {
 		throw new Error(
-			'buildStrikeResolution called with a pending outcome — check outcome.outcome !== "pending" before calling',
+			'buildStrikeResolution called with a pending outcome, check outcome.outcome !== "pending" before calling',
 		);
 	}
 
@@ -78,9 +73,7 @@ export function buildStrikeResolution(
 	}
 }
 
-// executes the original class action after a deferred penalty interaction
-// does not overwrite lastResolution; the caller already set the correct
-// resolution for the interaction that triggered this deferred action
+// does not overwrite lastResolution, the caller already set the correct one for the triggering interaction
 export function runDeferredPendingAction(state: FaceturnServerState): void {
 	const outcome = executePendingAction(state);
 	if (outcome && outcome.outcome === "pending") {
@@ -97,27 +90,8 @@ export function makeResult(
 ): EngineResult {
 	markDirty(state);
 
-	// privatePayloads defaults to a fresh resync for every player and can
-	// only be widened/replaced by extras, never silently dropped — extras
-	// would need to explicitly pass `privatePayloads: undefined` to unset
-	// it, which TypeScript's Partial<EngineResult> permits but no call site
-	// in this codebase does. This is the single choke point every action
-	// handler's result passes through (directly, or via afterAction), so
-	// it's the right place to guarantee every player's hand/cash/crew/etc.
-	// gets resynced on every action — instead of trusting ~30 scattered call
-	// sites, several levels of indirection deep through resolveChallenge/
-	// executePendingAction/resolveMoveChainFull/resolveEffects/boss
-	// commandEffects, to each correctly notice when they touch
-	// secret-visible state and opt in. That trust-every-call-site model is
-	// what caused the original bug (Sucker Punch staying visible in hand
-	// after being played) and, on audit, several more instances of the same
-	// pattern elsewhere in this file (declare_class_action's challenge
-	// window, the card-strike defend window, move-chain windows,
-	// swap_in_reserve_crew).
-	// buildPrivatePayloads is cheap (small array/object copies over a
-	// handful of players), and GameRunner only emits player_secret to
-	// sockets that are already connected, so a redundant identical payload
-	// costs nothing observable.
+	// always resync, this is the one choke point every result passes through
+	// instead of trusting ~30 call sites to opt in (caused the sucker punch hand-visibility bug)
 	const privatePayloads = extras.privatePayloads ?? buildPrivatePayloads(state);
 
 	return {
@@ -132,15 +106,8 @@ export function makeResult(
 	};
 }
 
-// For move-chain actions that shouldn't disturb the clock at all: opening a
-// chain on your own turn, and pushing burst (turn player, doesn't touch
-// priority) are all still just "your turn," not a new window waiting on
-// anyone. This carries the room's current timer forward exactly as-is
-// (same startsAt, same duration) instead of stamping a fresh
-// MOVE_CHAIN_WINDOW_MS countdown, so the active-turn clock just keeps
-// ticking through them uninterrupted. Only an action that actually hands
-// priority to the other participant (a slow push, the first chain_pass of a
-// pair) should open a real response window — see moveChainWindowAction.
+// actions that don't hand priority away (opening own chain, pushing burst) keep the
+// current timer as-is instead of restarting it, so the clock doesn't reset on your own turn
 export function makeResultKeepingTimer(
 	state: FaceturnServerState,
 	currentTimer: { startsAt: number; duration: number } | null,
@@ -162,14 +129,6 @@ export function afterAction(
 	state: FaceturnServerState,
 	fallback: { duration?: number } = {},
 ): EngineResult {
-	// makeResult() always attaches a fresh privatePayloads resync by
-	// default (see its comment), so every return below gets one for free —
-	// this function no longer needs to think about it at all. That's
-	// deliberate: there used to be an opt-in `includePrivatePayloads` flag
-	// here, and forgetting to pass it on one call site (a plain played
-	// burst move) was exactly the Sucker Punch bug — the card was removed
-	// from the server's hand, but the client's hand array was never told,
-	// so the card stayed rendered until the next full resync.
 	if (state.phase === "finished") {
 		return makeResult(state, null, { roomPhase: "ended" });
 	}
@@ -180,18 +139,8 @@ export function afterAction(
 		return makeResult(state, null, { roomPhase: "ended" });
 	}
 
-	// A pendingInteraction opened by whatever ran before afterAction() (a
-	// challenge-loss picker, a move effect like choose_from_discard, a
-	// turn-start offer like void_legs_choice, a deferred class action
-	// re-running into a fresh interaction, ...) needs its own window, not
-	// whatever generic duration this function would otherwise fall back
-	// to. tryOpenQueuedDefendableStrike() below already refuses to touch
-	// state while pendingInteraction is set, which used to mean nothing
-	// downstream of it ever assigned a real duration and callers silently
-	// inherited ACTIVE_TURN_DURATION_MS (or, in a couple of spots, an
-	// explicitly hardcoded active-turn duration passed in via `fallback`).
-	// Checking this first, centrally, fixes every such call site at once
-	// instead of requiring each one to remember to special-case it.
+	// a pendingInteraction opened upstream needs its own window duration, not this fallback,
+	// check it first so no caller has to remember to special-case it
 	if (state.pendingInteraction !== null) {
 		return makeResult(state, C.INTERACTION_WINDOW_MS);
 	}
@@ -203,7 +152,7 @@ export function afterAction(
 	return makeResult(state, fallback.duration ?? C.ACTIVE_TURN_DURATION_MS);
 }
 
-// opens a defend window for the next queued turned‑effect strike (e.g. Shrike)
+// opens a defend window for the next queued turned-effect strike (e.g. Shrike)
 function tryOpenQueuedDefendableStrike(state: FaceturnServerState): boolean {
 	if (state.pendingAction !== null) return false;
 	if (state.pendingInteraction !== null) return false;
@@ -233,7 +182,7 @@ function tryOpenQueuedDefendableStrike(state: FaceturnServerState): boolean {
 			return true;
 		}
 
-		// actor or target no longer valid (e.g. eliminated meanwhile); drop and try the next queued strike
+		// actor or target no longer valid (e.g. eliminated meanwhile), drop and try the next queued strike
 		next = state.pendingDefendableStrikes.shift();
 	}
 
@@ -258,19 +207,13 @@ export function finalizeResolvedChallenge(
 	return afterAction(state);
 }
 
-// both picks are in and the winner is known, but clients haven't had a
-// chance to render the reveal yet — hold here briefly before moving on to
-// the order choice. Advancing out of this phase is handled by onTimerExpired
-// (see index.ts, case "rps_reveal").
+// hold here so clients render the reveal before advancing, onTimerExpired moves on (see index.ts, "rps_reveal")
 export function beginRpsReveal(state: FaceturnServerState): EngineResult {
 	state.phase = "rps_reveal";
 	return makeResult(state, C.RPS_REVEAL_DURATION_MS);
 }
 
-// rps has a winner but turn order isn't decided yet — stop here and let the
-// winner choose to go first or second. setTurnOrderAfterRps/hand-dealing
-// happens once resolveRpsOrderChoice runs (winner's explicit pick, or the
-// timeout default in onTimerExpired).
+// rps winner still needs to pick turn order, resolveRpsOrderChoice deals hands once they do (or on timeout)
 export function beginRpsOrderChoice(state: FaceturnServerState): EngineResult {
 	const winnerId =
 		state.rpsResult === "player1" ? state.playerOrder[0] : state.playerOrder[1];

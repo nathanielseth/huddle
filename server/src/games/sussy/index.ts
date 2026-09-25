@@ -81,7 +81,7 @@ function allVoted(state: SussyServerState): boolean {
 }
 
 // exactly the fields that reset at the start of every round. adding a new
-// per-round field? add it here — not in advanceRound
+// per-round field? add it here, not in advanceRound
 type RoundSlice = Pick<
 	SussyServerState,
 	| "taskNumber"
@@ -251,7 +251,7 @@ interface VoteComputation {
 	readonly newCorrectVoters: ReadonlySet<string>;
 }
 
-// pure query — scores current vote state, no mutations
+// pure query, scores current vote state, no mutations
 function computeVoteResult(state: SussyServerState): VoteComputation {
 	invariant(
 		state.impostorId !== null,
@@ -266,7 +266,7 @@ function computeVoteResult(state: SussyServerState): VoteComputation {
 
 	// glitch round always runs all three tasks regardless of vote outcome.
 	// catching becomes "official" on task 3. tasks 1 & 2 still award SLEUTH
-	// points for correct votes — only CAUGHT bonus and early termination are held
+	// points for correct votes, only CAUGHT bonus and early termination are held
 	const allowCaught =
 		state.taskType !== "glitch_in_the_chat" || state.taskNumber === 3;
 
@@ -287,7 +287,7 @@ function computeVoteResult(state: SussyServerState): VoteComputation {
 	};
 }
 
-// command — applies computed vote result to mutable state. call computeVoteResult first
+// command, applies computed vote result to mutable state. call computeVoteResult first
 function commitVoteResult(
 	state: SussyServerState,
 	computed: VoteComputation,
